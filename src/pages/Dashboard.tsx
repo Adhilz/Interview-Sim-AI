@@ -9,7 +9,7 @@ import {
   FileText, 
   Mic, 
   History, 
-  User, 
+  User as UserIcon, 
   LogOut, 
   ChevronRight,
   Clock,
@@ -184,7 +184,7 @@ const Dashboard = () => {
             to="/profile"
             className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
           >
-            <User className="w-5 h-5" />
+            <UserIcon className="w-5 h-5" />
             Profile
           </Link>
         </nav>
