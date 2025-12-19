@@ -1,1 +1,10 @@
 project_id = "fjaneryjjgesujinlbix"
+
+[functions.parse-resume]
+verify_jwt = true
+
+[functions.vapi-interview]
+verify_jwt = true
+
+[functions.evaluate-interview]
+verify_jwt = true

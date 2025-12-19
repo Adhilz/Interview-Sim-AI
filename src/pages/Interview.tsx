@@ -18,12 +18,20 @@ import {
   Play,
   Square,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Loader2,
+  ExternalLink
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 
 type InterviewDuration = "3" | "5";
-type InterviewStatus = "setup" | "ready" | "in_progress" | "completed";
+type InterviewStatus = "setup" | "ready" | "connecting" | "in_progress" | "evaluating" | "completed";
+
+interface ResumeHighlights {
+  skills: string[] | null;
+  tools: string[] | null;
+  summary: string | null;
+}
 
 const Interview = () => {
   const navigate = useNavigate();
@@ -38,6 +46,10 @@ const Interview = () => {
   const [isMicOn, setIsMicOn] = useState(false);
   const [isVideoOn, setIsVideoOn] = useState(false);
   const [interviewId, setInterviewId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [vapiWebCallUrl, setVapiWebCallUrl] = useState<string | null>(null);
+  const [resumeHighlights, setResumeHighlights] = useState<ResumeHighlights | null>(null);
+  const [vapiError, setVapiError] = useState<string | null>(null);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -53,6 +65,9 @@ const Interview = () => {
       setUser(session?.user ?? null);
       if (!session?.user) {
         navigate("/login");
+      } else {
+        // Fetch resume highlights
+        fetchResumeHighlights(session.user.id);
       }
     });
 
@@ -61,6 +76,32 @@ const Interview = () => {
       stopMedia();
     };
   }, [navigate]);
+
+  const fetchResumeHighlights = async (userId: string) => {
+    try {
+      const { data: resume } = await supabase
+        .from('resumes')
+        .select('id')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (resume) {
+        const { data: highlights } = await supabase
+          .from('resume_highlights')
+          .select('skills, tools, summary')
+          .eq('resume_id', resume.id)
+          .single();
+
+        if (highlights) {
+          setResumeHighlights(highlights);
+        }
+      }
+    } catch (error) {
+      // No resume/highlights found
+    }
+  };
 
   // Timer effect
   useEffect(() => {
@@ -104,6 +145,7 @@ const Interview = () => {
       setIsMicOn(true);
       setIsVideoOn(true);
       setStatus("ready");
+      setVapiError(null);
       
       toast({
         title: "Permissions granted",
@@ -139,9 +181,12 @@ const Interview = () => {
   const startInterview = async () => {
     if (!user) return;
 
+    setStatus("connecting");
+    setVapiError(null);
+
     try {
       // Create interview record
-      const { data, error } = await supabase
+      const { data: interview, error: interviewError } = await supabase
         .from("interviews")
         .insert({
           user_id: user.id,
@@ -152,9 +197,47 @@ const Interview = () => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (interviewError) throw interviewError;
 
-      setInterviewId(data.id);
+      setInterviewId(interview.id);
+
+      // Start VAPI session
+      const { data: vapiData, error: vapiError } = await supabase.functions.invoke('vapi-interview', {
+        body: {
+          action: 'start',
+          interviewId: interview.id,
+          resumeHighlights,
+        },
+      });
+
+      if (vapiError) {
+        throw new Error(vapiError.message || 'Failed to start VAPI session');
+      }
+
+      if (vapiData?.error) {
+        // Handle VAPI configuration errors
+        setVapiError(vapiData.error);
+        if (vapiData.instructions) {
+          toast({
+            title: "VAPI Setup Required",
+            description: vapiData.instructions,
+            variant: "destructive",
+          });
+        }
+        // Still allow interview to proceed without VAPI
+        setTimeRemaining(parseInt(duration) * 60);
+        setStatus("in_progress");
+        return;
+      }
+
+      if (vapiData?.sessionId) {
+        setSessionId(vapiData.sessionId);
+      }
+
+      if (vapiData?.webCallUrl) {
+        setVapiWebCallUrl(vapiData.webCallUrl);
+      }
+
       setTimeRemaining(parseInt(duration) * 60);
       setStatus("in_progress");
 
@@ -162,19 +245,34 @@ const Interview = () => {
         title: "Interview started!",
         description: `You have ${duration} minutes. Good luck!`,
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Start interview error:', error);
       toast({
         title: "Error",
-        description: "Failed to start interview.",
+        description: error.message || "Failed to start interview.",
         variant: "destructive",
       });
+      setStatus("ready");
     }
   };
 
   const endInterview = async () => {
     if (!interviewId) return;
 
+    setStatus("evaluating");
+
     try {
+      // End VAPI session if active
+      if (sessionId) {
+        await supabase.functions.invoke('vapi-interview', {
+          body: {
+            action: 'end',
+            sessionId,
+          },
+        });
+      }
+
+      // Update interview status
       await supabase
         .from("interviews")
         .update({
@@ -183,15 +281,28 @@ const Interview = () => {
         })
         .eq("id", interviewId);
 
-      setStatus("completed");
+      // Trigger evaluation
+      const { data: evalData, error: evalError } = await supabase.functions.invoke('evaluate-interview', {
+        body: {
+          interviewId,
+          userId: user?.id,
+        },
+      });
+
+      if (evalError) {
+        console.error('Evaluation error:', evalError);
+      }
+
       stopMedia();
+      setStatus("completed");
 
       toast({
         title: "Interview completed!",
-        description: "Your session has ended.",
+        description: "Your evaluation is ready.",
       });
     } catch (error) {
       console.error("Error ending interview:", error);
+      setStatus("completed");
     }
   };
 
@@ -300,12 +411,16 @@ const Interview = () => {
               <h1 className="text-3xl font-bold text-foreground mb-2">
                 {status === "setup" ? "Setup Interview" : 
                  status === "ready" ? "Ready to Start" :
-                 status === "in_progress" ? "Live Interview" : "Interview Complete"}
+                 status === "connecting" ? "Connecting..." :
+                 status === "in_progress" ? "Live Interview" :
+                 status === "evaluating" ? "Generating Evaluation..." : "Interview Complete"}
               </h1>
               <p className="text-muted-foreground">
                 {status === "setup" ? "Configure your interview session" :
                  status === "ready" ? "Click start when you're ready" :
-                 status === "in_progress" ? "Your AI interviewer is listening" : "Great job! Review your performance."}
+                 status === "connecting" ? "Setting up your AI interviewer..." :
+                 status === "in_progress" ? "Your AI interviewer is listening" :
+                 status === "evaluating" ? "Analyzing your performance..." : "Great job! Review your performance."}
               </p>
             </div>
 
@@ -314,17 +429,24 @@ const Interview = () => {
               <Card className="border-border/50 overflow-hidden">
                 <CardContent className="p-0">
                   <div className="aspect-video bg-navy-900 relative">
-                    {status === "in_progress" || status === "ready" ? (
+                    {(status === "in_progress" || status === "ready" || status === "connecting") ? (
                       <>
                         {/* AI Avatar placeholder */}
                         <div className="absolute inset-0 flex items-center justify-center">
                           <div className="text-center">
-                            <div className="w-24 h-24 rounded-full gradient-accent flex items-center justify-center mx-auto mb-4 animate-pulse-slow">
-                              <Brain className="w-12 h-12 text-accent-foreground" />
+                            <div className={`w-24 h-24 rounded-full gradient-accent flex items-center justify-center mx-auto mb-4 ${status === "in_progress" ? "animate-pulse-slow" : ""}`}>
+                              {status === "connecting" ? (
+                                <Loader2 className="w-12 h-12 text-accent-foreground animate-spin" />
+                              ) : (
+                                <Brain className="w-12 h-12 text-accent-foreground" />
+                              )}
                             </div>
                             <p className="text-primary-foreground/80 text-lg">AI Interviewer</p>
                             {status === "in_progress" && (
                               <p className="text-primary-foreground/60 text-sm mt-2">Listening...</p>
+                            )}
+                            {status === "connecting" && (
+                              <p className="text-primary-foreground/60 text-sm mt-2">Connecting to VAPI...</p>
                             )}
                           </div>
                         </div>
@@ -345,14 +467,24 @@ const Interview = () => {
                           )}
                         </div>
                       </>
-                    ) : status === "completed" ? (
+                    ) : status === "completed" || status === "evaluating" ? (
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="text-center">
-                          <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-4">
-                            <Clock className="w-10 h-10 text-success" />
-                          </div>
-                          <p className="text-primary-foreground text-xl font-medium mb-2">Interview Complete</p>
-                          <p className="text-primary-foreground/60">Check your history for results</p>
+                          {status === "evaluating" ? (
+                            <>
+                              <Loader2 className="w-20 h-20 text-accent mx-auto mb-4 animate-spin" />
+                              <p className="text-primary-foreground text-xl font-medium mb-2">Analyzing...</p>
+                              <p className="text-primary-foreground/60">Please wait while we evaluate your performance</p>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-4">
+                                <Clock className="w-10 h-10 text-success" />
+                              </div>
+                              <p className="text-primary-foreground text-xl font-medium mb-2">Interview Complete</p>
+                              <p className="text-primary-foreground/60">Check your history for results</p>
+                            </>
+                          )}
                         </div>
                       </div>
                     ) : (
@@ -373,6 +505,42 @@ const Interview = () => {
               <div className="space-y-6">
                 {status === "setup" && (
                   <>
+                    {/* Resume status */}
+                    {!resumeHighlights && (
+                      <Card className="border-warning/50 bg-warning/5">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <AlertCircle className="w-5 h-5 text-warning flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-medium text-foreground">No resume uploaded</p>
+                              <p className="text-xs text-muted-foreground">
+                                Upload a resume for personalized questions.{" "}
+                                <Link to="/resume" className="text-accent hover:underline">
+                                  Upload now →
+                                </Link>
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {resumeHighlights && (
+                      <Card className="border-success/50 bg-success/5">
+                        <CardContent className="p-4">
+                          <div className="flex items-center gap-3">
+                            <FileText className="w-5 h-5 text-success flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-medium text-foreground">Resume ready</p>
+                              <p className="text-xs text-muted-foreground">
+                                Questions will be based on your background
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
                     {/* Duration selection */}
                     <Card className="border-border/50">
                       <CardHeader>
@@ -431,8 +599,50 @@ const Interview = () => {
                   </>
                 )}
 
-                {(status === "ready" || status === "in_progress") && (
+                {(status === "ready" || status === "in_progress" || status === "connecting") && (
                   <>
+                    {/* VAPI Error display */}
+                    {vapiError && (
+                      <Card className="border-warning/50 bg-warning/5">
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium text-foreground">VAPI Configuration Issue</p>
+                              <p className="text-xs text-muted-foreground mt-1">{vapiError}</p>
+                              <p className="text-xs text-muted-foreground mt-2">
+                                Interview will continue without voice AI. Check your VAPI settings.
+                              </p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* VAPI Web Call Link */}
+                    {vapiWebCallUrl && status === "in_progress" && (
+                      <Card className="border-accent/50 bg-accent/5">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="text-sm font-medium text-foreground">Voice Interview Active</p>
+                              <p className="text-xs text-muted-foreground">Click to join the voice call</p>
+                            </div>
+                            <a
+                              href={vapiWebCallUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-accent-foreground text-sm font-medium hover:bg-accent/90"
+                            >
+                              <Mic className="w-4 h-4" />
+                              Join Call
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
                     {/* Media controls */}
                     <Card className="border-border/50">
                       <CardHeader>
@@ -466,6 +676,13 @@ const Interview = () => {
                         Start Interview
                       </Button>
                     )}
+
+                    {status === "connecting" && (
+                      <Button variant="hero" size="xl" className="w-full" disabled>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Connecting...
+                      </Button>
+                    )}
                   </>
                 )}
 
@@ -479,10 +696,27 @@ const Interview = () => {
                         <Button variant="outline" className="flex-1" onClick={() => navigate("/history")}>
                           View History
                         </Button>
-                        <Button variant="hero" className="flex-1" onClick={() => setStatus("setup")}>
+                        <Button variant="hero" className="flex-1" onClick={() => {
+                          setStatus("setup");
+                          setInterviewId(null);
+                          setSessionId(null);
+                          setVapiWebCallUrl(null);
+                          setVapiError(null);
+                        }}>
                           New Interview
                         </Button>
                       </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {status === "evaluating" && (
+                  <Card className="border-border/50">
+                    <CardContent className="p-6 text-center">
+                      <Loader2 className="w-8 h-8 mx-auto mb-4 animate-spin text-accent" />
+                      <p className="text-muted-foreground">
+                        Analyzing your interview performance...
+                      </p>
                     </CardContent>
                   </Card>
                 )}
