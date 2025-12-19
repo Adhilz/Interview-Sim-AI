@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +19,8 @@ const signupSchema = loginSchema.extend({
 });
 
 const Auth = () => {
-  const [searchParams] = useSearchParams();
-  const isLogin = searchParams.get("mode") !== "signup";
+  const location = useLocation();
+  const isLogin = location.pathname !== "/signup";
   const navigate = useNavigate();
   const { toast } = useToast();
 
