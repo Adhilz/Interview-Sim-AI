@@ -37,11 +37,19 @@ interface Evaluation {
   feedback: string | null;
 }
 
+interface Improvement {
+  id: string;
+  suggestion: string;
+  category: string | null;
+  priority: number | null;
+}
+
 const InterviewHistory = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [evaluations, setEvaluations] = useState<Record<string, Evaluation>>({});
+  const [improvements, setImprovements] = useState<Record<string, Improvement[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [selectedInterview, setSelectedInterview] = useState<string | null>(null);
 
@@ -88,10 +96,33 @@ const InterviewHistory = () => {
         
         if (evaluationsData) {
           const evalMap: Record<string, Evaluation> = {};
+          const evalIds: string[] = [];
           evaluationsData.forEach((e) => {
             evalMap[e.interview_id] = e as Evaluation;
+            evalIds.push(e.id);
           });
           setEvaluations(evalMap);
+
+          // Fetch improvement suggestions
+          if (evalIds.length > 0) {
+            const { data: improvementsData } = await supabase
+              .from("improvement_suggestions")
+              .select("*")
+              .in("evaluation_id", evalIds);
+            
+            if (improvementsData) {
+              const impMap: Record<string, Improvement[]> = {};
+              evaluationsData.forEach((e) => {
+                const relatedImps = improvementsData.filter(
+                  (imp) => imp.evaluation_id === e.id
+                );
+                if (relatedImps.length > 0) {
+                  impMap[e.interview_id] = relatedImps as Improvement[];
+                }
+              });
+              setImprovements(impMap);
+            }
+          }
         }
       }
     } catch (error) {
@@ -117,6 +148,7 @@ const InterviewHistory = () => {
 
   const selectedEval = selectedInterview ? evaluations[selectedInterview] : null;
   const selectedInterviewData = interviews.find(i => i.id === selectedInterview);
+  const selectedImprovements = selectedInterview ? improvements[selectedInterview] : null;
 
   if (isLoading) {
     return (
@@ -330,6 +362,26 @@ const InterviewHistory = () => {
                           <p className="text-muted-foreground bg-secondary/50 p-4 rounded-xl">
                             {selectedEval.feedback}
                           </p>
+                        </div>
+                      )}
+
+                      {/* Improvements */}
+                      {selectedImprovements && selectedImprovements.length > 0 && (
+                        <div>
+                          <h4 className="font-medium text-foreground mb-3">Areas for Improvement</h4>
+                          <div className="space-y-2">
+                            {selectedImprovements.sort((a, b) => (a.priority || 3) - (b.priority || 3)).map((imp) => (
+                              <div key={imp.id} className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50">
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                  imp.priority === 1 ? 'bg-destructive/10 text-destructive' :
+                                  imp.priority === 2 ? 'bg-warning/10 text-warning' : 'bg-muted text-muted-foreground'
+                                }`}>
+                                  {imp.category || 'general'}
+                                </span>
+                                <p className="text-sm text-foreground flex-1">{imp.suggestion}</p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
 

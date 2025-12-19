@@ -16,9 +16,14 @@ import {
   TrendingUp,
   Loader2,
   X,
-  Sparkles
+  Sparkles,
+  RefreshCw,
+  Briefcase,
+  GraduationCap,
+  Code
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
+import type { Json } from "@/integrations/supabase/types";
 
 interface Resume {
   id: string;
@@ -28,11 +33,34 @@ interface Resume {
   parsed_at: string | null;
 }
 
+interface Experience {
+  company: string;
+  role: string;
+  duration: string;
+  highlights: string[];
+}
+
+interface Project {
+  name: string;
+  description: string;
+  technologies: string[];
+}
+
+interface Education {
+  institution: string;
+  degree: string;
+  year: string;
+  gpa?: string;
+}
+
 interface ResumeHighlight {
   id: string;
   skills: string[] | null;
   tools: string[] | null;
   summary: string | null;
+  experience: Experience[] | null;
+  projects: Project[] | null;
+  education: Education[] | null;
 }
 
 const Resume = () => {
@@ -45,6 +73,7 @@ const Resume = () => {
   const [highlights, setHighlights] = useState<ResumeHighlight | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
@@ -91,7 +120,17 @@ const Resume = () => {
           .single();
         
         if (highlightsData) {
-          setHighlights(highlightsData as ResumeHighlight);
+          // Parse JSON fields
+          const parsed: ResumeHighlight = {
+            id: highlightsData.id,
+            skills: highlightsData.skills,
+            tools: highlightsData.tools,
+            summary: highlightsData.summary,
+            experience: highlightsData.experience as unknown as Experience[] | null,
+            projects: highlightsData.projects as unknown as Project[] | null,
+            education: highlightsData.education as unknown as Education[] | null,
+          };
+          setHighlights(parsed);
         }
       }
     } catch (error) {
@@ -101,13 +140,20 @@ const Resume = () => {
     }
   };
 
+  const extractTextFromPDF = async (file: File): Promise<string> => {
+    // For now, we'll send the file name and let the AI know it's a PDF
+    // In production, you'd use a PDF parsing library
+    return `[PDF Resume: ${file.name}]\n\nPlease extract and analyze the content from this resume file.`;
+  };
+
   const handleFileUpload = async (file: File) => {
     if (!user) return;
     
-    if (file.type !== "application/pdf") {
+    const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!validTypes.includes(file.type)) {
       toast({
         title: "Invalid file type",
-        description: "Please upload a PDF file.",
+        description: "Please upload a PDF or Word document.",
         variant: "destructive",
       });
       return;
@@ -124,13 +170,26 @@ const Resume = () => {
 
     setIsUploading(true);
     try {
-      // For now, just save the metadata (file storage would need additional setup)
+      // Upload to storage
+      const fileName = `${user.id}/${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('resumes')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('resumes')
+        .getPublicUrl(fileName);
+
+      // Save resume record
       const { data, error } = await supabase
         .from("resumes")
         .insert({
           user_id: user.id,
           file_name: file.name,
-          file_url: `pending/${file.name}`, // Placeholder
+          file_url: urlData.publicUrl,
           file_size: file.size,
         })
         .select()
@@ -140,11 +199,16 @@ const Resume = () => {
 
       toast({
         title: "Resume uploaded!",
-        description: "Your resume has been uploaded successfully.",
+        description: "Now parsing your resume with AI...",
       });
 
       setResume(data as Resume);
+      
+      // Start parsing
+      await parseResume(data.id, file);
+      
     } catch (error) {
+      console.error('Upload error:', error);
       toast({
         title: "Upload failed",
         description: "An error occurred while uploading your resume.",
@@ -155,11 +219,90 @@ const Resume = () => {
     }
   };
 
+  const parseResume = async (resumeId: string, file?: File) => {
+    if (!user) return;
+
+    setIsParsing(true);
+    try {
+      // Read file as text (simplified - in production use proper PDF parser)
+      let resumeText = '';
+      if (file) {
+        if (file.type === 'application/pdf') {
+          resumeText = await extractTextFromPDF(file);
+        } else {
+          resumeText = await file.text();
+        }
+      }
+
+      const { data, error } = await supabase.functions.invoke('parse-resume', {
+        body: {
+          resumeText,
+          resumeId,
+          userId: user.id,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.highlights) {
+        const parsed: ResumeHighlight = {
+          id: data.highlights.id,
+          skills: data.highlights.skills,
+          tools: data.highlights.tools,
+          summary: data.highlights.summary,
+          experience: data.highlights.experience as Experience[] | null,
+          projects: data.highlights.projects as Project[] | null,
+          education: data.highlights.education as Education[] | null,
+        };
+        setHighlights(parsed);
+      }
+
+      toast({
+        title: "Resume parsed!",
+        description: "Your resume has been analyzed successfully.",
+      });
+
+      // Refresh resume data
+      if (user) {
+        fetchResume(user.id);
+      }
+    } catch (error: any) {
+      console.error('Parse error:', error);
+      toast({
+        title: "Parsing failed",
+        description: error.message || "Failed to parse resume. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
     if (file) handleFileUpload(file);
+  };
+
+  const handleDeleteResume = async () => {
+    if (!resume || !user) return;
+
+    try {
+      await supabase.from('resumes').delete().eq('id', resume.id);
+      setResume(null);
+      setHighlights(null);
+      toast({
+        title: "Resume deleted",
+        description: "You can upload a new resume.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete resume.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleLogout = async () => {
@@ -275,7 +418,7 @@ const Resume = () => {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf"
+                  accept=".pdf,.doc,.docx"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
@@ -283,10 +426,17 @@ const Resume = () => {
                   }}
                 />
                 
-                {isUploading ? (
+                {isUploading || isParsing ? (
                   <div className="flex flex-col items-center gap-4">
                     <Loader2 className="w-12 h-12 text-accent animate-spin" />
-                    <p className="text-foreground font-medium">Uploading...</p>
+                    <p className="text-foreground font-medium">
+                      {isUploading ? "Uploading..." : "Parsing with AI..."}
+                    </p>
+                    {isParsing && (
+                      <p className="text-sm text-muted-foreground">
+                        Extracting skills, experience, and projects...
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -297,7 +447,7 @@ const Resume = () => {
                       Drop your resume here
                     </p>
                     <p className="text-muted-foreground mb-4">
-                      or click to browse (PDF only, max 5MB)
+                      or click to browse (PDF or Word, max 5MB)
                     </p>
                     <Button variant="hero" size="sm">
                       Choose File
@@ -327,12 +477,30 @@ const Resume = () => {
                       <p className="font-medium text-foreground">{resume.file_name}</p>
                       <p className="text-sm text-muted-foreground">
                         Uploaded {new Date(resume.created_at).toLocaleDateString()}
+                        {resume.parsed_at && " • Parsed"}
                       </p>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive">
-                    <X className="w-5 h-5" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {!highlights && !isParsing && (
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => parseResume(resume.id)}
+                      >
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Parse
+                      </Button>
+                    )}
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={handleDeleteResume}
+                    >
+                      <X className="w-5 h-5" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -360,7 +528,10 @@ const Resume = () => {
 
                 {highlights.skills && highlights.skills.length > 0 && (
                   <div>
-                    <h4 className="text-sm font-medium text-muted-foreground mb-2">Skills</h4>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
+                      <Code className="w-4 h-4" />
+                      Skills
+                    </h4>
                     <div className="flex flex-wrap gap-2">
                       {highlights.skills.map((skill, i) => (
                         <span 
@@ -385,6 +556,79 @@ const Resume = () => {
                         >
                           {tool}
                         </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {highlights.experience && highlights.experience.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                      <Briefcase className="w-4 h-4" />
+                      Experience
+                    </h4>
+                    <div className="space-y-4">
+                      {highlights.experience.map((exp, i) => (
+                        <div key={i} className="p-4 rounded-xl bg-secondary/30">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <p className="font-medium text-foreground">{exp.role}</p>
+                              <p className="text-sm text-muted-foreground">{exp.company}</p>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{exp.duration}</span>
+                          </div>
+                          {exp.highlights && exp.highlights.length > 0 && (
+                            <ul className="text-sm text-muted-foreground mt-2 space-y-1">
+                              {exp.highlights.slice(0, 3).map((h, j) => (
+                                <li key={j}>• {h}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {highlights.education && highlights.education.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                      <GraduationCap className="w-4 h-4" />
+                      Education
+                    </h4>
+                    <div className="space-y-3">
+                      {highlights.education.map((edu, i) => (
+                        <div key={i} className="p-4 rounded-xl bg-secondary/30">
+                          <p className="font-medium text-foreground">{edu.degree}</p>
+                          <p className="text-sm text-muted-foreground">{edu.institution}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {edu.year}
+                            {edu.gpa && ` • GPA: ${edu.gpa}`}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {highlights.projects && highlights.projects.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-3">Projects</h4>
+                    <div className="space-y-3">
+                      {highlights.projects.map((project, i) => (
+                        <div key={i} className="p-4 rounded-xl bg-secondary/30">
+                          <p className="font-medium text-foreground">{project.name}</p>
+                          <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
+                          {project.technologies && project.technologies.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {project.technologies.map((tech, j) => (
+                                <span key={j} className="text-xs px-2 py-0.5 rounded bg-accent/10 text-accent">
+                                  {tech}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>
