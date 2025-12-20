@@ -243,14 +243,30 @@ const Resume = () => {
 
     setIsParsing(true);
     try {
-      // Read file as text (simplified - in production use proper PDF parser)
       let resumeText = '';
+      
       if (file) {
+        // Use the provided file directly
         if (file.type === 'application/pdf') {
           resumeText = await extractTextFromPDF(file);
         } else {
           resumeText = await file.text();
         }
+      } else if (resume?.file_url) {
+        // Fetch the file from storage URL and extract text
+        try {
+          const response = await fetch(resume.file_url);
+          const blob = await response.blob();
+          const fetchedFile = new File([blob], resume.file_name, { type: 'application/pdf' });
+          resumeText = await extractTextFromPDF(fetchedFile);
+        } catch (fetchError) {
+          console.error('Error fetching resume file:', fetchError);
+          throw new Error('Could not fetch resume file for parsing');
+        }
+      }
+      
+      if (!resumeText || resumeText.trim() === '') {
+        throw new Error('Could not extract text from resume. Please ensure the PDF contains selectable text.');
       }
 
       const { data, error } = await supabase.functions.invoke('parse-resume', {
