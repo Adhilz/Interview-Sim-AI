@@ -143,7 +143,9 @@ const Resume = () => {
   const extractTextFromPDF = async (file: File): Promise<string> => {
     try {
       const pdfjsLib = await import('pdfjs-dist');
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      
+      // Use unpkg CDN which has better CORS support
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
       
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -158,10 +160,14 @@ const Resume = () => {
         fullText += pageText + '\n';
       }
       
-      return fullText.trim() || `[Unable to extract text from PDF: ${file.name}]`;
+      const trimmedText = fullText.trim();
+      if (!trimmedText) {
+        throw new Error('No text content extracted from PDF');
+      }
+      return trimmedText;
     } catch (error) {
       console.error('PDF extraction error:', error);
-      return `[PDF Resume: ${file.name}] - Could not extract text. Please ensure the PDF contains selectable text.`;
+      throw new Error('Could not extract text from PDF. Please ensure the PDF contains selectable text.');
     }
   };
 
