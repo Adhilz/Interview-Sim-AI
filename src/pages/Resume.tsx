@@ -141,9 +141,28 @@ const Resume = () => {
   };
 
   const extractTextFromPDF = async (file: File): Promise<string> => {
-    // For now, we'll send the file name and let the AI know it's a PDF
-    // In production, you'd use a PDF parsing library
-    return `[PDF Resume: ${file.name}]\n\nPlease extract and analyze the content from this resume file.`;
+    try {
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+        fullText += pageText + '\n';
+      }
+      
+      return fullText.trim() || `[Unable to extract text from PDF: ${file.name}]`;
+    } catch (error) {
+      console.error('PDF extraction error:', error);
+      return `[PDF Resume: ${file.name}] - Could not extract text. Please ensure the PDF contains selectable text.`;
+    }
   };
 
   const handleFileUpload = async (file: File) => {
