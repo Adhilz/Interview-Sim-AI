@@ -25,6 +25,40 @@ serve(async (req) => {
 
     const VAPI_API_KEY = Deno.env.get('VAPI_API_KEY');
     const VAPI_ASSISTANT_ID = Deno.env.get('VAPI_ASSISTANT_ID');
+    const VAPI_PUBLIC_KEY = Deno.env.get('VAPI_PUBLIC_KEY');
+
+    // Action to get config for client-side VAPI SDK
+    if (action === 'get_config') {
+      if (!VAPI_PUBLIC_KEY) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'VAPI_PUBLIC_KEY is not configured',
+            setup_required: true,
+            instructions: 'Please add VAPI_PUBLIC_KEY to your environment variables. Get it from https://vapi.ai dashboard under API Keys (use the PUBLIC key).'
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!VAPI_ASSISTANT_ID) {
+        return new Response(
+          JSON.stringify({ 
+            error: 'VAPI_ASSISTANT_ID is not configured',
+            setup_required: true,
+            instructions: 'Please add VAPI_ASSISTANT_ID to your environment variables. Create an assistant at https://vapi.ai'
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          publicKey: VAPI_PUBLIC_KEY,
+          assistantId: VAPI_ASSISTANT_ID,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     if (!VAPI_API_KEY) {
       return new Response(
@@ -66,80 +100,43 @@ serve(async (req) => {
 - Summary: ${resumeHighlights.summary || 'Not provided'}`;
       }
 
-      // Start VAPI call - creates a web call that returns a URL for browser interaction
-      const vapiResponse = await fetch('https://api.vapi.ai/call', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${VAPI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type: 'webCall',
-          assistantId: VAPI_ASSISTANT_ID,
-          assistantOverrides: {
-            firstMessage: firstMessage,
-            variableValues: {
-              resumeContext: resumeContext
-            }
-          },
-          metadata: {
-            interviewId: interviewId
-          }
-        }),
-      });
-
-      if (!vapiResponse.ok) {
-        const errorText = await vapiResponse.text();
-        console.error('VAPI error:', vapiResponse.status, errorText);
-        
-        return new Response(
-          JSON.stringify({ 
-            error: 'Failed to start VAPI session',
-            details: errorText,
-            troubleshooting: [
-              'Check if VAPI_API_KEY is valid',
-              'Verify VAPI_ASSISTANT_ID exists and is active',
-              'Ensure your VAPI account has available credits',
-              'Check VAPI dashboard for assistant configuration issues'
-            ]
-          }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      const vapiData = await vapiResponse.json();
-
-      // Create interview session record
-      const { data: session, error: sessionError } = await supabase
+      // Create interview session record (VAPI call happens client-side via SDK)
+      const { data: newSession, error: newSessionError } = await supabase
         .from('interview_sessions')
         .insert({
           interview_id: interviewId,
-          vapi_session_id: vapiData.id,
           start_time: new Date().toISOString(),
         })
         .select()
         .single();
 
-      if (sessionError) {
-        console.error('Session creation error:', sessionError);
+      if (newSessionError) {
+        console.error('Session creation error:', newSessionError);
+        return new Response(
+          JSON.stringify({ 
+            error: 'Failed to create interview session',
+            details: newSessionError.message
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
       // Log the start event
-      if (session) {
+      if (newSession) {
         await supabase.from('vapi_logs').insert({
-          interview_session_id: session.id,
+          interview_session_id: newSession.id,
           log_type: 'session_start',
-          message: 'VAPI session started',
-          metadata: { vapi_call_id: vapiData.id }
+          message: 'Interview session started',
         });
       }
 
       return new Response(
         JSON.stringify({ 
           success: true, 
-          sessionId: session?.id,
-          vapiCallId: vapiData.id,
-          webCallUrl: vapiData.webCallUrl
+          sessionId: newSession?.id,
+          // Client will use VAPI Web SDK with public key
+          publicKey: VAPI_PUBLIC_KEY,
+          assistantId: VAPI_ASSISTANT_ID,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
