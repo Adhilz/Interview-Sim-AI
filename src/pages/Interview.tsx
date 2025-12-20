@@ -269,8 +269,9 @@ Tools: ${resumeHighlights.tools?.join(', ') || 'Not specified'}
 Summary: ${resumeHighlights.summary || 'Not provided'}`
     : '';
 
-  // VAPI Assistant ID from environment or config
-  const vapiAssistantId = import.meta.env.VITE_VAPI_ASSISTANT_ID || '6db2c2ee-0ad5-4e89-98af-293961dd9c87';
+  // VAPI config from environment
+  const vapiPublicKey = import.meta.env.VITE_VAPI_PUBLIC_KEY || '';
+  const vapiAssistantId = import.meta.env.VITE_VAPI_ASSISTANT_ID || '';
 
   // Show fullscreen interview room when in progress or connecting
   if (status === "in_progress" || status === "connecting") {
@@ -278,6 +279,7 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
       <InterviewRoom
         status={status}
         timeRemaining={timeRemaining}
+        publicKey={vapiPublicKey}
         assistantId={vapiAssistantId}
         resumeContext={resumeContext}
         onEndInterview={endInterview}
