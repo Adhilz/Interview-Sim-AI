@@ -66,18 +66,24 @@ serve(async (req) => {
 - Summary: ${resumeHighlights.summary || 'Not provided'}`;
       }
 
-      // Start VAPI web call - for browser-based audio interaction
-      const vapiResponse = await fetch('https://api.vapi.ai/call/web', {
+      // Start VAPI call - creates a web call that returns a URL for browser interaction
+      const vapiResponse = await fetch('https://api.vapi.ai/call', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${VAPI_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          type: 'webCall',
           assistantId: VAPI_ASSISTANT_ID,
           assistantOverrides: {
             firstMessage: firstMessage,
-            instructions: systemPrompt + resumeContext,
+            variableValues: {
+              resumeContext: resumeContext
+            }
+          },
+          metadata: {
+            interviewId: interviewId
           }
         }),
       });
