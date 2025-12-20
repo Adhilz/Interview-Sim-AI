@@ -17,7 +17,8 @@ import {
   Play,
   TrendingUp,
   AlertCircle,
-  Loader2
+  Loader2,
+  CheckCircle
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import InterviewRoom from "@/components/interview/InterviewRoom";
@@ -46,6 +47,8 @@ const Interview = () => {
   const [interviewId, setInterviewId] = useState<string | null>(null);
   const [resumeHighlights, setResumeHighlights] = useState<ResumeHighlights | null>(null);
   const [vapiError, setVapiError] = useState<string | null>(null);
+  const [vapiConfig, setVapiConfig] = useState<{ publicKey: string; assistantId: string } | null>(null);
+  const [isLoadingConfig, setIsLoadingConfig] = useState(true);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -63,6 +66,7 @@ const Interview = () => {
         navigate("/login");
       } else {
         fetchResumeHighlights(session.user.id);
+        fetchVapiConfig();
       }
     });
 
@@ -95,6 +99,39 @@ const Interview = () => {
       }
     } catch (error) {
       // No resume/highlights found
+    }
+  };
+
+  const fetchVapiConfig = async () => {
+    try {
+      setIsLoadingConfig(true);
+      const { data, error } = await supabase.functions.invoke('vapi-interview', {
+        body: { action: 'get_config' },
+      });
+
+      if (error) {
+        console.error('Failed to fetch VAPI config:', error);
+        setVapiError('Failed to load VAPI configuration');
+        return;
+      }
+
+      if (data?.error) {
+        console.error('VAPI config error:', data.error);
+        setVapiError(data.instructions || data.error);
+        return;
+      }
+
+      if (data?.publicKey && data?.assistantId) {
+        setVapiConfig({
+          publicKey: data.publicKey,
+          assistantId: data.assistantId,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching VAPI config:', error);
+      setVapiError('Failed to load VAPI configuration');
+    } finally {
+      setIsLoadingConfig(false);
     }
   };
 
@@ -269,18 +306,28 @@ Tools: ${resumeHighlights.tools?.join(', ') || 'Not specified'}
 Summary: ${resumeHighlights.summary || 'Not provided'}`
     : '';
 
-  // VAPI config from environment
-  const vapiPublicKey = import.meta.env.VITE_VAPI_PUBLIC_KEY || '';
-  const vapiAssistantId = import.meta.env.VITE_VAPI_ASSISTANT_ID || '';
-
   // Show fullscreen interview room when in progress or connecting
   if (status === "in_progress" || status === "connecting") {
+    if (!vapiConfig) {
+      return (
+        <div className="fixed inset-0 bg-background flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-accent" />
+            <p className="text-muted-foreground">Loading interview configuration...</p>
+            {vapiError && (
+              <p className="text-destructive mt-2">{vapiError}</p>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <InterviewRoom
         status={status}
         timeRemaining={timeRemaining}
-        publicKey={vapiPublicKey}
-        assistantId={vapiAssistantId}
+        publicKey={vapiConfig.publicKey}
+        assistantId={vapiConfig.assistantId}
         resumeContext={resumeContext}
         onEndInterview={endInterview}
         onVapiConnected={() => setStatus("in_progress")}
@@ -459,6 +506,51 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
                             <p className="text-sm font-medium text-foreground">Resume ready</p>
                             <p className="text-xs text-muted-foreground">
                               Questions will be based on your background
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {!vapiConfig && !isLoadingConfig && vapiError && (
+                    <Card className="border-destructive/50 bg-destructive/5">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-foreground">VAPI not configured</p>
+                            <p className="text-xs text-muted-foreground">
+                              {vapiError}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {isLoadingConfig && (
+                    <Card className="border-border/50">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <Loader2 className="w-5 h-5 text-muted-foreground animate-spin flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Loading configuration...</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {vapiConfig && (
+                    <Card className="border-success/50 bg-success/5">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Interview ready</p>
+                            <p className="text-xs text-muted-foreground">
+                              AI interviewer is configured
                             </p>
                           </div>
                         </div>
