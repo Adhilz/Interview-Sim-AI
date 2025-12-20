@@ -65,6 +65,7 @@ Guidelines:
     stop: stopVapi,
     toggleMute,
   } = useVapi({
+    publicKey,
     assistantId,
     assistantOverrides: {
       firstMessage,
