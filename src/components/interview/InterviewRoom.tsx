@@ -5,7 +5,6 @@ import {
   MicOff,
   Video,
   VideoOff,
-  Phone,
   PhoneOff,
   Clock,
   Brain,
@@ -13,44 +12,100 @@ import {
   Settings,
   Volume2
 } from "lucide-react";
+import { useVapi } from "@/hooks/useVapi";
 
 interface InterviewRoomProps {
   status: "connecting" | "in_progress" | "ended";
   timeRemaining: number;
-  webCallUrl: string | null;
+  publicKey: string;
+  assistantId: string;
+  resumeContext: string;
   onEndInterview: () => void;
-  vapiError: string | null;
+  onVapiConnected?: () => void;
+  onVapiError?: (error: string) => void;
 }
 
 const InterviewRoom = ({ 
   status, 
   timeRemaining, 
-  webCallUrl, 
+  publicKey,
+  assistantId,
+  resumeContext,
   onEndInterview,
-  vapiError 
+  onVapiConnected,
+  onVapiError,
 }: InterviewRoomProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
   
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
-  const [isListening, setIsListening] = useState(false);
+  const [hasStartedVapi, setHasStartedVapi] = useState(false);
 
+  // Build first message and instructions
+  const firstMessage = "Hello! I'm your AI interviewer today. I've reviewed your background and I'm excited to learn more about your experience. Let's begin - can you start by telling me about yourself and what brings you here today?";
+  
+  const instructions = `You are a professional job interviewer. Be friendly but professional. Ask follow-up questions based on the candidate's responses. Focus on their skills and experience from their resume.
+
+Resume context:
+${resumeContext || 'No resume provided - ask general interview questions.'}
+
+Guidelines:
+- Ask one question at a time
+- Wait for the candidate to finish before responding
+- Give brief acknowledgments before asking follow-up questions
+- Keep the interview conversational and engaging`;
+
+  const {
+    isConnected,
+    isLoading,
+    isSpeaking,
+    error: vapiError,
+    start: startVapi,
+    stop: stopVapi,
+    toggleMute,
+  } = useVapi({
+    assistantId,
+    assistantOverrides: {
+      firstMessage,
+      variableValues: {
+        resumeContext: resumeContext || 'No resume provided',
+      },
+    },
+    onCallStart: () => {
+      console.log('[InterviewRoom] VAPI call started');
+      onVapiConnected?.();
+    },
+    onCallEnd: () => {
+      console.log('[InterviewRoom] VAPI call ended');
+    },
+    onError: (e) => {
+      console.error('[InterviewRoom] VAPI error:', e);
+      onVapiError?.(e.message || 'VAPI connection failed');
+    },
+  });
+
+  // Start media on mount
   useEffect(() => {
     startMedia();
     return () => stopMedia();
   }, []);
 
-  // Simulate listening state when interview is in progress
+  // Auto-start VAPI when ready
   useEffect(() => {
-    if (status === "in_progress") {
-      const interval = setInterval(() => {
-        setIsListening(prev => !prev);
-      }, 2000 + Math.random() * 3000);
-      return () => clearInterval(interval);
+    if (status === "connecting" && !hasStartedVapi && !isLoading && !isConnected) {
+      console.log('[InterviewRoom] Auto-starting VAPI');
+      setHasStartedVapi(true);
+      startVapi();
     }
-  }, [status]);
+  }, [status, hasStartedVapi, isLoading, isConnected, startVapi]);
+
+  // Handle VAPI error
+  useEffect(() => {
+    if (vapiError) {
+      onVapiError?.(vapiError);
+    }
+  }, [vapiError, onVapiError]);
 
   const startMedia = async () => {
     try {
@@ -80,6 +135,7 @@ const InterviewRoom = ({
         track.enabled = !track.enabled;
       });
       setIsMicOn(!isMicOn);
+      toggleMute();
     }
   };
 
@@ -99,9 +155,12 @@ const InterviewRoom = ({
   };
 
   const handleEndCall = () => {
+    stopVapi();
     stopMedia();
     onEndInterview();
   };
+
+  const isActuallyConnected = isConnected || status === "in_progress";
 
   return (
     <div className="fixed inset-0 bg-[#202124] flex flex-col">
@@ -109,36 +168,31 @@ const InterviewRoom = ({
       <div className="flex-1 relative flex items-center justify-center p-4">
         {/* AI Interviewer - Center */}
         <div className="relative w-full max-w-4xl aspect-video bg-[#3c4043] rounded-2xl overflow-hidden flex items-center justify-center">
-          {/* VAPI Web Call iframe - hidden but active for audio */}
-          {webCallUrl && status === "in_progress" && (
-            <iframe
-              ref={iframeRef}
-              src={webCallUrl}
-              className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
-              allow="microphone; camera"
-              title="VAPI Interview"
-            />
-          )}
-          
           {/* Avatar Placeholder */}
           <div className="flex flex-col items-center justify-center text-center">
             <div className={`w-32 h-32 md:w-40 md:h-40 rounded-full bg-gradient-to-br from-accent to-accent/60 flex items-center justify-center mb-6 transition-all duration-300 ${
-              isListening && status === "in_progress" ? "ring-4 ring-accent/50 animate-pulse" : ""
-            }`}>
-              {status === "connecting" ? (
+              isSpeaking ? "ring-4 ring-accent/50 scale-105" : ""
+            } ${isLoading ? "animate-pulse" : ""}`}>
+              {isLoading ? (
                 <Loader2 className="w-16 h-16 md:w-20 md:h-20 text-accent-foreground animate-spin" />
               ) : (
                 <Brain className="w-16 h-16 md:w-20 md:h-20 text-accent-foreground" />
               )}
             </div>
             <p className="text-white text-xl md:text-2xl font-medium mb-2">AI Interviewer</p>
-            {status === "connecting" && (
+            {isLoading && (
               <p className="text-white/60 text-sm">Connecting to interview...</p>
             )}
-            {status === "in_progress" && (
+            {isActuallyConnected && !isSpeaking && (
               <div className="flex items-center gap-2 text-white/60 text-sm">
-                <Volume2 className={`w-4 h-4 ${isListening ? "text-success animate-pulse" : ""}`} />
-                <span>{isListening ? "Listening..." : "Your turn to speak"}</span>
+                <Mic className="w-4 h-4 text-success animate-pulse" />
+                <span>Listening to you...</span>
+              </div>
+            )}
+            {isSpeaking && (
+              <div className="flex items-center gap-2 text-white/60 text-sm">
+                <Volume2 className="w-4 h-4 text-accent animate-pulse" />
+                <span>AI is speaking...</span>
               </div>
             )}
             {vapiError && (
@@ -178,6 +232,14 @@ const InterviewRoom = ({
               timeRemaining < 60 ? "text-white animate-pulse" : "text-white"
             }`}>
               {formatTime(timeRemaining)}
+            </span>
+          </div>
+
+          {/* Connection status */}
+          <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/50">
+            <div className={`w-2 h-2 rounded-full ${isActuallyConnected ? "bg-success" : isLoading ? "bg-warning animate-pulse" : "bg-muted"}`} />
+            <span className="text-white/70 text-sm">
+              {isActuallyConnected ? "Connected" : isLoading ? "Connecting..." : "Disconnected"}
             </span>
           </div>
         </div>

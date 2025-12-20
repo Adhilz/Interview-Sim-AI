@@ -44,8 +44,6 @@ const Interview = () => {
   const [isMicOn, setIsMicOn] = useState(false);
   const [isVideoOn, setIsVideoOn] = useState(false);
   const [interviewId, setInterviewId] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [vapiWebCallUrl, setVapiWebCallUrl] = useState<string | null>(null);
   const [resumeHighlights, setResumeHighlights] = useState<ResumeHighlights | null>(null);
   const [vapiError, setVapiError] = useState<string | null>(null);
 
@@ -198,47 +196,15 @@ const Interview = () => {
 
       setInterviewId(interview.id);
 
-      // Start VAPI session
-      const { data: vapiData, error: vapiError } = await supabase.functions.invoke('vapi-interview', {
-        body: {
-          action: 'start',
-          interviewId: interview.id,
-          resumeHighlights,
-        },
-      });
-
-      if (vapiError) {
-        throw new Error(vapiError.message || 'Failed to start VAPI session');
-      }
-
-      if (vapiData?.error) {
-        setVapiError(vapiData.error);
-        if (vapiData.instructions) {
-          toast({
-            title: "VAPI Setup Required",
-            description: vapiData.instructions,
-            variant: "destructive",
-          });
-        }
-      }
-
-      if (vapiData?.sessionId) {
-        setSessionId(vapiData.sessionId);
-      }
-
-      if (vapiData?.webCallUrl) {
-        setVapiWebCallUrl(vapiData.webCallUrl);
-      }
-
       // Stop the setup media stream since InterviewRoom will start its own
       stopMedia();
 
       setTimeRemaining(parseInt(duration) * 60);
-      setStatus("in_progress");
+      // Status will be set to "in_progress" when VAPI connects successfully
 
       toast({
-        title: "Interview started!",
-        description: `You have ${duration} minutes. Good luck!`,
+        title: "Interview starting!",
+        description: `Connecting to AI interviewer...`,
       });
     } catch (error: any) {
       console.error('Start interview error:', error);
@@ -257,16 +223,6 @@ const Interview = () => {
     setStatus("evaluating");
 
     try {
-      // End VAPI session if active
-      if (sessionId) {
-        await supabase.functions.invoke('vapi-interview', {
-          body: {
-            action: 'end',
-            sessionId,
-          },
-        });
-      }
-
       // Update interview status
       await supabase
         .from("interviews")
@@ -306,15 +262,27 @@ const Interview = () => {
     navigate("/");
   };
 
+  // Build resume context for VAPI
+  const resumeContext = resumeHighlights 
+    ? `Skills: ${resumeHighlights.skills?.join(', ') || 'Not specified'}
+Tools: ${resumeHighlights.tools?.join(', ') || 'Not specified'}
+Summary: ${resumeHighlights.summary || 'Not provided'}`
+    : '';
+
+  // VAPI Assistant ID from environment or config
+  const vapiAssistantId = import.meta.env.VITE_VAPI_ASSISTANT_ID || '6db2c2ee-0ad5-4e89-98af-293961dd9c87';
+
   // Show fullscreen interview room when in progress or connecting
   if (status === "in_progress" || status === "connecting") {
     return (
       <InterviewRoom
         status={status}
         timeRemaining={timeRemaining}
-        webCallUrl={vapiWebCallUrl}
+        assistantId={vapiAssistantId}
+        resumeContext={resumeContext}
         onEndInterview={endInterview}
-        vapiError={vapiError}
+        onVapiConnected={() => setStatus("in_progress")}
+        onVapiError={(error) => setVapiError(error)}
       />
     );
   }
@@ -614,8 +582,6 @@ const Interview = () => {
                       <Button variant="hero" className="flex-1" onClick={() => {
                         setStatus("setup");
                         setInterviewId(null);
-                        setSessionId(null);
-                        setVapiWebCallUrl(null);
                         setVapiError(null);
                       }}>
                         New Interview
