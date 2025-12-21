@@ -190,12 +190,9 @@ serve(async (req) => {
           publicKey: VAPI_PUBLIC_KEY,
           assistantId: VAPI_ASSISTANT_ID,
           firstMessage,
-          // Include overrides for the assistant
+          // Only override firstMessage - model config should be in VAPI dashboard
           assistantOverrides: {
             firstMessage,
-            model: {
-              messages: [{ role: 'system', content: systemPrompt }]
-            }
           }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
