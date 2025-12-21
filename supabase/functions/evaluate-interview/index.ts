@@ -7,15 +7,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Mode 3 - Interview Evaluation System Prompt
-const EVALUATION_SYSTEM_PROMPT = `You are an AI interview evaluator.
+// Mode 3 - Interview Evaluation System Prompt (STRICT)
+const EVALUATION_SYSTEM_PROMPT = `You are an expert interview evaluator.
 
-INPUT:
+INPUTS:
 1. Candidate profile JSON
-2. Full interview transcript (questions + answers)
+2. Complete interview transcript (all questions and answers)
 
 TASK:
-Analyze the candidate's performance objectively.
+Evaluate the candidate STRICTLY based on their interview responses.
+Scores must NOT be fixed, default, or reused.
+Each interview must produce DIFFERENT results based on performance.
 
 OUTPUT:
 Return ONLY valid JSON in the following format:
@@ -32,7 +34,7 @@ Return ONLY valid JSON in the following format:
     "score": 0,
     "feedback": ""
   },
-  "confidence": {
+  "project_understanding": {
     "score": 0,
     "feedback": ""
   },
@@ -51,12 +53,12 @@ Return ONLY valid JSON in the following format:
 
 SCORING RULES:
 - Each category score: 0-10 (will be converted to 0-100 scale)
-- Overall score = average of all categories (converted to 0-100)
-- Base evaluation STRICTLY on the transcript
-- Be realistic and unbiased
-- No assumptions beyond the data
+- Overall score = average of all category scores (converted to 0-100)
+- Scores MUST reflect transcript quality
+- No assumptions beyond provided data
+- No template or static responses
 
-Categories for improvements: "communication", "technical", "confidence", "preparation", "structure"
+Categories for improvements: "communication", "technical", "project_understanding", "preparation", "structure"
 Priority: 1=high, 2=medium, 3=low`;
 
 serve(async (req) => {
@@ -230,9 +232,10 @@ ${interviewTranscript || 'No transcript available. Provide general feedback with
       ? normalizeScore(evaluation.overall_score)
       : Math.round((
           normalizeScore(evaluation.technical_skills?.score || 7) +
+          normalizeScore(evaluation.problem_solving?.score || 7) +
           normalizeScore(evaluation.communication?.score || 7) +
-          normalizeScore(evaluation.confidence?.score || 7)
-        ) / 3);
+          normalizeScore(evaluation.project_understanding?.score || 7)
+        ) / 4);
 
     // Build feedback from individual category feedback
     const feedback = [
@@ -254,7 +257,7 @@ ${interviewTranscript || 'No transcript available. Provide general feedback with
         overall_score: overallScore,
         communication_score: normalizeScore(evaluation.communication?.score || 7),
         technical_score: normalizeScore(evaluation.technical_skills?.score || 7),
-        confidence_score: normalizeScore(evaluation.confidence?.score || 7),
+        confidence_score: normalizeScore(evaluation.project_understanding?.score || 7),
         feedback: feedback,
       })
       .select()
