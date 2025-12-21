@@ -7,13 +7,65 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Mode 3 - Interview Evaluation System Prompt
+const EVALUATION_SYSTEM_PROMPT = `You are an AI interview evaluator.
+
+INPUT:
+1. Candidate profile JSON
+2. Full interview transcript (questions + answers)
+
+TASK:
+Analyze the candidate's performance objectively.
+
+OUTPUT:
+Return ONLY valid JSON in the following format:
+{
+  "technical_skills": {
+    "score": 0,
+    "feedback": ""
+  },
+  "problem_solving": {
+    "score": 0,
+    "feedback": ""
+  },
+  "communication": {
+    "score": 0,
+    "feedback": ""
+  },
+  "confidence": {
+    "score": 0,
+    "feedback": ""
+  },
+  "overall_score": 0,
+  "strengths": [],
+  "areas_for_improvement": [],
+  "final_verdict": "",
+  "improvements": [
+    {
+      "suggestion": "",
+      "category": "",
+      "priority": 1
+    }
+  ]
+}
+
+SCORING RULES:
+- Each category score: 0-10 (will be converted to 0-100 scale)
+- Overall score = average of all categories (converted to 0-100)
+- Base evaluation STRICTLY on the transcript
+- Be realistic and unbiased
+- No assumptions beyond the data
+
+Categories for improvements: "communication", "technical", "confidence", "preparation", "structure"
+Priority: 1=high, 2=medium, 3=low`;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { interviewId, userId, transcript } = await req.json();
+    const { interviewId, userId, transcript, candidateProfile } = await req.json();
 
     if (!interviewId || !userId) {
       throw new Error('Missing required fields');
@@ -28,8 +80,12 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    console.log('Evaluating interview - Mode 3 (Interview Evaluation)');
+
     // If no transcript provided, try to get it from VAPI
     let interviewTranscript = transcript;
+    let profile = candidateProfile;
+
     if (!interviewTranscript) {
       // Get session data
       const { data: session } = await supabase
@@ -56,6 +112,44 @@ serve(async (req) => {
       }
     }
 
+    // Get candidate profile from resume highlights if not provided
+    if (!profile) {
+      const { data: interview } = await supabase
+        .from('interviews')
+        .select('resume_id')
+        .eq('id', interviewId)
+        .single();
+
+      if (interview?.resume_id) {
+        const { data: highlights } = await supabase
+          .from('resume_highlights')
+          .select('*')
+          .eq('resume_id', interview.resume_id)
+          .single();
+
+        if (highlights) {
+          profile = {
+            skills: highlights.skills || [],
+            tools: highlights.tools || [],
+            projects: highlights.projects || [],
+            experience: highlights.experience || [],
+            summary: highlights.summary || ''
+          };
+        }
+      }
+    }
+
+    // Build the evaluation prompt
+    const userPrompt = `CANDIDATE PROFILE:
+<<<
+${profile ? JSON.stringify(profile, null, 2) : 'No profile available'}
+>>>
+
+INTERVIEW TRANSCRIPT:
+<<<
+${interviewTranscript || 'No transcript available. Provide general feedback with baseline scores.'}
+>>>`;
+
     // Generate evaluation using AI
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -68,26 +162,11 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `You are an expert interview evaluator. Analyze the interview transcript and provide a detailed evaluation.
-
-You must respond with a valid JSON object containing:
-- overall_score: Number 1-100
-- communication_score: Number 1-100
-- technical_score: Number 1-100
-- confidence_score: Number 1-100
-- feedback: String with detailed overall feedback (2-3 paragraphs)
-- improvements: Array of objects with {suggestion: string, category: string, priority: number 1-3}
-
-Categories for improvements: "communication", "technical", "confidence", "preparation", "structure"
-Priority: 1=high, 2=medium, 3=low
-
-Be constructive and specific. Return ONLY valid JSON.`
+            content: EVALUATION_SYSTEM_PROMPT
           },
           {
             role: 'user',
-            content: interviewTranscript 
-              ? `Evaluate this interview transcript:\n\n${interviewTranscript}`
-              : `The interview was completed but no transcript is available. Provide a general evaluation with placeholder scores and encourage the student to review their performance. Set all scores to 70 as baseline.`
+            content: userPrompt
           }
         ],
       }),
@@ -100,11 +179,19 @@ Be constructive and specific. Return ONLY valid JSON.`
           { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+      if (response.status === 402) {
+        return new Response(
+          JSON.stringify({ error: 'Payment required. Please add credits to continue.' }),
+          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
       throw new Error('AI evaluation failed');
     }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
+
+    console.log('AI evaluation response received');
 
     let evaluation;
     try {
@@ -115,13 +202,17 @@ Be constructive and specific. Return ONLY valid JSON.`
         throw new Error('No JSON found');
       }
     } catch {
+      console.log('Failed to parse AI response, using defaults');
       // Default evaluation if parsing fails
       evaluation = {
+        technical_skills: { score: 7, feedback: "Unable to fully evaluate from transcript." },
+        problem_solving: { score: 7, feedback: "Unable to fully evaluate from transcript." },
+        communication: { score: 7, feedback: "Unable to fully evaluate from transcript." },
+        confidence: { score: 7, feedback: "Unable to fully evaluate from transcript." },
         overall_score: 70,
-        communication_score: 70,
-        technical_score: 70,
-        confidence_score: 70,
-        feedback: "Your interview has been completed. Continue practicing to improve your skills.",
+        strengths: ["Completed the interview session"],
+        areas_for_improvement: ["Continue practicing interview skills"],
+        final_verdict: "Your interview has been completed. Continue practicing to improve your skills.",
         improvements: [
           { suggestion: "Practice STAR method for behavioral questions", category: "structure", priority: 1 },
           { suggestion: "Research common interview questions", category: "preparation", priority: 2 }
@@ -129,17 +220,42 @@ Be constructive and specific. Return ONLY valid JSON.`
       };
     }
 
+    // Convert scores from 0-10 to 0-100 if needed
+    const normalizeScore = (score: number) => {
+      if (score <= 10) return score * 10;
+      return score;
+    };
+
+    const overallScore = evaluation.overall_score 
+      ? normalizeScore(evaluation.overall_score)
+      : Math.round((
+          normalizeScore(evaluation.technical_skills?.score || 7) +
+          normalizeScore(evaluation.communication?.score || 7) +
+          normalizeScore(evaluation.confidence?.score || 7)
+        ) / 3);
+
+    // Build feedback from individual category feedback
+    const feedback = [
+      evaluation.final_verdict || '',
+      '',
+      '**Strengths:**',
+      ...(evaluation.strengths?.map((s: string) => `- ${s}`) || []),
+      '',
+      '**Areas for Improvement:**',
+      ...(evaluation.areas_for_improvement?.map((a: string) => `- ${a}`) || [])
+    ].join('\n');
+
     // Save evaluation
     const { data: evalData, error: evalError } = await supabase
       .from('evaluations')
       .insert({
         interview_id: interviewId,
         user_id: userId,
-        overall_score: evaluation.overall_score,
-        communication_score: evaluation.communication_score,
-        technical_score: evaluation.technical_score,
-        confidence_score: evaluation.confidence_score,
-        feedback: evaluation.feedback,
+        overall_score: overallScore,
+        communication_score: normalizeScore(evaluation.communication?.score || 7),
+        technical_score: normalizeScore(evaluation.technical_skills?.score || 7),
+        confidence_score: normalizeScore(evaluation.confidence?.score || 7),
+        feedback: feedback,
       })
       .select()
       .single();
@@ -150,16 +266,24 @@ Be constructive and specific. Return ONLY valid JSON.`
     }
 
     // Save improvement suggestions
-    if (evaluation.improvements?.length > 0) {
-      const suggestions = evaluation.improvements.map((imp: any) => ({
+    const improvements = evaluation.improvements || evaluation.areas_for_improvement?.map((a: string, i: number) => ({
+      suggestion: a,
+      category: 'general',
+      priority: i + 1
+    })) || [];
+
+    if (improvements.length > 0) {
+      const suggestions = improvements.map((imp: any) => ({
         evaluation_id: evalData.id,
-        suggestion: imp.suggestion,
-        category: imp.category,
-        priority: imp.priority,
+        suggestion: typeof imp === 'string' ? imp : imp.suggestion,
+        category: imp.category || 'general',
+        priority: imp.priority || 2,
       }));
 
       await supabase.from('improvement_suggestions').insert(suggestions);
     }
+
+    console.log('Evaluation saved successfully');
 
     return new Response(
       JSON.stringify({ success: true, evaluation: evalData }),

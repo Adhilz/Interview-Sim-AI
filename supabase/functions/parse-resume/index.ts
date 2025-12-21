@@ -7,6 +7,56 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const RESUME_PARSING_PROMPT = `You are an advanced ATS resume parser.
+
+INPUT:
+- Plain extracted text from a resume (may contain broken formatting)
+
+TASK:
+Extract structured resume information strictly from the given text.
+
+OUTPUT:
+Return ONLY valid JSON in the following schema:
+{
+  "name": "",
+  "email": "",
+  "phone": "",
+  "summary": "",
+  "skills": [],
+  "tools": [],
+  "projects": [
+    {
+      "name": "",
+      "description": "",
+      "technologies": []
+    }
+  ],
+  "experience": [
+    {
+      "company": "",
+      "role": "",
+      "duration": "",
+      "highlights": []
+    }
+  ],
+  "education": [
+    {
+      "institution": "",
+      "degree": "",
+      "year": "",
+      "gpa": ""
+    }
+  ]
+}
+
+RULES:
+- Do NOT guess missing values
+- Empty fields must be "" or []
+- Do NOT add commentary
+- Do NOT modify schema
+- Extract ALL relevant information from the text
+- Be thorough and extract all skills, tools, and technologies mentioned`;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -24,7 +74,8 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    console.log('Parsing resume with Gemini...');
+    console.log('Parsing resume with AI - Mode 1 (Resume Parsing)...');
+    console.log('Resume text length:', resumeText.length);
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -37,21 +88,11 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `You are an expert resume parser. Extract structured information from resumes.
-            
-You must respond with a valid JSON object containing these fields:
-- summary: A 2-3 sentence professional summary
-- skills: Array of technical/soft skills (strings)
-- tools: Array of tools, technologies, frameworks (strings)
-- experience: Array of objects with {company, role, duration, highlights: string[]}
-- projects: Array of objects with {name, description, technologies: string[]}
-- education: Array of objects with {institution, degree, year, gpa?}
-
-Be thorough and extract all relevant information. Return ONLY valid JSON, no other text.`
+            content: RESUME_PARSING_PROMPT
           },
           {
             role: 'user',
-            content: `Parse this resume and extract structured information:\n\n${resumeText}`
+            content: `RESUME TEXT:\n<<<\n${resumeText}\n>>>`
           }
         ],
       }),
@@ -82,6 +123,8 @@ Be thorough and extract all relevant information. Return ONLY valid JSON, no oth
       throw new Error('No content in AI response');
     }
 
+    console.log('AI response received, parsing JSON...');
+
     // Parse the JSON response
     let parsedData;
     try {
@@ -90,6 +133,7 @@ Be thorough and extract all relevant information. Return ONLY valid JSON, no oth
       if (jsonMatch) {
         parsedData = JSON.parse(jsonMatch[0]);
       } else {
+        console.error('No JSON found in response:', content);
         throw new Error('No JSON found in response');
       }
     } catch (parseError) {
