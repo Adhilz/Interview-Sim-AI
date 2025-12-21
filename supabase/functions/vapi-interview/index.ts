@@ -7,13 +7,34 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Default prompts - can be overridden via environment variables
-const DEFAULT_SYSTEM_PROMPT = `You are a professional interviewer conducting a mock interview. 
-Be encouraging but realistic. Ask follow-up questions based on the candidate's responses.
-Focus on behavioral questions and technical skills mentioned in their resume.
-Keep responses concise and natural for voice conversation.`;
+// Mode 2 - Live Interview System Prompt
+const buildInterviewSystemPrompt = (candidateProfile: any) => `You are a professional technical interviewer conducting a real-time voice interview.
 
-const DEFAULT_FIRST_MESSAGE = "Hello! I'm your AI interviewer today. Let's start with a simple question - can you briefly tell me about yourself and what position you're interested in?";
+INTERVIEW RULES:
+- Start with a brief, friendly introduction
+- Ask ONE question at a time
+- Questions must be based ONLY on:
+  - Skills
+  - Projects
+  - Experience
+- Gradually increase difficulty
+- Maintain a natural, human interview tone
+- Do NOT evaluate or score during the interview
+- Wait for the candidate's response before proceeding
+- Keep responses concise and conversational (voice-friendly)
+
+FOCUS AREAS:
+- Technical understanding
+- Problem-solving ability
+- Communication clarity
+- Project depth
+
+CANDIDATE PROFILE:
+<<<
+${JSON.stringify(candidateProfile, null, 2)}
+>>>`;
+
+const DEFAULT_FIRST_MESSAGE = "Hello! I'm your AI interviewer today. Thank you for joining this interview session. Let's start with a brief introduction - can you tell me a little about yourself and walk me through your background?";
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -86,18 +107,19 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get custom prompts from environment or use defaults
-    const systemPrompt = Deno.env.get('VAPI_SYSTEM_PROMPT') || DEFAULT_SYSTEM_PROMPT;
-    const firstMessage = Deno.env.get('VAPI_FIRST_MESSAGE') || DEFAULT_FIRST_MESSAGE;
-
     if (action === 'start') {
-      // Build context from resume highlights
-      let resumeContext = '';
+      console.log('Starting interview session - Mode 2 (Live Interview)');
+      
+      // Build candidate profile from resume highlights for the interview prompt
+      let candidateProfile = null;
       if (resumeHighlights) {
-        resumeContext = `\n\nCandidate's background:
-- Skills: ${resumeHighlights.skills?.join(', ') || 'Not provided'}
-- Tools: ${resumeHighlights.tools?.join(', ') || 'Not provided'}
-- Summary: ${resumeHighlights.summary || 'Not provided'}`;
+        candidateProfile = {
+          skills: resumeHighlights.skills || [],
+          tools: resumeHighlights.tools || [],
+          projects: resumeHighlights.projects || [],
+          experience: resumeHighlights.experience || [],
+          summary: resumeHighlights.summary || ''
+        };
       }
 
       // Create interview session record (VAPI call happens client-side via SDK)
@@ -127,16 +149,28 @@ serve(async (req) => {
           interview_session_id: newSession.id,
           log_type: 'session_start',
           message: 'Interview session started',
+          metadata: { candidateProfile }
         });
       }
+
+      // Build system prompt with candidate profile
+      const systemPrompt = candidateProfile 
+        ? buildInterviewSystemPrompt(candidateProfile)
+        : buildInterviewSystemPrompt({ message: "No resume data available. Conduct a general behavioral interview." });
 
       return new Response(
         JSON.stringify({ 
           success: true, 
           sessionId: newSession?.id,
-          // Client will use VAPI Web SDK with public key
           publicKey: VAPI_PUBLIC_KEY,
           assistantId: VAPI_ASSISTANT_ID,
+          // Include overrides for the assistant
+          assistantOverrides: {
+            firstMessage: DEFAULT_FIRST_MESSAGE,
+            model: {
+              messages: [{ role: 'system', content: systemPrompt }]
+            }
+          }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -145,6 +179,8 @@ serve(async (req) => {
       if (!sessionId) {
         throw new Error('sessionId is required to end interview');
       }
+
+      console.log('Ending interview session:', sessionId);
 
       // Get the VAPI session ID
       const { data: session } = await supabase
