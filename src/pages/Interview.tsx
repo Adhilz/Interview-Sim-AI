@@ -30,6 +30,15 @@ interface ResumeHighlights {
   skills: string[] | null;
   tools: string[] | null;
   summary: string | null;
+  projects?: any | null;
+  experience?: any | null;
+  name?: string | null;
+}
+
+interface SessionData {
+  sessionId: string;
+  firstMessage: string;
+  assistantOverrides: any;
 }
 
 const Interview = () => {
@@ -49,6 +58,8 @@ const Interview = () => {
   const [vapiError, setVapiError] = useState<string | null>(null);
   const [vapiConfig, setVapiConfig] = useState<{ publicKey: string; assistantId: string } | null>(null);
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
+  const [sessionData, setSessionData] = useState<SessionData | null>(null);
+  const [interviewTranscript, setInterviewTranscript] = useState<string>('');
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -89,12 +100,22 @@ const Interview = () => {
       if (resume) {
         const { data: highlights } = await supabase
           .from('resume_highlights')
-          .select('skills, tools, summary')
+          .select('skills, tools, summary, projects, experience')
           .eq('resume_id', resume.id)
           .single();
 
         if (highlights) {
-          setResumeHighlights(highlights);
+          // Also get the profile name
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('user_id', userId)
+            .single();
+          
+          setResumeHighlights({
+            ...highlights,
+            name: profile?.full_name || null
+          });
         }
       }
     } catch (error) {
@@ -215,6 +236,7 @@ const Interview = () => {
 
     setStatus("connecting");
     setVapiError(null);
+    setInterviewTranscript('');
 
     try {
       // Create interview record
@@ -233,11 +255,32 @@ const Interview = () => {
 
       setInterviewId(interview.id);
 
+      // Start session via backend to get personalized first message
+      const { data: startData, error: startError } = await supabase.functions.invoke('vapi-interview', {
+        body: { 
+          action: 'start', 
+          interviewId: interview.id,
+          resumeHighlights: resumeHighlights ? {
+            ...resumeHighlights,
+            name: resumeHighlights.name || user.user_metadata?.full_name || ''
+          } : null
+        },
+      });
+
+      if (startError || startData?.error) {
+        throw new Error(startData?.error || startError?.message || 'Failed to start session');
+      }
+
+      setSessionData({
+        sessionId: startData.sessionId,
+        firstMessage: startData.firstMessage,
+        assistantOverrides: startData.assistantOverrides
+      });
+
       // Stop the setup media stream since InterviewRoom will start its own
       stopMedia();
 
       setTimeRemaining(parseInt(duration) * 60);
-      // Status will be set to "in_progress" when VAPI connects successfully
 
       toast({
         title: "Interview starting!",
@@ -254,7 +297,7 @@ const Interview = () => {
     }
   };
 
-  const endInterview = async () => {
+  const endInterview = async (transcript?: string) => {
     if (!interviewId) return;
 
     setStatus("evaluating");
@@ -269,11 +312,20 @@ const Interview = () => {
         })
         .eq("id", interviewId);
 
-      // Trigger evaluation
+      // Trigger evaluation with transcript
       const { data: evalData, error: evalError } = await supabase.functions.invoke('evaluate-interview', {
         body: {
           interviewId,
           userId: user?.id,
+          transcript: transcript || interviewTranscript || undefined,
+          candidateProfile: resumeHighlights ? {
+            skills: resumeHighlights.skills || [],
+            tools: resumeHighlights.tools || [],
+            projects: resumeHighlights.projects || [],
+            experience: resumeHighlights.experience || [],
+            summary: resumeHighlights.summary || '',
+            name: resumeHighlights.name || ''
+          } : undefined
         },
       });
 
@@ -293,6 +345,21 @@ const Interview = () => {
     }
   };
 
+  const handleVapiCallStart = async (vapiCallId: string) => {
+    if (sessionData?.sessionId && vapiCallId) {
+      // Save VAPI call ID to the session
+      await supabase
+        .from('interview_sessions')
+        .update({ vapi_session_id: vapiCallId })
+        .eq('id', sessionData.sessionId);
+    }
+    setStatus("in_progress");
+  };
+
+  const handleTranscriptUpdate = (newTranscript: string) => {
+    setInterviewTranscript(newTranscript);
+  };
+
   const handleLogout = async () => {
     stopMedia();
     await supabase.auth.signOut();
@@ -308,7 +375,7 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
 
   // Show fullscreen interview room when in progress or connecting
   if (status === "in_progress" || status === "connecting") {
-    if (!vapiConfig) {
+    if (!vapiConfig || !sessionData) {
       return (
         <div className="fixed inset-0 bg-background flex items-center justify-center">
           <div className="text-center">
@@ -328,10 +395,12 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
         timeRemaining={timeRemaining}
         publicKey={vapiConfig.publicKey}
         assistantId={vapiConfig.assistantId}
-        resumeContext={resumeContext}
+        assistantOverrides={sessionData.assistantOverrides}
+        sessionId={sessionData.sessionId}
         onEndInterview={endInterview}
-        onVapiConnected={() => setStatus("in_progress")}
+        onVapiConnected={handleVapiCallStart}
         onVapiError={(error) => setVapiError(error)}
+        onTranscriptUpdate={handleTranscriptUpdate}
       />
     );
   }
