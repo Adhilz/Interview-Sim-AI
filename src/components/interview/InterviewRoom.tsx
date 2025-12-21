@@ -19,10 +19,12 @@ interface InterviewRoomProps {
   timeRemaining: number;
   publicKey: string;
   assistantId: string;
-  resumeContext: string;
-  onEndInterview: () => void;
-  onVapiConnected?: () => void;
+  assistantOverrides?: any;
+  sessionId: string;
+  onEndInterview: (transcript?: string) => void;
+  onVapiConnected?: (callId: string) => void;
   onVapiError?: (error: string) => void;
+  onTranscriptUpdate?: (transcript: string) => void;
 }
 
 const InterviewRoom = ({ 
@@ -30,10 +32,12 @@ const InterviewRoom = ({
   timeRemaining, 
   publicKey,
   assistantId,
-  resumeContext,
+  assistantOverrides,
+  sessionId,
   onEndInterview,
   onVapiConnected,
   onVapiError,
+  onTranscriptUpdate,
 }: InterviewRoomProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -42,40 +46,23 @@ const InterviewRoom = ({
   const [isVideoOn, setIsVideoOn] = useState(true);
   const [hasStartedVapi, setHasStartedVapi] = useState(false);
 
-  // Build first message and instructions
-  const firstMessage = "Hello! I'm your AI interviewer today. I've reviewed your background and I'm excited to learn more about your experience. Let's begin - can you start by telling me about yourself and what brings you here today?";
-  
-  const instructions = `You are a professional job interviewer. Be friendly but professional. Ask follow-up questions based on the candidate's responses. Focus on their skills and experience from their resume.
-
-Resume context:
-${resumeContext || 'No resume provided - ask general interview questions.'}
-
-Guidelines:
-- Ask one question at a time
-- Wait for the candidate to finish before responding
-- Give brief acknowledgments before asking follow-up questions
-- Keep the interview conversational and engaging`;
-
   const {
     isConnected,
     isLoading,
     isSpeaking,
     error: vapiError,
+    callId,
     start: startVapi,
     stop: stopVapi,
     toggleMute,
+    getTranscript,
   } = useVapi({
     publicKey,
     assistantId,
-    assistantOverrides: {
-      firstMessage,
-      variableValues: {
-        resumeContext: resumeContext || 'No resume provided',
-      },
-    },
-    onCallStart: () => {
-      console.log('[InterviewRoom] VAPI call started');
-      onVapiConnected?.();
+    assistantOverrides,
+    onCallStart: (id) => {
+      console.log('[InterviewRoom] VAPI call started with ID:', id);
+      onVapiConnected?.(id);
     },
     onCallEnd: () => {
       console.log('[InterviewRoom] VAPI call ended');
@@ -83,6 +70,13 @@ Guidelines:
     onError: (e) => {
       console.error('[InterviewRoom] VAPI error:', e);
       onVapiError?.(e.message || 'VAPI connection failed');
+    },
+    onMessage: (message) => {
+      // Update transcript on each message
+      if (message.type === 'transcript') {
+        const currentTranscript = getTranscript();
+        onTranscriptUpdate?.(currentTranscript);
+      }
     },
   });
 
@@ -156,9 +150,10 @@ Guidelines:
   };
 
   const handleEndCall = () => {
+    const transcript = getTranscript();
     stopVapi();
     stopMedia();
-    onEndInterview();
+    onEndInterview(transcript);
   };
 
   const isActuallyConnected = isConnected || status === "in_progress";

@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 // Mode 2 - Live Interview System Prompt (STRICT)
-const buildInterviewSystemPrompt = (candidateProfile: any) => `You are a professional human interviewer conducting a real-time voice interview.
+const buildInterviewSystemPrompt = (candidateProfile: any, candidateName: string) => `You are a professional human interviewer conducting a real-time voice interview with ${candidateName || 'the candidate'}.
 
 CRITICAL GROUNDING RULES (NON-NEGOTIABLE):
 - You MUST use the candidate profile as the ONLY source of truth
@@ -20,7 +20,7 @@ CRITICAL GROUNDING RULES (NON-NEGOTIABLE):
 - You are NOT allowed to invent skills, tools, or experience
 
 INTERVIEW BEHAVIOR:
-- Start with a brief introduction
+- Start with a brief introduction addressing the candidate by name
 - Ask ONE question at a time
 - Increase difficulty gradually
 - Maintain natural, human tone
@@ -39,7 +39,21 @@ CANDIDATE PROFILE (SOURCE OF TRUTH):
 ${JSON.stringify(candidateProfile, null, 2)}
 >>>`;
 
-const DEFAULT_FIRST_MESSAGE = "Hello! I'm your AI interviewer today. Thank you for joining this interview session. Let's start with a brief introduction - can you tell me a little about yourself and walk me through your background?";
+// Build personalized first message based on candidate profile
+const buildFirstMessage = (candidateName: string, candidateProfile: any) => {
+  const name = candidateName || 'there';
+  const skills = candidateProfile?.skills?.slice(0, 3)?.join(', ') || '';
+  const hasProjects = candidateProfile?.projects?.length > 0;
+  const projectName = hasProjects ? candidateProfile.projects[0]?.title : '';
+  
+  if (skills && projectName) {
+    return `Hello ${name}! I'm your AI interviewer today. I've reviewed your background and I'm excited to discuss your experience with ${skills}. I'm particularly interested in your project "${projectName}". Let's start - can you give me a brief overview of your background and what you're passionate about in tech?`;
+  } else if (skills) {
+    return `Hello ${name}! I'm your AI interviewer today. I've reviewed your resume and I see you have experience with ${skills}. I'm looking forward to learning more about your work. Let's start - can you tell me about yourself and walk me through your background?`;
+  } else {
+    return `Hello ${name}! I'm your AI interviewer today. Thank you for joining this interview session. Let's start with a brief introduction - can you tell me a little about yourself and walk me through your background?`;
+  }
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -117,6 +131,8 @@ serve(async (req) => {
       
       // Build candidate profile from resume highlights for the interview prompt
       let candidateProfile = null;
+      let candidateName = '';
+      
       if (resumeHighlights) {
         candidateProfile = {
           skills: resumeHighlights.skills || [],
@@ -125,6 +141,7 @@ serve(async (req) => {
           experience: resumeHighlights.experience || [],
           summary: resumeHighlights.summary || ''
         };
+        candidateName = resumeHighlights.name || '';
       }
 
       // Create interview session record (VAPI call happens client-side via SDK)
@@ -154,14 +171,17 @@ serve(async (req) => {
           interview_session_id: newSession.id,
           log_type: 'session_start',
           message: 'Interview session started',
-          metadata: { candidateProfile }
+          metadata: { candidateProfile, candidateName }
         });
       }
 
       // Build system prompt with candidate profile
       const systemPrompt = candidateProfile 
-        ? buildInterviewSystemPrompt(candidateProfile)
-        : buildInterviewSystemPrompt({ message: "No resume data available. Conduct a general behavioral interview." });
+        ? buildInterviewSystemPrompt(candidateProfile, candidateName)
+        : buildInterviewSystemPrompt({ message: "No resume data available. Conduct a general behavioral interview." }, '');
+
+      // Build personalized first message
+      const firstMessage = buildFirstMessage(candidateName, candidateProfile);
 
       return new Response(
         JSON.stringify({ 
@@ -169,9 +189,10 @@ serve(async (req) => {
           sessionId: newSession?.id,
           publicKey: VAPI_PUBLIC_KEY,
           assistantId: VAPI_ASSISTANT_ID,
+          firstMessage,
           // Include overrides for the assistant
           assistantOverrides: {
-            firstMessage: DEFAULT_FIRST_MESSAGE,
+            firstMessage,
             model: {
               messages: [{ role: 'system', content: systemPrompt }]
             }
