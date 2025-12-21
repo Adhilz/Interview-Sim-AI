@@ -10,10 +10,12 @@ const corsHeaders = {
 const RESUME_PARSING_PROMPT = `You are an advanced ATS resume parser.
 
 INPUT:
-- Plain extracted text from a resume (may contain broken formatting)
+- Plain extracted text from a PDF resume
+- Text may be poorly formatted or broken
 
 TASK:
-Extract structured resume information strictly from the given text.
+Extract ALL available information from the resume.
+Do NOT guess missing data.
 
 OUTPUT:
 Return ONLY valid JSON in the following schema:
@@ -21,12 +23,10 @@ Return ONLY valid JSON in the following schema:
   "name": "",
   "email": "",
   "phone": "",
-  "summary": "",
   "skills": [],
-  "tools": [],
   "projects": [
     {
-      "name": "",
+      "title": "",
       "description": "",
       "technologies": []
     }
@@ -36,26 +36,23 @@ Return ONLY valid JSON in the following schema:
       "company": "",
       "role": "",
       "duration": "",
-      "highlights": []
+      "description": ""
     }
   ],
   "education": [
     {
       "institution": "",
       "degree": "",
-      "year": "",
-      "gpa": ""
+      "year": ""
     }
   ]
 }
 
 RULES:
-- Do NOT guess missing values
-- Empty fields must be "" or []
-- Do NOT add commentary
-- Do NOT modify schema
-- Extract ALL relevant information from the text
-- Be thorough and extract all skills, tools, and technologies mentioned`;
+- If information is missing, use "" or []
+- Do NOT add extra fields
+- Do NOT add explanations
+- Do NOT summarize`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
