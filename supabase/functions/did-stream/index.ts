@@ -76,14 +76,26 @@ serve(async (req) => {
         }
 
         const streamData = await createResponse.json();
-        console.log('[D-ID Stream] Stream created:', streamData.id);
+        
+        // Log the full response to understand the structure
+        console.log('[D-ID Stream] Full response:', JSON.stringify(streamData, null, 2));
+        console.log('[D-ID Stream] Stream created - id:', streamData.id, 'session_id:', streamData.session_id);
+
+        // D-ID returns 'id' as the stream ID and 'session_id' as the WebRTC session identifier
+        // Make sure we're getting the correct session_id from the JSON response
+        const actualSessionId = streamData.session_id;
+        
+        if (!actualSessionId) {
+          console.error('[D-ID Stream] No session_id in response, full response:', JSON.stringify(streamData));
+          throw new Error('D-ID did not return a session_id');
+        }
 
         return new Response(
           JSON.stringify({
             streamId: streamData.id,
             sdpOffer: streamData.offer,
             iceServers: streamData.ice_servers,
-            sessionId: streamData.session_id,
+            sessionId: actualSessionId,
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
