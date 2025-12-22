@@ -62,6 +62,35 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
     }
   }, [autoStart, initialize]);
 
+  // Try to play video when connected (handles autoplay restrictions)
+  useEffect(() => {
+    if (isConnected && videoRef.current) {
+      const playVideo = async () => {
+        try {
+          // First try unmuted
+          await videoRef.current?.play();
+          console.log('[DidAvatar] Video playing');
+        } catch (e) {
+          console.warn('[DidAvatar] Autoplay failed, trying muted:', e);
+          // If autoplay fails, try muted first then unmute
+          if (videoRef.current) {
+            videoRef.current.muted = true;
+            try {
+              await videoRef.current.play();
+              // Unmute after a short delay
+              setTimeout(() => {
+                if (videoRef.current) videoRef.current.muted = false;
+              }, 100);
+            } catch (e2) {
+              console.error('[DidAvatar] Even muted autoplay failed:', e2);
+            }
+          }
+        }
+      };
+      playVideo();
+    }
+  }, [isConnected]);
+
   return (
     <div className={`relative w-full h-full bg-[#2d2d2d] rounded-xl overflow-hidden ${className}`}>
       {/* Video element for D-ID stream */}

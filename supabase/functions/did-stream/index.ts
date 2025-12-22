@@ -62,9 +62,9 @@ serve(async (req) => {
           body: JSON.stringify({
             source_url: sourceUrl,
             driver_url: "bank://lively/driver-03", // Natural idle behavior
+            stream_warmup: true, // Enable stream warmup to reduce jittering and show idle avatar
             config: {
               stitch: true,
-              result_format: "mp4",
             },
           }),
         });
