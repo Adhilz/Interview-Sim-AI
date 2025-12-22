@@ -7,12 +7,12 @@ import {
   VideoOff,
   PhoneOff,
   Clock,
-  Brain,
   Loader2,
   Settings,
   Volume2
 } from "lucide-react";
 import { useVapi } from "@/hooks/useVapi";
+import DidAvatar, { DidAvatarRef } from "./DidAvatar";
 
 interface InterviewRoomProps {
   status: "connecting" | "in_progress" | "ended";
@@ -41,10 +41,13 @@ const InterviewRoom = ({
 }: InterviewRoomProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const didAvatarRef = useRef<DidAvatarRef>(null);
   
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
   const [hasStartedVapi, setHasStartedVapi] = useState(false);
+  const [isDidConnected, setIsDidConnected] = useState(false);
+  const [isAvatarSpeaking, setIsAvatarSpeaking] = useState(false);
 
   const {
     isConnected,
@@ -86,14 +89,14 @@ const InterviewRoom = ({
     return () => stopMedia();
   }, []);
 
-  // Auto-start VAPI when ready
+  // Auto-start VAPI when D-ID is ready
   useEffect(() => {
-    if (status === "connecting" && !hasStartedVapi && !isLoading && !isConnected) {
-      console.log('[InterviewRoom] Auto-starting VAPI');
+    if (status === "connecting" && !hasStartedVapi && !isLoading && !isConnected && isDidConnected) {
+      console.log('[InterviewRoom] D-ID connected, starting VAPI');
       setHasStartedVapi(true);
       startVapi();
     }
-  }, [status, hasStartedVapi, isLoading, isConnected, startVapi]);
+  }, [status, hasStartedVapi, isLoading, isConnected, isDidConnected, startVapi]);
 
   // Handle VAPI error
   useEffect(() => {
@@ -153,7 +156,18 @@ const InterviewRoom = ({
     const transcript = getTranscript();
     stopVapi();
     stopMedia();
+    didAvatarRef.current?.destroy();
     onEndInterview(transcript);
+  };
+
+  const handleDidConnected = () => {
+    console.log('[InterviewRoom] D-ID avatar connected');
+    setIsDidConnected(true);
+  };
+
+  const handleDidError = (error: string) => {
+    console.error('[InterviewRoom] D-ID error:', error);
+    // D-ID errors are non-fatal, we can still do audio-only interview
   };
 
   const isActuallyConnected = isConnected || status === "in_progress";
@@ -162,44 +176,19 @@ const InterviewRoom = ({
     <div className="fixed inset-0 bg-[#202124] flex flex-col">
       {/* Main content area */}
       <div className="flex-1 relative flex items-center justify-center p-4">
-        {/* AI Interviewer - Center */}
-        <div className="relative w-full max-w-4xl aspect-video bg-[#3c4043] rounded-2xl overflow-hidden flex items-center justify-center">
-          {/* Avatar Placeholder */}
-          <div className="flex flex-col items-center justify-center text-center">
-            <div className={`w-32 h-32 md:w-40 md:h-40 rounded-full bg-gradient-to-br from-accent to-accent/60 flex items-center justify-center mb-6 transition-all duration-300 ${
-              isSpeaking ? "ring-4 ring-accent/50 scale-105" : ""
-            } ${isLoading ? "animate-pulse" : ""}`}>
-              {isLoading ? (
-                <Loader2 className="w-16 h-16 md:w-20 md:h-20 text-accent-foreground animate-spin" />
-              ) : (
-                <Brain className="w-16 h-16 md:w-20 md:h-20 text-accent-foreground" />
-              )}
-            </div>
-            <p className="text-white text-xl md:text-2xl font-medium mb-2">AI Interviewer</p>
-            {isLoading && (
-              <p className="text-white/60 text-sm">Connecting to interview...</p>
-            )}
-            {isActuallyConnected && !isSpeaking && (
-              <div className="flex items-center gap-2 text-white/60 text-sm">
-                <Mic className="w-4 h-4 text-success animate-pulse" />
-                <span>Listening to you...</span>
-              </div>
-            )}
-            {isSpeaking && (
-              <div className="flex items-center gap-2 text-white/60 text-sm">
-                <Volume2 className="w-4 h-4 text-accent animate-pulse" />
-                <span>AI is speaking...</span>
-              </div>
-            )}
-            {vapiError && (
-              <div className="mt-4 p-3 bg-destructive/20 rounded-lg max-w-md">
-                <p className="text-destructive text-sm">{vapiError}</p>
-              </div>
-            )}
-          </div>
+        {/* AI Interviewer Avatar - Center */}
+        <div className="relative w-full max-w-4xl aspect-video rounded-2xl overflow-hidden">
+          <DidAvatar
+            ref={didAvatarRef}
+            autoStart={true}
+            onConnected={handleDidConnected}
+            onError={handleDidError}
+            onSpeakingChange={setIsAvatarSpeaking}
+            className="w-full h-full"
+          />
 
           {/* User's self video - bottom right */}
-          <div className="absolute bottom-4 right-4 w-40 h-28 md:w-52 md:h-36 rounded-xl overflow-hidden bg-[#3c4043] border-2 border-white/10 shadow-2xl">
+          <div className="absolute bottom-4 right-4 w-40 h-28 md:w-52 md:h-36 rounded-xl overflow-hidden bg-[#3c4043] border-2 border-white/10 shadow-2xl z-10">
             <video
               ref={videoRef}
               autoPlay
@@ -220,7 +209,7 @@ const InterviewRoom = ({
           </div>
 
           {/* Timer - top right */}
-          <div className={`absolute top-4 right-4 flex items-center gap-2 px-4 py-2 rounded-lg ${
+          <div className={`absolute top-4 right-4 flex items-center gap-2 px-4 py-2 rounded-lg z-10 ${
             timeRemaining < 60 ? "bg-destructive/80" : "bg-black/50"
           }`}>
             <Clock className="w-5 h-5 text-white" />
@@ -232,12 +221,27 @@ const InterviewRoom = ({
           </div>
 
           {/* Connection status */}
-          <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/50">
+          <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/50 z-10">
             <div className={`w-2 h-2 rounded-full ${isActuallyConnected ? "bg-success" : isLoading ? "bg-warning animate-pulse" : "bg-muted"}`} />
             <span className="text-white/70 text-sm">
               {isActuallyConnected ? "Connected" : isLoading ? "Connecting..." : "Disconnected"}
             </span>
           </div>
+
+          {/* VAPI status indicator */}
+          {isActuallyConnected && !isSpeaking && (
+            <div className="absolute bottom-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/50 z-10">
+              <Mic className="w-4 h-4 text-success animate-pulse" />
+              <span className="text-white/70 text-sm">Listening...</span>
+            </div>
+          )}
+
+          {/* VAPI error display */}
+          {vapiError && (
+            <div className="absolute top-16 left-4 right-4 p-3 bg-destructive/80 rounded-lg z-10">
+              <p className="text-white text-sm">{vapiError}</p>
+            </div>
+          )}
         </div>
       </div>
 
