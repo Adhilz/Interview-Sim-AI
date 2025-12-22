@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useVapi } from "@/hooks/useVapi";
 import DidAvatar, { DidAvatarRef } from "./DidAvatar";
+import { initializeDefaultAvatar, getDefaultAvatarUrl } from "@/lib/uploadAvatarToStorage";
 
 interface InterviewRoomProps {
   status: "connecting" | "in_progress" | "ended";
@@ -48,6 +49,8 @@ const InterviewRoom = ({
   const [hasStartedVapi, setHasStartedVapi] = useState(false);
   const [isDidConnected, setIsDidConnected] = useState(false);
   const [isAvatarSpeaking, setIsAvatarSpeaking] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [isAvatarLoading, setIsAvatarLoading] = useState(true);
 
   const {
     isConnected,
@@ -83,6 +86,27 @@ const InterviewRoom = ({
     },
   });
 
+  // Initialize avatar in storage on mount
+  useEffect(() => {
+    const initAvatar = async () => {
+      try {
+        setIsAvatarLoading(true);
+        // Try to initialize default avatar in storage
+        const url = await initializeDefaultAvatar();
+        setAvatarUrl(url);
+        console.log('[InterviewRoom] Avatar initialized:', url);
+      } catch (error) {
+        console.error('[InterviewRoom] Avatar init error, using fallback:', error);
+        // Use the direct URL as fallback
+        setAvatarUrl(getDefaultAvatarUrl());
+      } finally {
+        setIsAvatarLoading(false);
+      }
+    };
+    
+    initAvatar();
+  }, []);
+
   // Start media on mount
   useEffect(() => {
     startMedia();
@@ -91,12 +115,12 @@ const InterviewRoom = ({
 
   // Auto-start VAPI when D-ID is ready
   useEffect(() => {
-    if (status === "connecting" && !hasStartedVapi && !isLoading && !isConnected && isDidConnected) {
+    if (status === "connecting" && !hasStartedVapi && !isLoading && !isConnected && isDidConnected && avatarUrl) {
       console.log('[InterviewRoom] D-ID connected, starting VAPI');
       setHasStartedVapi(true);
       startVapi();
     }
-  }, [status, hasStartedVapi, isLoading, isConnected, isDidConnected, startVapi]);
+  }, [status, hasStartedVapi, isLoading, isConnected, isDidConnected, startVapi, avatarUrl]);
 
   // Handle VAPI error
   useEffect(() => {
@@ -178,14 +202,24 @@ const InterviewRoom = ({
       <div className="flex-1 relative flex items-center justify-center p-4">
         {/* AI Interviewer Avatar - Center */}
         <div className="relative w-full max-w-4xl aspect-video rounded-2xl overflow-hidden">
-          <DidAvatar
-            ref={didAvatarRef}
-            autoStart={true}
-            onConnected={handleDidConnected}
-            onError={handleDidError}
-            onSpeakingChange={setIsAvatarSpeaking}
-            className="w-full h-full"
-          />
+          {!isAvatarLoading && avatarUrl && (
+            <DidAvatar
+              ref={didAvatarRef}
+              autoStart={true}
+              avatarUrl={avatarUrl}
+              onConnected={handleDidConnected}
+              onError={handleDidError}
+              onSpeakingChange={setIsAvatarSpeaking}
+              className="w-full h-full"
+            />
+          )}
+          
+          {isAvatarLoading && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#3c4043]">
+              <Loader2 className="w-16 h-16 text-accent animate-spin mb-4" />
+              <p className="text-white/70 text-sm">Loading avatar...</p>
+            </div>
+          )}
 
           {/* User's self video - bottom right */}
           <div className="absolute bottom-4 right-4 w-40 h-28 md:w-52 md:h-36 rounded-xl overflow-hidden bg-[#3c4043] border-2 border-white/10 shadow-2xl z-10">

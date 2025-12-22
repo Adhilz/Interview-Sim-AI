@@ -4,6 +4,7 @@ import { useDidStream } from '@/hooks/useDidStream';
 
 interface DidAvatarProps {
   autoStart?: boolean;
+  avatarUrl?: string; // Custom avatar URL (must be publicly accessible)
   onConnected?: () => void;
   onError?: (error: string) => void;
   onSpeakingChange?: (speaking: boolean) => void;
@@ -18,6 +19,7 @@ export interface DidAvatarRef {
 
 const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
   autoStart = true,
+  avatarUrl,
   onConnected,
   onError,
   onSpeakingChange,
@@ -38,6 +40,7 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
     onConnected,
     onError,
     onSpeaking: onSpeakingChange,
+    avatarUrl, // Pass the custom avatar URL to the hook
   });
 
   // Expose methods to parent

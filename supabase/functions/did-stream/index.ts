@@ -7,7 +7,24 @@ const corsHeaders = {
 
 // D-ID API configuration
 const DID_API_URL = "https://api.d-id.com";
-const AVATAR_IMAGE_URL = "https://create-images-results.d-id.com/DefaultPresenters/Noelle_f/image.jpeg";
+
+// Get the Supabase URL to construct the public avatar URL
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
+
+// Default avatar image - stored in public/avatars folder of the project
+// This can be overridden by passing a custom avatarUrl in the request
+const getAvatarUrl = (customUrl?: string): string => {
+  if (customUrl) {
+    console.log('[D-ID Stream] Using custom avatar URL:', customUrl);
+    return customUrl;
+  }
+  
+  // Use the default interviewer avatar from the project's public folder
+  // This will be served from the project's domain
+  const defaultUrl = "https://fjaneryjjgesujinlbix.supabase.co/storage/v1/object/public/avatars/interviewer.png";
+  console.log('[D-ID Stream] Using default avatar URL:', defaultUrl);
+  return defaultUrl;
+};
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -25,13 +42,16 @@ serve(async (req) => {
   }
 
   try {
-    const { action, streamId, sdpAnswer, audio, iceCandidate } = await req.json();
+    const { action, streamId, sdpAnswer, audio, iceCandidate, avatarUrl } = await req.json();
     console.log(`[D-ID Stream] Action: ${action}`);
 
     switch (action) {
       case 'create': {
         // Create a new D-ID streaming session
         console.log('[D-ID Stream] Creating new stream session...');
+        
+        // Get the avatar URL (custom or default)
+        const sourceUrl = getAvatarUrl(avatarUrl);
         
         const createResponse = await fetch(`${DID_API_URL}/talks/streams`, {
           method: 'POST',
@@ -40,7 +60,7 @@ serve(async (req) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            source_url: AVATAR_IMAGE_URL,
+            source_url: sourceUrl,
             driver_url: "bank://lively/driver-03", // Natural idle behavior
             config: {
               stitch: true,

@@ -5,6 +5,7 @@ interface UseDidStreamOptions {
   onConnected?: () => void;
   onError?: (error: string) => void;
   onSpeaking?: (speaking: boolean) => void;
+  avatarUrl?: string; // Custom avatar URL (must be publicly accessible)
 }
 
 export const useDidStream = (options: UseDidStreamOptions = {}) => {
@@ -33,9 +34,12 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
     console.log('[D-ID] Initializing stream...');
 
     try {
-      // Create D-ID stream session
+      // Create D-ID stream session with optional custom avatar
       const { data, error: fnError } = await supabase.functions.invoke('did-stream', {
-        body: { action: 'create' }
+        body: { 
+          action: 'create',
+          avatarUrl: options.avatarUrl // Pass custom avatar URL if provided
+        }
       });
 
       if (fnError) throw new Error(fnError.message);
