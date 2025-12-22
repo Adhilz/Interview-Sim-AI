@@ -15,6 +15,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
   const [error, setError] = useState<string | null>(null);
 
   const streamIdRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null); // D-ID session_id (different from stream_id)
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioQueueRef = useRef<string[]>([]);
@@ -43,10 +44,11 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
       });
 
       if (fnError) throw new Error(fnError.message);
-      if (!data?.streamId) throw new Error('No stream ID received');
+      if (!data?.streamId || !data?.sessionId) throw new Error('No stream ID or session ID received');
 
-      console.log('[D-ID] Stream created:', data.streamId);
+      console.log('[D-ID] Stream created:', data.streamId, 'Session:', data.sessionId);
       streamIdRef.current = data.streamId;
+      sessionIdRef.current = data.sessionId; // Store the session_id separately
 
       // Create RTCPeerConnection
       const pc = new RTCPeerConnection({
@@ -63,14 +65,15 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
         }
       };
 
-      // Handle ICE candidates
+      // Handle ICE candidates - send with both streamId and sessionId
       pc.onicecandidate = async (event) => {
-        if (event.candidate) {
+        if (event.candidate && streamIdRef.current && sessionIdRef.current) {
           console.log('[D-ID] Sending ICE candidate');
           await supabase.functions.invoke('did-stream', {
             body: {
               action: 'ice',
               streamId: streamIdRef.current,
+              sessionId: sessionIdRef.current,
               iceCandidate: {
                 candidate: event.candidate.candidate,
                 sdpMid: event.candidate.sdpMid,
@@ -104,11 +107,12 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      // Send SDP answer to D-ID
+      // Send SDP answer to D-ID with both streamId and sessionId
       const { error: sdpError } = await supabase.functions.invoke('did-stream', {
         body: {
           action: 'sdp',
           streamId: data.streamId,
+          sessionId: data.sessionId, // Pass the session_id from D-ID
           sdpAnswer: {
             type: answer.type,
             sdp: answer.sdp
@@ -130,7 +134,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
   // Process audio queue sequentially
   const processAudioQueue = useCallback(async () => {
     if (isProcessingAudioRef.current || audioQueueRef.current.length === 0) return;
-    if (!streamIdRef.current) return;
+    if (!streamIdRef.current || !sessionIdRef.current) return;
 
     isProcessingAudioRef.current = true;
     setIsSpeaking(true);
@@ -145,6 +149,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
           body: {
             action: 'talk',
             streamId: streamIdRef.current,
+            sessionId: sessionIdRef.current,
             audio
           }
         });
@@ -163,8 +168,8 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
 
   // Queue audio for streaming
   const streamAudio = useCallback((audioBase64: string) => {
-    if (!streamIdRef.current) {
-      console.warn('[D-ID] Cannot stream audio: no active stream');
+    if (!streamIdRef.current || !sessionIdRef.current) {
+      console.warn('[D-ID] Cannot stream audio: no active stream or session');
       return;
     }
 
@@ -200,6 +205,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
         console.error('[D-ID] Error destroying stream:', err);
       }
       streamIdRef.current = null;
+      sessionIdRef.current = null;
     }
 
     // Reset state
