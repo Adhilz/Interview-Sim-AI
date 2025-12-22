@@ -61,7 +61,12 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
         console.log('[D-ID] Received remote track:', event.track.kind);
         if (event.streams && event.streams[0] && videoRef.current) {
           videoRef.current.srcObject = event.streams[0];
-          console.log('[D-ID] Video stream attached');
+          console.log('[D-ID] Video stream attached, stream has', event.streams[0].getTracks().length, 'tracks');
+          
+          // Log video track details
+          event.streams[0].getTracks().forEach(track => {
+            console.log('[D-ID] Track:', track.kind, 'enabled:', track.enabled, 'readyState:', track.readyState);
+          });
         }
       };
 
