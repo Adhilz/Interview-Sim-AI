@@ -42,8 +42,8 @@ serve(async (req) => {
   }
 
   try {
-    const { action, streamId, sdpAnswer, audio, iceCandidate, avatarUrl } = await req.json();
-    console.log(`[D-ID Stream] Action: ${action}`);
+    const { action, streamId, sessionId, sdpAnswer, audio, iceCandidate, avatarUrl } = await req.json();
+    console.log(`[D-ID Stream] Action: ${action}, streamId: ${streamId}, sessionId: ${sessionId}`);
 
     switch (action) {
       case 'create': {
@@ -91,11 +91,12 @@ serve(async (req) => {
 
       case 'sdp': {
         // Send SDP answer to complete WebRTC handshake
-        if (!streamId || !sdpAnswer) {
-          throw new Error('streamId and sdpAnswer required for SDP action');
+        // D-ID requires the session_id (not stream_id) for WebRTC negotiation
+        if (!streamId || !sessionId || !sdpAnswer) {
+          throw new Error('streamId, sessionId, and sdpAnswer required for SDP action');
         }
 
-        console.log('[D-ID Stream] Sending SDP answer for stream:', streamId);
+        console.log('[D-ID Stream] Sending SDP answer for stream:', streamId, 'session:', sessionId);
 
         const sdpResponse = await fetch(`${DID_API_URL}/talks/streams/${streamId}/sdp`, {
           method: 'POST',
@@ -105,7 +106,7 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             answer: sdpAnswer,
-            session_id: streamId,
+            session_id: sessionId, // Use the actual session_id from D-ID, not stream_id
           }),
         });
 
@@ -124,11 +125,12 @@ serve(async (req) => {
 
       case 'ice': {
         // Forward ICE candidate to D-ID
-        if (!streamId || !iceCandidate) {
-          throw new Error('streamId and iceCandidate required for ICE action');
+        // D-ID requires the session_id for ICE candidates
+        if (!streamId || !sessionId || !iceCandidate) {
+          throw new Error('streamId, sessionId, and iceCandidate required for ICE action');
         }
 
-        console.log('[D-ID Stream] Sending ICE candidate for stream:', streamId);
+        console.log('[D-ID Stream] Sending ICE candidate for stream:', streamId, 'session:', sessionId);
 
         const iceResponse = await fetch(`${DID_API_URL}/talks/streams/${streamId}/ice`, {
           method: 'POST',
@@ -140,7 +142,7 @@ serve(async (req) => {
             candidate: iceCandidate.candidate,
             sdpMid: iceCandidate.sdpMid,
             sdpMLineIndex: iceCandidate.sdpMLineIndex,
-            session_id: streamId,
+            session_id: sessionId, // Use the actual session_id from D-ID
           }),
         });
 
@@ -158,11 +160,11 @@ serve(async (req) => {
 
       case 'talk': {
         // Stream audio to make the avatar speak
-        if (!streamId || !audio) {
-          throw new Error('streamId and audio required for talk action');
+        if (!streamId || !sessionId || !audio) {
+          throw new Error('streamId, sessionId, and audio required for talk action');
         }
 
-        console.log('[D-ID Stream] Sending audio to stream:', streamId);
+        console.log('[D-ID Stream] Sending audio to stream:', streamId, 'session:', sessionId);
 
         const talkResponse = await fetch(`${DID_API_URL}/talks/streams/${streamId}`, {
           method: 'POST',
@@ -179,7 +181,7 @@ serve(async (req) => {
             config: {
               stitch: true,
             },
-            session_id: streamId,
+            session_id: sessionId, // Use the actual session_id
           }),
         });
 
