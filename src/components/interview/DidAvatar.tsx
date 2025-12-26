@@ -1,4 +1,4 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { Loader2, User } from 'lucide-react';
 import { useDidStream } from '@/hooks/useDidStream';
 
@@ -26,7 +26,8 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
   className = '',
 }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  
+  const [hasVideoFrame, setHasVideoFrame] = useState(false);
+
   const {
     isConnected,
     isLoading,
@@ -44,16 +45,29 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
   });
 
   // Expose methods to parent
-  useImperativeHandle(ref, () => ({
-    streamAudio,
-    destroy,
-    isConnected,
-  }), [streamAudio, destroy, isConnected]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      streamAudio,
+      destroy,
+      isConnected,
+    }),
+    [streamAudio, destroy, isConnected]
+  );
 
   // Set video element reference
   useEffect(() => {
     setVideoElement(videoRef.current);
   }, [setVideoElement]);
+
+  // Reset frame detection when changing connection/avatar
+  useEffect(() => {
+    if (!isConnected) setHasVideoFrame(false);
+  }, [isConnected]);
+
+  useEffect(() => {
+    setHasVideoFrame(false);
+  }, [avatarUrl]);
 
   // Auto-start on mount
   useEffect(() => {
@@ -93,20 +107,34 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
 
   return (
     <div className={`relative w-full h-full bg-[#2d2d2d] rounded-xl overflow-hidden ${className}`}>
+      {/* Static avatar placeholder (shown until the first video frame arrives) */}
+      {avatarUrl && !hasVideoFrame && (
+        <img
+          src={avatarUrl}
+          alt="AI interviewer avatar"
+          className="absolute inset-0 z-0 h-full w-full object-cover"
+          loading="eager"
+          draggable={false}
+        />
+      )}
+
       {/* Video element for D-ID stream */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted={false}
-        className={`w-full h-full object-cover transition-opacity duration-300 ${
-          isConnected ? 'opacity-100' : 'opacity-0'
+        poster={avatarUrl}
+        onLoadedData={() => setHasVideoFrame(true)}
+        onPlaying={() => setHasVideoFrame(true)}
+        className={`relative z-10 w-full h-full object-cover transition-opacity duration-300 ${
+          hasVideoFrame ? 'opacity-100' : 'opacity-0'
         }`}
       />
 
       {/* Loading state */}
       {isLoading && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#3c4043]">
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#3c4043]">
           <Loader2 className="w-16 h-16 text-accent animate-spin mb-4" />
           <p className="text-white/70 text-sm">Connecting to AI interviewer...</p>
         </div>
@@ -114,7 +142,7 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
 
       {/* Fallback when not connected */}
       {!isConnected && !isLoading && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#3c4043]">
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#3c4043]">
           <div className="w-24 h-24 rounded-full bg-gradient-to-br from-accent to-accent/60 flex items-center justify-center mb-4">
             <User className="w-12 h-12 text-accent-foreground" />
           </div>
@@ -124,7 +152,7 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
 
       {/* Speaking indicator */}
       {isSpeaking && isConnected && (
-        <div className="absolute bottom-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent/80">
+        <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent/80">
           <div className="flex gap-0.5">
             <div className="w-1 h-3 bg-white rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
             <div className="w-1 h-4 bg-white rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
@@ -136,7 +164,7 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
 
       {/* Error display */}
       {error && (
-        <div className="absolute bottom-4 left-4 right-4 p-3 bg-destructive/80 rounded-lg">
+        <div className="absolute bottom-4 left-4 right-4 z-20 p-3 bg-destructive/80 rounded-lg">
           <p className="text-white text-sm">{error}</p>
         </div>
       )}

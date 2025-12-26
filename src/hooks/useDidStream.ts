@@ -203,7 +203,8 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
         await supabase.functions.invoke('did-stream', {
           body: {
             action: 'destroy',
-            streamId: streamIdRef.current
+            streamId: streamIdRef.current,
+            sessionId: sessionIdRef.current,
           }
         });
       } catch (err) {
