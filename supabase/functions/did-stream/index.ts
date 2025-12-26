@@ -11,17 +11,19 @@ const DID_API_URL = "https://api.d-id.com";
 // Get the Supabase URL to construct the public avatar URL
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 
-// Default avatar - use a well-known public image that D-ID can validate
-// D-ID requires publicly accessible images with proper CORS headers
+// Default avatar - use D-ID's guaranteed-to-work presenter image
+// Note: Supabase storage URLs don't work reliably with D-ID's image validation
 const getAvatarUrl = (customUrl?: string): string => {
-  if (customUrl) {
+  // Only use custom URLs from trusted sources (not Supabase storage)
+  // D-ID has issues validating Supabase storage URLs
+  if (customUrl && !customUrl.includes('supabase.co/storage')) {
     console.log('[D-ID Stream] Using custom avatar URL:', customUrl);
     return customUrl;
   }
   
   // Use D-ID's sample presenter image which is guaranteed to work
   const defaultUrl = "https://create-images-results.d-id.com/DefaultPresenters/Emma_f/image.png";
-  console.log('[D-ID Stream] Using default avatar URL:', defaultUrl);
+  console.log('[D-ID Stream] Using D-ID default avatar URL:', defaultUrl);
   return defaultUrl;
 };
 
