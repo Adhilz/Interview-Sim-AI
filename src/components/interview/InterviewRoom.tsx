@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useVapi } from "@/hooks/useVapi";
 import DidAvatar, { DidAvatarRef } from "./DidAvatar";
-import { initializeDefaultAvatar, getDefaultAvatarUrl } from "@/lib/uploadAvatarToStorage";
+
 
 interface InterviewRoomProps {
   status: "connecting" | "in_progress" | "ended";
@@ -86,25 +86,11 @@ const InterviewRoom = ({
     },
   });
 
-  // Initialize avatar in storage on mount
+  // Use the app-hosted avatar from /public/avatars so D-ID can fetch it reliably
   useEffect(() => {
-    const initAvatar = async () => {
-      try {
-        setIsAvatarLoading(true);
-        // Try to initialize default avatar in storage
-        const url = await initializeDefaultAvatar();
-        setAvatarUrl(url);
-        console.log('[InterviewRoom] Avatar initialized:', url);
-      } catch (error) {
-        console.error('[InterviewRoom] Avatar init error, using fallback:', error);
-        // Use the direct URL as fallback
-        setAvatarUrl(getDefaultAvatarUrl());
-      } finally {
-        setIsAvatarLoading(false);
-      }
-    };
-    
-    initAvatar();
+    setIsAvatarLoading(true);
+    setAvatarUrl(new URL('/avatars/interviewer.png', window.location.origin).toString());
+    setIsAvatarLoading(false);
   }, []);
 
   // Start media on mount
