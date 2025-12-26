@@ -35,12 +35,13 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
     console.log('[D-ID] Initializing stream...');
 
     try {
-      // Create D-ID stream session with optional custom avatar
+      // Create D-ID stream session
+      // NOTE: We intentionally do NOT pass a custom avatarUrl here because D-ID rejects
+      // some hosts/mime-types, which causes a hard failure and blank interview screen.
       const { data, error: fnError } = await supabase.functions.invoke('did-stream', {
-        body: { 
+        body: {
           action: 'create',
-          avatarUrl: options.avatarUrl // Pass custom avatar URL if provided
-        }
+        },
       });
 
       if (fnError) throw new Error(fnError.message);
