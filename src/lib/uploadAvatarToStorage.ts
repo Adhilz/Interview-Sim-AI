@@ -13,7 +13,7 @@ export const uploadAvatarToStorage = async (
   const { data, error } = await supabase.storage
     .from('avatars')
     .upload(name, file, {
-      cacheControl: '3600',
+      cacheControl: '0',
       upsert: true
     });
 
@@ -37,31 +37,23 @@ export const uploadAvatarToStorage = async (
  */
 export const initializeDefaultAvatar = async (): Promise<string> => {
   const bucketUrl = `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/avatars/interviewer.png`;
-  
-  // Check if avatar already exists
-  const { data: existingFiles } = await supabase.storage
-    .from('avatars')
-    .list('', { search: 'interviewer.png' });
 
-  if (existingFiles && existingFiles.length > 0) {
-    console.log('Default avatar already exists');
-    return bucketUrl;
-  }
-
-  // Fetch the avatar from public folder and upload to storage
+  // Always (re)upload from the app's bundled avatar so the storage file stays in sync.
+  // This keeps the avatar available as a public URL for D-ID.
   try {
-    const response = await fetch('/avatars/interviewer.png');
+    const response = await fetch('/avatars/interviewer.png', { cache: 'no-store' });
     if (!response.ok) {
-      throw new Error('Failed to fetch default avatar');
+      console.warn('[Avatar] Failed to fetch bundled avatar, using existing storage URL');
+      return bucketUrl;
     }
-    
+
     const blob = await response.blob();
-    const file = new File([blob], 'interviewer.png', { type: 'image/png' });
-    
+    const file = new File([blob], 'interviewer.png', { type: blob.type || 'image/png' });
+
     return await uploadAvatarToStorage(file, 'interviewer.png');
   } catch (error) {
     console.error('Error initializing default avatar:', error);
-    throw error;
+    return bucketUrl;
   }
 };
 
