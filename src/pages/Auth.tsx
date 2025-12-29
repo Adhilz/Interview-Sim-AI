@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Brain, Eye, EyeOff, Loader2, GraduationCap, ArrowLeft } from "lucide-react";
+import { Brain, Eye, EyeOff, Loader2, GraduationCap, ArrowLeft, Shield, User } from "lucide-react";
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -13,14 +13,26 @@ const loginSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
-const signupSchema = loginSchema.extend({
+const studentSignupSchema = loginSchema.extend({
   fullName: z.string().min(2, "Full name is required"),
   universityCode: z.string().min(1, "University code is required"),
 });
 
+const adminSignupSchema = loginSchema.extend({
+  fullName: z.string().min(2, "Full name is required"),
+});
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+});
+
+type RoleType = "student" | "admin";
+
 const Auth = () => {
   const location = useLocation();
-  const isLogin = location.pathname !== "/signup";
+  const isLogin = location.pathname === "/login";
+  const isSignup = location.pathname === "/signup";
+  const isForgotPassword = location.pathname === "/forgot-password";
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -28,22 +40,47 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [universityCode, setUniversityCode] = useState("");
+  const [selectedRole, setSelectedRole] = useState<RoleType>("student");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [resetEmailSent, setResetEmailSent] = useState(false);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         if (session?.user) {
-          navigate("/dashboard");
+          // Fetch user role and redirect accordingly
+          setTimeout(async () => {
+            const { data: roleData } = await supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', session.user.id)
+              .single();
+
+            if (roleData?.role === 'admin') {
+              navigate("/admin");
+            } else {
+              navigate("/dashboard");
+            }
+          }, 0);
         }
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
-        navigate("/dashboard");
+        const { data: roleData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', session.user.id)
+          .single();
+
+        if (roleData?.role === 'admin') {
+          navigate("/admin");
+        } else {
+          navigate("/dashboard");
+        }
       }
     });
 
@@ -52,10 +89,14 @@ const Auth = () => {
 
   const validateForm = () => {
     try {
-      if (isLogin) {
+      if (isForgotPassword) {
+        forgotPasswordSchema.parse({ email });
+      } else if (isLogin) {
         loginSchema.parse({ email, password });
+      } else if (selectedRole === "admin") {
+        adminSignupSchema.parse({ email, password, fullName });
       } else {
-        signupSchema.parse({ email, password, fullName, universityCode });
+        studentSignupSchema.parse({ email, password, fullName, universityCode });
       }
       setErrors({});
       return true;
@@ -73,13 +114,47 @@ const Auth = () => {
     }
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    setIsLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/login`,
+      });
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        setResetEmailSent(true);
+        toast({
+          title: "Email sent",
+          description: "Password reset link has been sent to your registered email.",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
 
     setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -90,12 +165,24 @@ const Auth = () => {
           description: error.message,
           variant: "destructive",
         });
-      } else {
+      } else if (data.user) {
+        // Fetch role and redirect
+        const { data: roleData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', data.user.id)
+          .single();
+
         toast({
           title: "Welcome back!",
           description: "Successfully logged in.",
         });
-        navigate("/dashboard");
+
+        if (roleData?.role === 'admin') {
+          navigate("/admin");
+        } else {
+          navigate("/dashboard");
+        }
       }
     } catch (error) {
       toast({
@@ -114,21 +201,26 @@ const Auth = () => {
 
     setIsLoading(true);
     try {
-      // Validate university code first
-      const { data: codeData, error: codeError } = await supabase
-        .rpc('validate_university_code', { code_input: universityCode });
+      let codeData = null;
 
-      if (codeError || !codeData) {
-        toast({
-          title: "Invalid University Code",
-          description: "The university code is invalid, expired, or has reached its usage limit.",
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        return;
+      // Only validate university code for students
+      if (selectedRole === "student") {
+        const { data, error: codeError } = await supabase
+          .rpc('validate_university_code', { code_input: universityCode });
+
+        if (codeError || !data) {
+          toast({
+            title: "Invalid University Code",
+            description: "The university code is invalid, expired, or has reached its usage limit.",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
+        codeData = data;
       }
 
-      const redirectUrl = `${window.location.origin}/dashboard`;
+      const redirectUrl = `${window.location.origin}/${selectedRole === 'admin' ? 'admin' : 'dashboard'}`;
       
       const { error } = await supabase.auth.signUp({
         email,
@@ -138,6 +230,7 @@ const Auth = () => {
           data: {
             full_name: fullName,
             university_code_id: codeData,
+            role: selectedRole,
           },
         },
       });
@@ -171,6 +264,18 @@ const Auth = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const getPageTitle = () => {
+    if (isForgotPassword) return "Reset password";
+    if (isLogin) return "Welcome back";
+    return "Create account";
+  };
+
+  const getPageDescription = () => {
+    if (isForgotPassword) return "Enter your email to receive a password reset link";
+    if (isLogin) return "Enter your credentials to access your dashboard";
+    return "Start your interview preparation journey";
   };
 
   return (
@@ -233,17 +338,201 @@ const Auth = () => {
 
             <div className="mb-8">
               <h2 className="text-3xl font-bold text-foreground mb-2">
-                {isLogin ? "Welcome back" : "Create account"}
+                {getPageTitle()}
               </h2>
               <p className="text-muted-foreground">
-                {isLogin 
-                  ? "Enter your credentials to access your dashboard" 
-                  : "Start your interview preparation journey"}
+                {getPageDescription()}
               </p>
             </div>
 
-            <form onSubmit={isLogin ? handleLogin : handleSignup} className="space-y-5">
-              {!isLogin && (
+            {/* Forgot Password Form */}
+            {isForgotPassword && (
+              <>
+                {resetEmailSent ? (
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mx-auto mb-4">
+                      <Brain className="w-8 h-8 text-accent" />
+                    </div>
+                    <h3 className="text-xl font-semibold text-foreground mb-2">Check your email</h3>
+                    <p className="text-muted-foreground mb-6">
+                      Password reset link has been sent to your registered email.
+                    </p>
+                    <Link to="/login">
+                      <Button variant="outline" className="w-full">
+                        Back to Login
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <form onSubmit={handleForgotPassword} className="space-y-5">
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="you@university.edu"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className={errors.email ? "border-destructive" : ""}
+                      />
+                      {errors.email && (
+                        <p className="text-sm text-destructive">{errors.email}</p>
+                      )}
+                    </div>
+
+                    <Button 
+                      type="submit" 
+                      className="w-full" 
+                      variant="hero" 
+                      size="lg"
+                      disabled={isLoading}
+                    >
+                      {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Send Reset Link
+                    </Button>
+
+                    <div className="text-center">
+                      <Link 
+                        to="/login" 
+                        className="text-accent hover:underline font-medium text-sm"
+                      >
+                        Back to Login
+                      </Link>
+                    </div>
+                  </form>
+                )}
+              </>
+            )}
+
+            {/* Login Form */}
+            {isLogin && (
+              <form onSubmit={handleLogin} className="space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@university.edu"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={errors.email ? "border-destructive" : ""}
+                  />
+                  {errors.email && (
+                    <p className="text-sm text-destructive">{errors.email}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className={errors.password ? "border-destructive pr-10" : "pr-10"}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {errors.password && (
+                    <p className="text-sm text-destructive">{errors.password}</p>
+                  )}
+                  <div className="text-right">
+                    <Link 
+                      to="/forgot-password" 
+                      className="text-sm text-accent hover:underline"
+                    >
+                      Forgot Password?
+                    </Link>
+                  </div>
+                </div>
+
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  variant="hero" 
+                  size="lg"
+                  disabled={isLoading}
+                >
+                  {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Sign In
+                </Button>
+
+                <div className="text-center">
+                  <p className="text-muted-foreground">
+                    Don't have an account?{" "}
+                    <Link 
+                      to="/signup" 
+                      className="text-accent hover:underline font-medium"
+                    >
+                      Sign up
+                    </Link>
+                  </p>
+                </div>
+              </form>
+            )}
+
+            {/* Signup Form */}
+            {isSignup && (
+              <form onSubmit={handleSignup} className="space-y-5">
+                {/* Role Selection */}
+                <div className="space-y-2">
+                  <Label>I am a</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRole("student")}
+                      className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+                        selectedRole === "student"
+                          ? "border-accent bg-accent/10"
+                          : "border-border hover:border-accent/50"
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        selectedRole === "student" ? "bg-accent" : "bg-muted"
+                      }`}>
+                        <User className={`w-5 h-5 ${
+                          selectedRole === "student" ? "text-accent-foreground" : "text-muted-foreground"
+                        }`} />
+                      </div>
+                      <span className={`font-medium ${
+                        selectedRole === "student" ? "text-foreground" : "text-muted-foreground"
+                      }`}>
+                        Student
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRole("admin")}
+                      className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+                        selectedRole === "admin"
+                          ? "border-accent bg-accent/10"
+                          : "border-border hover:border-accent/50"
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        selectedRole === "admin" ? "bg-accent" : "bg-muted"
+                      }`}>
+                        <Shield className={`w-5 h-5 ${
+                          selectedRole === "admin" ? "text-accent-foreground" : "text-muted-foreground"
+                        }`} />
+                      </div>
+                      <span className={`font-medium ${
+                        selectedRole === "admin" ? "text-foreground" : "text-muted-foreground"
+                      }`}>
+                        Admin
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="fullName">Full Name</Label>
                   <Input
@@ -258,98 +547,96 @@ const Auth = () => {
                     <p className="text-sm text-destructive">{errors.fullName}</p>
                   )}
                 </div>
-              )}
 
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@university.edu"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className={errors.email ? "border-destructive" : ""}
-                />
-                {errors.email && (
-                  <p className="text-sm text-destructive">{errors.email}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className={errors.password ? "border-destructive pr-10" : "pr-10"}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                {errors.password && (
-                  <p className="text-sm text-destructive">{errors.password}</p>
-                )}
-              </div>
-
-              {!isLogin && (
                 <div className="space-y-2">
-                  <Label htmlFor="universityCode" className="flex items-center gap-2">
-                    <GraduationCap className="w-4 h-4" />
-                    University Code
-                  </Label>
+                  <Label htmlFor="email">Email</Label>
                   <Input
-                    id="universityCode"
-                    type="text"
-                    placeholder="Enter your university code"
-                    value={universityCode}
-                    onChange={(e) => setUniversityCode(e.target.value.toUpperCase())}
-                    className={errors.universityCode ? "border-destructive uppercase" : "uppercase"}
+                    id="email"
+                    type="email"
+                    placeholder="you@university.edu"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={errors.email ? "border-destructive" : ""}
                   />
-                  {errors.universityCode && (
-                    <p className="text-sm text-destructive">{errors.universityCode}</p>
+                  {errors.email && (
+                    <p className="text-sm text-destructive">{errors.email}</p>
                   )}
-                  <p className="text-xs text-muted-foreground">
-                    Contact your university administrator if you don't have a code
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className={errors.password ? "border-destructive pr-10" : "pr-10"}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  {errors.password && (
+                    <p className="text-sm text-destructive">{errors.password}</p>
+                  )}
+                </div>
+
+                {selectedRole === "student" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="universityCode" className="flex items-center gap-2">
+                      <GraduationCap className="w-4 h-4" />
+                      University Code
+                    </Label>
+                    <Input
+                      id="universityCode"
+                      type="text"
+                      placeholder="Enter your university code"
+                      value={universityCode}
+                      onChange={(e) => setUniversityCode(e.target.value.toUpperCase())}
+                      className={errors.universityCode ? "border-destructive uppercase" : "uppercase"}
+                    />
+                    {errors.universityCode && (
+                      <p className="text-sm text-destructive">{errors.universityCode}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Contact your university administrator if you don't have a code
+                    </p>
+                  </div>
+                )}
+
+                <Button 
+                  type="submit" 
+                  className="w-full" 
+                  variant="hero" 
+                  size="lg"
+                  disabled={isLoading}
+                >
+                  {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Create Account
+                </Button>
+
+                <div className="text-center">
+                  <p className="text-muted-foreground">
+                    Already have an account?{" "}
+                    <Link 
+                      to="/login" 
+                      className="text-accent hover:underline font-medium"
+                    >
+                      Sign in
+                    </Link>
                   </p>
                 </div>
-              )}
 
-              <Button 
-                type="submit" 
-                className="w-full" 
-                variant="hero" 
-                size="lg"
-                disabled={isLoading}
-              >
-                {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                {isLogin ? "Sign In" : "Create Account"}
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center">
-              <p className="text-muted-foreground">
-                {isLogin ? "Don't have an account? " : "Already have an account? "}
-                <Link 
-                  to={isLogin ? "/signup" : "/login"} 
-                  className="text-accent hover:underline font-medium"
-                >
-                  {isLogin ? "Sign up" : "Sign in"}
-                </Link>
-              </p>
-            </div>
-
-            {!isLogin && (
-              <p className="mt-6 text-xs text-center text-muted-foreground">
-                By creating an account, you agree to our Terms of Service and Privacy Policy.
-              </p>
+                <p className="text-xs text-center text-muted-foreground">
+                  By creating an account, you agree to our Terms of Service and Privacy Policy.
+                </p>
+              </form>
             )}
           </div>
         </div>

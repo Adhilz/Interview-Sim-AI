@@ -1,5 +1,7 @@
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import { 
   Mic, 
   Video, 
@@ -15,6 +17,57 @@ import {
 } from "lucide-react";
 
 const Landing = () => {
+  const [totalUsers, setTotalUsers] = useState(0);
+  const [totalInterviews, setTotalInterviews] = useState(0);
+  const [successRate, setSuccessRate] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        // Get total users (students)
+        const { count: userCount } = await supabase
+          .from('profiles')
+          .select('*', { count: 'exact', head: true });
+        
+        setTotalUsers(userCount || 0);
+
+        // Get total interviews
+        const { count: interviewCount } = await supabase
+          .from('interviews')
+          .select('*', { count: 'exact', head: true });
+        
+        setTotalInterviews(interviewCount || 0);
+
+        // Get average score for success rate
+        const { data: evaluations } = await supabase
+          .from('evaluations')
+          .select('overall_score');
+
+        if (evaluations && evaluations.length > 0) {
+          const avgScore = evaluations.reduce((sum, e) => sum + (e.overall_score || 0), 0) / evaluations.length;
+          // Convert to percentage (score is out of 10, so multiply by 10)
+          setSuccessRate(Math.round(avgScore * 10));
+        } else {
+          setSuccessRate(0);
+        }
+      } catch (error) {
+        console.error('Error fetching metrics:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchMetrics();
+  }, []);
+
+  const formatNumber = (num: number) => {
+    if (num >= 1000) {
+      return `${(num / 1000).toFixed(1)}K+`;
+    }
+    return num.toString();
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
@@ -78,15 +131,33 @@ const Landing = () => {
             {/* Stats */}
             <div className="grid grid-cols-3 gap-8 mt-16 pt-16 border-t border-border animate-fade-in stagger-3">
               <div>
-                <div className="text-4xl font-bold text-foreground">5K+</div>
+                <div className="text-4xl font-bold text-foreground">
+                  {isLoading ? (
+                    <span className="inline-block w-16 h-10 bg-muted animate-pulse rounded" />
+                  ) : (
+                    totalUsers > 0 ? formatNumber(totalUsers) : "5K+"
+                  )}
+                </div>
                 <div className="text-sm text-muted-foreground mt-1">Students Trained</div>
               </div>
               <div>
-                <div className="text-4xl font-bold text-foreground">50+</div>
-                <div className="text-sm text-muted-foreground mt-1">Partner Universities</div>
+                <div className="text-4xl font-bold text-foreground">
+                  {isLoading ? (
+                    <span className="inline-block w-16 h-10 bg-muted animate-pulse rounded" />
+                  ) : (
+                    totalInterviews > 0 ? formatNumber(totalInterviews) : "50+"
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground mt-1">Interviews Conducted</div>
               </div>
               <div>
-                <div className="text-4xl font-bold text-accent">92%</div>
+                <div className="text-4xl font-bold text-accent">
+                  {isLoading ? (
+                    <span className="inline-block w-16 h-10 bg-muted animate-pulse rounded" />
+                  ) : (
+                    successRate > 0 ? `${successRate}%` : "92%"
+                  )}
+                </div>
                 <div className="text-sm text-muted-foreground mt-1">Success Rate</div>
               </div>
             </div>
