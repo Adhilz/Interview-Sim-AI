@@ -127,7 +127,8 @@ serve(async (req) => {
 
     switch (action) {
       case "create": {
-        const sourceUrl = getAvatarUrl(avatarUrl) ?? "https://create-images-results.d-id.com/DefaultPresenters/Emma_f/image.png";
+        // Always use D-ID's reliable default presenter - custom URLs often fail due to CORS/access issues
+        const sourceUrl = "https://create-images-results.d-id.com/DefaultPresenters/Emma_f/image.png";
 
         const createResponse = await fetch(`${DID_HTTP_API_URL}/talks/streams`, {
           method: "POST",
