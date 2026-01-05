@@ -7,59 +7,99 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Mode 3 - Interview Evaluation System Prompt (STRICT)
-const EVALUATION_SYSTEM_PROMPT = `You are an expert interview evaluator.
+// Mode 3 - STRICT Interview Evaluation System Prompt
+const EVALUATION_SYSTEM_PROMPT = `You are an EXTREMELY STRICT interview evaluator. Your job is to identify weaknesses, not to encourage.
 
-INPUTS:
-1. Candidate profile JSON
-2. Complete interview transcript (all questions and answers)
+CRITICAL RULES:
+- PENALIZE vague, shallow, or generic answers heavily
+- PENALIZE filler words, hesitation, and lack of structure
+- PENALIZE technically incorrect or misleading explanations
+- PENALIZE answers that don't address the actual question asked
+- PENALIZE lack of specific examples, metrics, or concrete details
+- DO NOT give benefit of the doubt
+- DO NOT use encouraging language
+- DO NOT inflate scores
 
-TASK:
-Evaluate the candidate STRICTLY based on their interview responses.
-Scores must NOT be fixed, default, or reused.
-Each interview must produce DIFFERENT results based on performance.
+SCORING CRITERIA (0-10 scale):
 
-OUTPUT:
-Return ONLY valid JSON in the following format:
+COMMUNICATION (0-10):
+- 0-2: Incoherent, cannot form complete thoughts
+- 3-4: Rambling, uses excessive filler, unclear structure
+- 5-6: Adequate but lacks precision, some rambling
+- 7-8: Clear, structured, minimal filler
+- 9-10: Exceptional clarity, perfect structure, compelling delivery
+
+TECHNICAL ACCURACY (0-10):
+- 0-2: Fundamentally incorrect understanding
+- 3-4: Major technical errors or misconceptions
+- 5-6: Mostly correct but with gaps or shallow understanding
+- 7-8: Accurate with good depth
+- 9-10: Expert-level accuracy with nuanced understanding
+
+CONFIDENCE/PRESENCE (0-10):
+- 0-2: Cannot answer, excessive hesitation
+- 3-4: Very uncertain, many pauses
+- 5-6: Some hesitation but recovers
+- 7-8: Steady, appropriate pace
+- 9-10: Commanding presence, natural confidence
+
+RELEVANCE (0-10):
+- 0-2: Completely off-topic
+- 3-4: Barely addresses the question
+- 5-6: Partially relevant, missing key points
+- 7-8: Addresses question well
+- 9-10: Perfectly targeted, comprehensive answer
+
+OUTPUT FORMAT (JSON only):
 {
-  "technical_skills": {
-    "score": 0,
-    "feedback": ""
-  },
-  "problem_solving": {
-    "score": 0,
-    "feedback": ""
-  },
   "communication": {
-    "score": 0,
-    "feedback": ""
+    "score": <0-10>,
+    "feedback": "<specific criticism, max 30 words>"
   },
-  "project_understanding": {
-    "score": 0,
-    "feedback": ""
+  "technical_accuracy": {
+    "score": <0-10>,
+    "feedback": "<specific criticism, max 30 words>"
   },
-  "overall_score": 0,
-  "strengths": [],
-  "areas_for_improvement": [],
-  "final_verdict": "",
+  "confidence": {
+    "score": <0-10>,
+    "feedback": "<specific criticism, max 30 words>"
+  },
+  "relevance": {
+    "score": <0-10>,
+    "feedback": "<specific criticism, max 30 words>"
+  },
+  "overall_score": <0-100>,
+  "verdict": "<harsh but fair 2-sentence summary>",
+  "critical_weaknesses": [
+    "<weakness 1 - be specific>",
+    "<weakness 2 - be specific>",
+    "<weakness 3 - be specific>"
+  ],
   "improvements": [
     {
-      "suggestion": "",
-      "category": "",
+      "suggestion": "<specific, actionable improvement>",
+      "category": "communication|technical|confidence|preparation|structure",
       "priority": 1
     }
   ]
 }
 
-SCORING RULES:
-- Each category score: 0-10 (will be converted to 0-100 scale)
-- Overall score = average of all category scores (converted to 0-100)
-- Scores MUST reflect transcript quality
-- No assumptions beyond provided data
-- No template or static responses
+FORBIDDEN PHRASES (never use):
+- "Good attempt"
+- "Nice effort"
+- "Well done"
+- "Great job"
+- "You showed potential"
+- "Keep it up"
+- "Promising"
 
-Categories for improvements: "communication", "technical", "project_understanding", "preparation", "structure"
-Priority: 1=high, 2=medium, 3=low`;
+REQUIRED PHRASES (use these instead):
+- "The response lacks..."
+- "Failed to demonstrate..."
+- "Insufficient depth in..."
+- "The explanation was technically incorrect because..."
+- "The answer did not address..."
+- "Critical gap in understanding..."`;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -82,14 +122,13 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('Evaluating interview - Mode 3 (Interview Evaluation)');
+    console.log('Evaluating interview - Mode 3 (STRICT Evaluation)');
 
-    // If no transcript provided, try to get it from VAPI
     let interviewTranscript = transcript;
     let profile = candidateProfile;
 
+    // Fetch transcript from VAPI if not provided
     if (!interviewTranscript) {
-      // Get session data
       const { data: session } = await supabase
         .from('interview_sessions')
         .select('vapi_session_id')
@@ -114,7 +153,7 @@ serve(async (req) => {
       }
     }
 
-    // Get candidate profile from resume highlights if not provided
+    // Fetch candidate profile if not provided
     if (!profile) {
       const { data: interview } = await supabase
         .from('interviews')
@@ -141,7 +180,6 @@ serve(async (req) => {
       }
     }
 
-    // Build the evaluation prompt
     const userPrompt = `CANDIDATE PROFILE:
 <<<
 ${profile ? JSON.stringify(profile, null, 2) : 'No profile available'}
@@ -149,10 +187,11 @@ ${profile ? JSON.stringify(profile, null, 2) : 'No profile available'}
 
 INTERVIEW TRANSCRIPT:
 <<<
-${interviewTranscript || 'No transcript available. Provide general feedback with baseline scores.'}
->>>`;
+${interviewTranscript || 'No transcript available. Assign minimum scores across all categories.'}
+>>>
 
-    // Generate evaluation using AI
+Evaluate this interview STRICTLY. No soft feedback. Identify every weakness.`;
+
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -162,14 +201,8 @@ ${interviewTranscript || 'No transcript available. Provide general feedback with
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
         messages: [
-          {
-            role: 'system',
-            content: EVALUATION_SYSTEM_PROMPT
-          },
-          {
-            role: 'user',
-            content: userPrompt
-          }
+          { role: 'system', content: EVALUATION_SYSTEM_PROMPT },
+          { role: 'user', content: userPrompt }
         ],
       }),
     });
@@ -204,48 +237,44 @@ ${interviewTranscript || 'No transcript available. Provide general feedback with
         throw new Error('No JSON found');
       }
     } catch {
-      console.log('Failed to parse AI response, using defaults');
-      // Default evaluation if parsing fails
+      console.log('Failed to parse AI response, using strict defaults');
       evaluation = {
-        technical_skills: { score: 7, feedback: "Unable to fully evaluate from transcript." },
-        problem_solving: { score: 7, feedback: "Unable to fully evaluate from transcript." },
-        communication: { score: 7, feedback: "Unable to fully evaluate from transcript." },
-        confidence: { score: 7, feedback: "Unable to fully evaluate from transcript." },
-        overall_score: 70,
-        strengths: ["Completed the interview session"],
-        areas_for_improvement: ["Continue practicing interview skills"],
-        final_verdict: "Your interview has been completed. Continue practicing to improve your skills.",
+        communication: { score: 4, feedback: "Unable to evaluate from transcript. Insufficient data." },
+        technical_accuracy: { score: 4, feedback: "Unable to evaluate from transcript. Insufficient data." },
+        confidence: { score: 4, feedback: "Unable to evaluate from transcript. Insufficient data." },
+        relevance: { score: 4, feedback: "Unable to evaluate from transcript. Insufficient data." },
+        overall_score: 40,
+        verdict: "The interview data was insufficient for proper evaluation. The candidate should retry with a complete session.",
+        critical_weaknesses: ["Incomplete interview session", "No evaluable responses provided"],
         improvements: [
-          { suggestion: "Practice STAR method for behavioral questions", category: "structure", priority: 1 },
-          { suggestion: "Research common interview questions", category: "preparation", priority: 2 }
+          { suggestion: "Complete the full interview session", category: "preparation", priority: 1 },
+          { suggestion: "Ensure stable connection for full transcript capture", category: "technical", priority: 2 }
         ]
       };
     }
 
-    // Convert scores from 0-10 to 0-100 if needed
-    const normalizeScore = (score: number) => {
-      if (score <= 10) return score * 10;
-      return score;
-    };
+    // Calculate overall score
+    const communicationScore = evaluation.communication?.score || 4;
+    const technicalScore = evaluation.technical_accuracy?.score || 4;
+    const confidenceScore = evaluation.confidence?.score || 4;
+    const relevanceScore = evaluation.relevance?.score || 4;
+    
+    const overallScore = evaluation.overall_score || Math.round(
+      ((communicationScore + technicalScore + confidenceScore + relevanceScore) / 4) * 10
+    );
 
-    const overallScore = evaluation.overall_score 
-      ? normalizeScore(evaluation.overall_score)
-      : Math.round((
-          normalizeScore(evaluation.technical_skills?.score || 7) +
-          normalizeScore(evaluation.problem_solving?.score || 7) +
-          normalizeScore(evaluation.communication?.score || 7) +
-          normalizeScore(evaluation.project_understanding?.score || 7)
-        ) / 4);
-
-    // Build feedback from individual category feedback
+    // Build feedback
     const feedback = [
-      evaluation.final_verdict || '',
+      `**Verdict:** ${evaluation.verdict || 'Evaluation complete.'}`,
       '',
-      '**Strengths:**',
-      ...(evaluation.strengths?.map((s: string) => `- ${s}`) || []),
+      '**Critical Weaknesses:**',
+      ...(evaluation.critical_weaknesses?.map((w: string) => `- ${w}`) || ['- No specific weaknesses identified']),
       '',
-      '**Areas for Improvement:**',
-      ...(evaluation.areas_for_improvement?.map((a: string) => `- ${a}`) || [])
+      '**Detailed Scores:**',
+      `- Communication: ${communicationScore}/10 - ${evaluation.communication?.feedback || 'N/A'}`,
+      `- Technical: ${technicalScore}/10 - ${evaluation.technical_accuracy?.feedback || 'N/A'}`,
+      `- Confidence: ${confidenceScore}/10 - ${evaluation.confidence?.feedback || 'N/A'}`,
+      `- Relevance: ${relevanceScore}/10 - ${evaluation.relevance?.feedback || 'N/A'}`,
     ].join('\n');
 
     // Save evaluation
@@ -255,9 +284,9 @@ ${interviewTranscript || 'No transcript available. Provide general feedback with
         interview_id: interviewId,
         user_id: userId,
         overall_score: overallScore,
-        communication_score: normalizeScore(evaluation.communication?.score || 7),
-        technical_score: normalizeScore(evaluation.technical_skills?.score || 7),
-        confidence_score: normalizeScore(evaluation.project_understanding?.score || 7),
+        communication_score: communicationScore * 10,
+        technical_score: technicalScore * 10,
+        confidence_score: confidenceScore * 10,
         feedback: feedback,
       })
       .select()
@@ -269,24 +298,19 @@ ${interviewTranscript || 'No transcript available. Provide general feedback with
     }
 
     // Save improvement suggestions
-    const improvements = evaluation.improvements || evaluation.areas_for_improvement?.map((a: string, i: number) => ({
-      suggestion: a,
-      category: 'general',
-      priority: i + 1
-    })) || [];
-
+    const improvements = evaluation.improvements || [];
     if (improvements.length > 0) {
-      const suggestions = improvements.map((imp: any) => ({
+      const suggestions = improvements.map((imp: any, idx: number) => ({
         evaluation_id: evalData.id,
         suggestion: typeof imp === 'string' ? imp : imp.suggestion,
         category: imp.category || 'general',
-        priority: imp.priority || 2,
+        priority: imp.priority || idx + 1,
       }));
 
       await supabase.from('improvement_suggestions').insert(suggestions);
     }
 
-    console.log('Evaluation saved successfully');
+    console.log('Strict evaluation saved successfully');
 
     return new Response(
       JSON.stringify({ success: true, evaluation: evalData }),

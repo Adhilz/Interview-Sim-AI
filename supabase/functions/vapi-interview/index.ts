@@ -7,52 +7,114 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Mode 2 - Live Interview System Prompt (STRICT)
+// Mode 2 - Live Interview System Prompt (STRICT & DYNAMIC)
 const buildInterviewSystemPrompt = (candidateProfile: any, candidateName: string) => `You are a professional human interviewer conducting a real-time voice interview with ${candidateName || 'the candidate'}.
 
 CRITICAL GROUNDING RULES (NON-NEGOTIABLE):
 - You MUST use the candidate profile as the ONLY source of truth
-- You MUST explicitly reference project NAMES
-- You MUST ask at least ONE question per project
+- You MUST explicitly reference project NAMES from their profile
+- You MUST ask at least ONE question per project mentioned
 - You MUST ask follow-up questions based on project descriptions
 - You MUST reference skills mentioned in the profile
 - You are NOT allowed to ask generic questions if projects exist
-- You are NOT allowed to invent skills, tools, or experience
+- You are NOT allowed to invent skills, tools, or experience not in the profile
 
 INTERVIEW BEHAVIOR:
-- Start with a brief introduction addressing the candidate by name
 - Ask ONE question at a time
-- Increase difficulty gradually
-- Maintain natural, human tone
+- WAIT for the candidate's response before continuing
+- Increase difficulty gradually based on their answers
+- If an answer is shallow or vague → probe deeper with follow-up
+- If an answer is technically weak → challenge with specific technical details
+- Maintain professional but slightly challenging tone
+- Keep responses concise and voice-friendly (under 50 words per response)
 - Do NOT evaluate or score during the interview
-- Wait for the candidate's response before continuing
-- Keep responses concise and voice-friendly
+- Do NOT give positive reinforcement like "Great answer" or "Good job"
+- Use neutral transitions like "I see", "Understood", "Let's move on"
 
-INTERVIEW FOCUS:
-- Project understanding
-- Technical depth
-- Problem-solving approach
-- Communication clarity
+FOLLOW-UP LOGIC:
+- Shallow answer → Ask "Can you elaborate on that?" or "What specifically did you do?"
+- Vague technical claim → Ask "How exactly did you implement that?"
+- Mentioned a tool → Ask "What challenges did you face using [tool]?"
+- Mentioned teamwork → Ask "What was your specific contribution?"
+
+FORBIDDEN BEHAVIORS:
+- Do NOT start with "Great to meet you" or similar pleasantries
+- Do NOT ask "Tell me about yourself" - you already have their profile
+- Do NOT use filler phrases like "That's interesting"
+- Do NOT compliment or encourage during the interview
 
 CANDIDATE PROFILE (SOURCE OF TRUTH):
 <<<
 ${JSON.stringify(candidateProfile, null, 2)}
 >>>`;
 
-// Build personalized first message based on candidate profile
-const buildFirstMessage = (candidateName: string, candidateProfile: any) => {
-  const name = candidateName || 'there';
-  const skills = candidateProfile?.skills?.slice(0, 3)?.join(', ') || '';
-  const hasProjects = candidateProfile?.projects?.length > 0;
-  const projectName = hasProjects ? candidateProfile.projects[0]?.title : '';
-  
-  if (skills && projectName) {
-    return `Hello ${name}! I'm your AI interviewer today. I've reviewed your background and I'm excited to discuss your experience with ${skills}. I'm particularly interested in your project "${projectName}". Let's start - can you give me a brief overview of your background and what you're passionate about in tech?`;
-  } else if (skills) {
-    return `Hello ${name}! I'm your AI interviewer today. I've reviewed your resume and I see you have experience with ${skills}. I'm looking forward to learning more about your work. Let's start - can you tell me about yourself and walk me through your background?`;
-  } else {
-    return `Hello ${name}! I'm your AI interviewer today. Thank you for joining this interview session. Let's start with a brief introduction - can you tell me a little about yourself and walk me through your background?`;
+// Generate dynamic first message using AI
+const generateDynamicFirstMessage = async (candidateName: string, candidateProfile: any, apiKey: string): Promise<string> => {
+  const prompt = `Generate a professional, unique interview opening for a candidate.
+
+CANDIDATE INFO:
+- Name: ${candidateName || 'Candidate'}
+- Skills: ${candidateProfile?.skills?.slice(0, 5)?.join(', ') || 'Not specified'}
+- Recent Project: ${candidateProfile?.projects?.[0]?.title || 'Not specified'}
+- Project Tech: ${candidateProfile?.projects?.[0]?.technologies?.join(', ') || candidateProfile?.tools?.slice(0, 3)?.join(', ') || 'Not specified'}
+
+RULES:
+- Maximum 40 words
+- Be professional, neutral, slightly formal
+- Reference ONE specific skill or project from their profile
+- Do NOT use "Great to meet you" or "Thank you for joining"
+- Do NOT be overly enthusiastic
+- Start with their name
+- End with a direct, specific first question about their experience
+
+EXAMPLES OF GOOD OPENINGS:
+- "${candidateName}, I've reviewed your background in [skill]. Let's discuss your work on [project] - what was the core technical challenge you solved?"
+- "${candidateName}, your experience with [technology] caught my attention. Walk me through a complex problem you tackled using it."
+
+Generate ONE opening now:`;
+
+  try {
+    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 100,
+      }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const generatedMessage = data.choices?.[0]?.message?.content?.trim();
+      if (generatedMessage && generatedMessage.length > 10) {
+        return generatedMessage;
+      }
+    }
+  } catch (error) {
+    console.error('[VAPI] Error generating dynamic first message:', error);
   }
+
+  // Fallback to template-based message
+  return buildFallbackFirstMessage(candidateName, candidateProfile);
+};
+
+const buildFallbackFirstMessage = (candidateName: string, candidateProfile: any) => {
+  const name = candidateName || 'Candidate';
+  const skills = candidateProfile?.skills?.slice(0, 2)?.join(' and ') || '';
+  const projectName = candidateProfile?.projects?.[0]?.title || '';
+  
+  if (projectName) {
+    return `${name}, I've reviewed your profile. Let's start with your project "${projectName}" - what was the most significant technical challenge you faced?`;
+  } else if (skills) {
+    return `${name}, I see you have experience with ${skills}. Walk me through a complex problem you solved using these technologies.`;
+  }
+  return `${name}, let's begin. Tell me about a challenging technical problem you've solved recently and your approach to solving it.`;
 };
 
 serve(async (req) => {
@@ -66,15 +128,14 @@ serve(async (req) => {
     const VAPI_API_KEY = Deno.env.get('VAPI_API_KEY');
     const VAPI_ASSISTANT_ID = Deno.env.get('VAPI_ASSISTANT_ID');
     const VAPI_PUBLIC_KEY = Deno.env.get('VAPI_PUBLIC_KEY');
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 
-    // Action to get config for client-side VAPI SDK
     if (action === 'get_config') {
       if (!VAPI_PUBLIC_KEY) {
         return new Response(
           JSON.stringify({ 
             error: 'VAPI_PUBLIC_KEY is not configured',
             setup_required: true,
-            instructions: 'Please add VAPI_PUBLIC_KEY to your environment variables. Get it from https://vapi.ai dashboard under API Keys (use the PUBLIC key).'
           }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -85,7 +146,6 @@ serve(async (req) => {
           JSON.stringify({ 
             error: 'VAPI_ASSISTANT_ID is not configured',
             setup_required: true,
-            instructions: 'Please add VAPI_ASSISTANT_ID to your environment variables. Create an assistant at https://vapi.ai'
           }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -105,18 +165,6 @@ serve(async (req) => {
         JSON.stringify({ 
           error: 'VAPI_API_KEY is not configured',
           setup_required: true,
-          instructions: 'Please add VAPI_API_KEY to your environment variables. Get it from https://vapi.ai'
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    if (!VAPI_ASSISTANT_ID && action === 'start') {
-      return new Response(
-        JSON.stringify({ 
-          error: 'VAPI_ASSISTANT_ID is not configured',
-          setup_required: true,
-          instructions: 'Please add VAPI_ASSISTANT_ID to your environment variables. Create an assistant at https://vapi.ai'
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -129,7 +177,6 @@ serve(async (req) => {
     if (action === 'start') {
       console.log('Starting interview session - Mode 2 (Live Interview)');
       
-      // Build candidate profile from resume highlights for the interview prompt
       let candidateProfile = null;
       let candidateName = '';
       
@@ -144,7 +191,7 @@ serve(async (req) => {
         candidateName = resumeHighlights.name || '';
       }
 
-      // Create interview session record (VAPI call happens client-side via SDK)
+      // Create interview session record
       const { data: newSession, error: newSessionError } = await supabase
         .from('interview_sessions')
         .insert({
@@ -175,13 +222,19 @@ serve(async (req) => {
         });
       }
 
-      // Build system prompt with candidate profile
+      // Build system prompt
       const systemPrompt = candidateProfile 
         ? buildInterviewSystemPrompt(candidateProfile, candidateName)
-        : buildInterviewSystemPrompt({ message: "No resume data available. Conduct a general behavioral interview." }, '');
+        : buildInterviewSystemPrompt({ message: "No resume data available. Conduct a general technical interview." }, '');
 
-      // Build personalized first message
-      const firstMessage = buildFirstMessage(candidateName, candidateProfile);
+      // Generate dynamic first message using AI
+      let firstMessage = buildFallbackFirstMessage(candidateName, candidateProfile);
+      
+      if (LOVABLE_API_KEY && candidateProfile) {
+        firstMessage = await generateDynamicFirstMessage(candidateName, candidateProfile, LOVABLE_API_KEY);
+      }
+
+      console.log('[VAPI] Generated first message:', firstMessage.substring(0, 50) + '...');
 
       return new Response(
         JSON.stringify({ 
@@ -190,9 +243,13 @@ serve(async (req) => {
           publicKey: VAPI_PUBLIC_KEY,
           assistantId: VAPI_ASSISTANT_ID,
           firstMessage,
-          // Only override firstMessage - model config should be in VAPI dashboard
           assistantOverrides: {
             firstMessage,
+            model: {
+              provider: 'custom-llm',
+              model: 'google/gemini-2.5-flash',
+              messages: [{ role: 'system', content: systemPrompt }],
+            },
           }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -205,7 +262,6 @@ serve(async (req) => {
 
       console.log('Ending interview session:', sessionId);
 
-      // Get the VAPI session ID
       const { data: session } = await supabase
         .from('interview_sessions')
         .select('vapi_session_id')
@@ -213,27 +269,20 @@ serve(async (req) => {
         .single();
 
       if (session?.vapi_session_id) {
-        // End VAPI call
         await fetch(`https://api.vapi.ai/call/${session.vapi_session_id}`, {
           method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${VAPI_API_KEY}`,
-          },
+          headers: { 'Authorization': `Bearer ${VAPI_API_KEY}` },
         });
       }
 
-      // Update session
       const endTime = new Date().toISOString();
       const { data: updatedSession } = await supabase
         .from('interview_sessions')
-        .update({ 
-          end_time: endTime,
-        })
+        .update({ end_time: endTime })
         .eq('id', sessionId)
         .select()
         .single();
 
-      // Calculate duration
       if (updatedSession?.start_time) {
         const duration = Math.floor(
           (new Date(endTime).getTime() - new Date(updatedSession.start_time).getTime()) / 1000
@@ -244,7 +293,6 @@ serve(async (req) => {
           .eq('id', sessionId);
       }
 
-      // Log end event
       await supabase.from('vapi_logs').insert({
         interview_session_id: sessionId,
         log_type: 'session_end',
@@ -274,11 +322,8 @@ serve(async (req) => {
         );
       }
 
-      // Get call details from VAPI
       const vapiResponse = await fetch(`https://api.vapi.ai/call/${session.vapi_session_id}`, {
-        headers: {
-          'Authorization': `Bearer ${VAPI_API_KEY}`,
-        },
+        headers: { 'Authorization': `Bearer ${VAPI_API_KEY}` },
       });
 
       if (!vapiResponse.ok) {
