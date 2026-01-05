@@ -258,6 +258,19 @@ serve(async (req) => {
         if (!talkResponse.ok) {
           const errorText = await talkResponse.text();
           console.error("[D-ID Stream] Talk error:", errorText);
+          
+          // Handle 402 (insufficient credits) gracefully - don't crash the app
+          if (talkResponse.status === 402) {
+            return new Response(JSON.stringify({ 
+              success: false, 
+              error: "insufficient_credits",
+              message: "D-ID credits exhausted. Avatar lip-sync disabled."
+            }), {
+              status: 200, // Return 200 so frontend doesn't crash
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          
           throw new Error(`Talk request failed: ${talkResponse.status}`);
         }
 
