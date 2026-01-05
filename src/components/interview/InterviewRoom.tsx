@@ -82,6 +82,11 @@ const InterviewRoom = ({
       if (message.type === 'transcript') {
         const currentTranscript = getTranscript();
         onTranscriptUpdate?.(currentTranscript);
+        
+        // Send assistant speech to D-ID for lip-sync
+        if (message.role === 'assistant' && message.transcript && didAvatarRef.current?.isConnected) {
+          didAvatarRef.current.streamText(message.transcript);
+        }
       }
     },
   });

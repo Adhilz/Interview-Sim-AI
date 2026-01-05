@@ -12,8 +12,7 @@ interface DidAvatarProps {
 }
 
 export interface DidAvatarRef {
-  sendPcmChunk: (pcmBytes: Uint8Array) => void;
-  endPcmStream: () => void;
+  streamText: (text: string) => void;
   destroy: () => void;
   isConnected: boolean;
 }
@@ -37,8 +36,7 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
     initialize,
     destroy,
     setVideoElement,
-    sendPcmChunk,
-    endPcmStream,
+    streamText,
   } = useDidStream({
     onConnected,
     onError,
@@ -49,12 +47,11 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
   useImperativeHandle(
     ref,
     () => ({
-      sendPcmChunk,
-      endPcmStream,
+      streamText,
       destroy,
       isConnected,
     }),
-    [sendPcmChunk, endPcmStream, destroy, isConnected]
+    [streamText, destroy, isConnected]
   );
 
   useEffect(() => {

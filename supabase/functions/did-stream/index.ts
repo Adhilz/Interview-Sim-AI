@@ -122,7 +122,7 @@ serve(async (req) => {
 
   // HTTP mode (kept for backward-compat + stream creation if needed)
   try {
-    const { action, streamId, sessionId, sdpAnswer, iceCandidate, avatarUrl } = await req.json();
+    const { action, streamId, sessionId, sdpAnswer, iceCandidate, avatarUrl, text } = await req.json();
     console.log(`[D-ID Stream] Action: ${action}, streamId: ${streamId}, sessionId: ${sessionId}`);
 
     switch (action) {
@@ -218,6 +218,46 @@ serve(async (req) => {
         if (!iceResponse.ok) {
           const errorText = await iceResponse.text();
           console.error("[D-ID Stream] ICE error:", errorText);
+        }
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      case "talk": {
+        if (!streamId || !sessionId || !text) {
+          throw new Error("streamId, sessionId, and text required for talk action");
+        }
+
+        const talkResponse = await fetch(`${DID_HTTP_API_URL}/talks/streams/${streamId}`, {
+          method: "POST",
+          headers: {
+            Authorization: `Basic ${DID_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            script: {
+              type: "text",
+              input: text,
+              provider: {
+                type: "microsoft",
+                voice_id: "en-US-JennyNeural",
+              },
+            },
+            driver_url: "bank://lively/driver-06",
+            config: {
+              stitch: true,
+              fluent: true,
+            },
+            session_id: sessionId,
+          }),
+        });
+
+        if (!talkResponse.ok) {
+          const errorText = await talkResponse.text();
+          console.error("[D-ID Stream] Talk error:", errorText);
+          throw new Error(`Talk request failed: ${talkResponse.status}`);
         }
 
         return new Response(JSON.stringify({ success: true }), {
