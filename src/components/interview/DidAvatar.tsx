@@ -4,7 +4,7 @@ import { useDidStream } from '@/hooks/useDidStream';
 
 interface DidAvatarProps {
   autoStart?: boolean;
-  avatarUrl?: string; // Custom avatar URL (must be publicly accessible)
+  avatarUrl?: string;
   onConnected?: () => void;
   onError?: (error: string) => void;
   onSpeakingChange?: (speaking: boolean) => void;
@@ -13,6 +13,7 @@ interface DidAvatarProps {
 
 export interface DidAvatarRef {
   streamAudio: (audioBase64: string) => void;
+  streamText: (text: string) => void;
   destroy: () => void;
   isConnected: boolean;
 }
@@ -35,32 +36,31 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
     error,
     initialize,
     streamAudio,
+    streamText,
     destroy,
     setVideoElement,
   } = useDidStream({
     onConnected,
     onError,
     onSpeaking: onSpeakingChange,
-    avatarUrl, // Pass the custom avatar URL to the hook
+    avatarUrl,
   });
 
-  // Expose methods to parent
   useImperativeHandle(
     ref,
     () => ({
       streamAudio,
+      streamText,
       destroy,
       isConnected,
     }),
-    [streamAudio, destroy, isConnected]
+    [streamAudio, streamText, destroy, isConnected]
   );
 
-  // Set video element reference
   useEffect(() => {
     setVideoElement(videoRef.current);
   }, [setVideoElement]);
 
-  // Reset frame detection when changing connection/avatar
   useEffect(() => {
     if (!isConnected) setHasVideoFrame(false);
   }, [isConnected]);
@@ -69,29 +69,24 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
     setHasVideoFrame(false);
   }, [avatarUrl]);
 
-  // Auto-start on mount
   useEffect(() => {
     if (autoStart) {
       initialize();
     }
   }, [autoStart, initialize]);
 
-  // Try to play video when connected (handles autoplay restrictions)
   useEffect(() => {
     if (isConnected && videoRef.current) {
       const playVideo = async () => {
         try {
-          // First try unmuted
           await videoRef.current?.play();
           console.log('[DidAvatar] Video playing');
         } catch (e) {
           console.warn('[DidAvatar] Autoplay failed, trying muted:', e);
-          // If autoplay fails, try muted first then unmute
           if (videoRef.current) {
             videoRef.current.muted = true;
             try {
               await videoRef.current.play();
-              // Unmute after a short delay
               setTimeout(() => {
                 if (videoRef.current) videoRef.current.muted = false;
               }, 100);
@@ -107,7 +102,6 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
 
   return (
     <div className={`relative w-full h-full bg-[#2d2d2d] rounded-xl overflow-hidden ${className}`}>
-      {/* Static avatar placeholder (shown until the first video frame arrives) */}
       {avatarUrl && !hasVideoFrame && (
         <img
           src={avatarUrl}
@@ -118,7 +112,6 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
         />
       )}
 
-      {/* Video element for D-ID stream */}
       <video
         ref={videoRef}
         autoPlay
@@ -132,7 +125,6 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
         }`}
       />
 
-      {/* Loading state */}
       {isLoading && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#3c4043]">
           <Loader2 className="w-16 h-16 text-accent animate-spin mb-4" />
@@ -140,7 +132,6 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
         </div>
       )}
 
-      {/* Fallback when not connected */}
       {!isConnected && !isLoading && (
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#3c4043]">
           <div className="w-24 h-24 rounded-full bg-gradient-to-br from-accent to-accent/60 flex items-center justify-center mb-4">
@@ -150,7 +141,6 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
         </div>
       )}
 
-      {/* Speaking indicator */}
       {isSpeaking && isConnected && (
         <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent/80">
           <div className="flex gap-0.5">
@@ -162,7 +152,6 @@ const DidAvatar = forwardRef<DidAvatarRef, DidAvatarProps>(({
         </div>
       )}
 
-      {/* Error display */}
       {error && (
         <div className="absolute bottom-4 left-4 right-4 z-20 p-3 bg-destructive/80 rounded-lg">
           <p className="text-white text-sm">{error}</p>
