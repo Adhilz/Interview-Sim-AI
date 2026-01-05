@@ -18,6 +18,26 @@ const getCorsHeaders = (origin: string | null) => {
   };
 };
 
+const verifyAuth = async (req: Request) => {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    throw new Error('Missing authorization header');
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  
+  if (error || !user) {
+    throw new Error('Invalid authentication token');
+  }
+  
+  return user;
+};
+
 // Mode 3 - STRICT Interview Evaluation System Prompt
 const EVALUATION_SYSTEM_PROMPT = `You are an EXTREMELY STRICT interview evaluator. Your job is to identify weaknesses, not to encourage.
 
@@ -121,10 +141,20 @@ serve(async (req) => {
   }
 
   try {
+    // Verify authentication before processing
+    const user = await verifyAuth(req);
+    console.log(`[Evaluate] Authenticated user: ${user.id}`);
+
     const { interviewId, userId, transcript, candidateProfile } = await req.json();
 
     if (!interviewId || !userId) {
       throw new Error('Missing required fields');
+    }
+
+    // Verify the authenticated user matches the userId or is authorized
+    if (user.id !== userId) {
+      console.warn(`[Evaluate] User ${user.id} attempted to evaluate for user ${userId}`);
+      throw new Error('Unauthorized: User mismatch');
     }
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -334,6 +364,17 @@ Evaluate this interview STRICTLY. No soft feedback. Identify every weakness.`;
   } catch (error) {
     console.error('Error in evaluate-interview function:', error);
     const errorMessage = error instanceof Error ? error.message : 'Evaluation failed';
+    
+    // Return 401 for authentication errors
+    if (errorMessage === 'Missing authorization header' || 
+        errorMessage === 'Invalid authentication token' ||
+        errorMessage === 'Unauthorized: User mismatch') {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

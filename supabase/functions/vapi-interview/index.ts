@@ -18,6 +18,26 @@ const getCorsHeaders = (origin: string | null) => {
   };
 };
 
+const verifyAuth = async (req: Request) => {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    throw new Error('Missing authorization header');
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  
+  if (error || !user) {
+    throw new Error('Invalid authentication token');
+  }
+  
+  return user;
+};
+
 // Mode 2 - Live Interview System Prompt (STRICT & DYNAMIC)
 const buildInterviewSystemPrompt = (candidateProfile: any, candidateName: string) => `You are a professional human interviewer conducting a real-time voice interview with ${candidateName || 'the candidate'}.
 
@@ -137,6 +157,10 @@ serve(async (req) => {
   }
 
   try {
+    // Verify authentication before processing
+    const user = await verifyAuth(req);
+    console.log(`[VAPI] Authenticated user: ${user.id}`);
+
     const { action, interviewId, sessionId, resumeHighlights } = await req.json();
 
     const VAPI_API_KEY = Deno.env.get('VAPI_API_KEY');
@@ -363,6 +387,15 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in vapi-interview function:', error);
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    
+    // Return 401 for authentication errors
+    if (errorMessage === 'Missing authorization header' || errorMessage === 'Invalid authentication token') {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
