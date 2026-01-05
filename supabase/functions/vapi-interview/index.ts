@@ -243,14 +243,10 @@ serve(async (req) => {
           publicKey: VAPI_PUBLIC_KEY,
           assistantId: VAPI_ASSISTANT_ID,
           firstMessage,
+          // IMPORTANT: keep overrides minimal; Vapi rejects custom-llm overrides unless a valid model.url is provided.
           assistantOverrides: {
             firstMessage,
-            model: {
-              provider: 'custom-llm',
-              model: 'google/gemini-2.5-flash',
-              messages: [{ role: 'system', content: systemPrompt }],
-            },
-          }
+          },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
