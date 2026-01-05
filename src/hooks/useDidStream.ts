@@ -13,6 +13,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [creditsExhausted, setCreditsExhausted] = useState(false);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -122,6 +123,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
   const processTextQueue = useCallback(async () => {
     if (isProcessingRef.current || textQueueRef.current.length === 0) return;
     if (!streamIdRef.current || !sessionIdRef.current) return;
+    if (creditsExhausted) return; // Skip if credits are exhausted
 
     isProcessingRef.current = true;
     const text = textQueueRef.current.shift()!;
@@ -130,7 +132,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
       setIsSpeaking(true);
       options.onSpeaking?.(true);
 
-      await supabase.functions.invoke("did-stream", {
+      const { data } = await supabase.functions.invoke("did-stream", {
         body: {
           action: "talk",
           streamId: streamIdRef.current,
@@ -138,6 +140,17 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
           text,
         },
       });
+
+      // Check if D-ID returned insufficient credits error
+      if (data?.error === "insufficient_credits") {
+        console.warn("[D-ID] Credits exhausted, disabling lip-sync");
+        setCreditsExhausted(true);
+        textQueueRef.current = []; // Clear queue
+        setIsSpeaking(false);
+        options.onSpeaking?.(false);
+        isProcessingRef.current = false;
+        return;
+      }
 
       // Estimate speech duration (~150ms per word)
       const wordCount = text.split(/\s+/).length;
@@ -152,11 +165,11 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
       isProcessingRef.current = false;
       
       // Process next in queue
-      if (textQueueRef.current.length > 0) {
+      if (textQueueRef.current.length > 0 && !creditsExhausted) {
         processTextQueue();
       }
     }
-  }, [options]);
+  }, [options, creditsExhausted]);
 
   // Queue text for lip-synced speech
   const streamText = useCallback((text: string) => {
