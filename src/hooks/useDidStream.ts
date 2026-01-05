@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface UseDidStreamOptions {
   onConnected?: () => void;
@@ -7,43 +8,21 @@ interface UseDidStreamOptions {
   avatarUrl?: string;
 }
 
-type DidWsServerMessage = {
-  messageType?: string;
-  id?: string;
-  offer?: RTCSessionDescriptionInit;
-  ice_servers?: RTCIceServer[];
-  session_id?: string;
-  [key: string]: any;
-};
-
-const DID_WS_PROXY_URL =
-  "wss://fjaneryjjgesujinlbix.functions.supabase.co/functions/v1/did-stream";
-
 export const useDidStream = (options: UseDidStreamOptions = {}) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const wsRef = useRef<WebSocket | null>(null);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const dataChannelRef = useRef<RTCDataChannel | null>(null);
-
   const videoRef = useRef<HTMLVideoElement | null>(null);
-
   const streamIdRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
-  const streamReadyRef = useRef(false);
-  const audioIndexRef = useRef(0);
+  const textQueueRef = useRef<string[]>([]);
+  const isProcessingRef = useRef(false);
 
   const setVideoElement = useCallback((element: HTMLVideoElement | null) => {
     videoRef.current = element;
-  }, []);
-
-  const send = useCallback((payload: any) => {
-    const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify(payload));
   }, []);
 
   const initialize = useCallback(async () => {
@@ -53,197 +32,161 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
     setError(null);
 
     try {
-      const ws = new WebSocket(DID_WS_PROXY_URL);
-      wsRef.current = ws;
+      // Create stream via HTTP API (faster than WebSocket handshake)
+      const { data, error: fnError } = await supabase.functions.invoke("did-stream", {
+        body: {
+          action: "create",
+          avatarUrl: options.avatarUrl,
+        },
+      });
 
-      ws.onopen = () => {
-        console.log("[D-ID] WS connected");
+      if (fnError || !data?.streamId) {
+        throw new Error(fnError?.message || "Failed to create D-ID stream");
+      }
 
-        const fallbackAvatar = new URL("/avatars/interviewer.png", window.location.origin).toString();
-        send({
-          type: "init-stream",
-          payload: {
-            presenter_type: "talk",
-            source_url: options.avatarUrl || fallbackAvatar,
-            stream_warmup: true,
-          },
-        });
+      const { streamId, sdpOffer, iceServers, sessionId } = data;
+      streamIdRef.current = streamId;
+      sessionIdRef.current = sessionId;
+
+      console.log("[D-ID] Stream created:", streamId);
+
+      // Set up WebRTC peer connection
+      const pc = new RTCPeerConnection({
+        iceServers: iceServers?.length ? iceServers : [{ urls: "stun:stun.l.google.com:19302" }],
+      });
+      peerConnectionRef.current = pc;
+
+      pc.ontrack = (event) => {
+        if (event.streams?.[0] && videoRef.current) {
+          videoRef.current.srcObject = event.streams[0];
+          console.log("[D-ID] Video track received");
+        }
       };
 
-      ws.onmessage = async (event) => {
-        let data: DidWsServerMessage;
-        try {
-          data = JSON.parse(event.data);
-        } catch {
-          return;
-        }
-
-        if (data.messageType === "init-stream") {
-          const streamId = data.id;
-          const sessionId = data.session_id;
-          const offer = data.offer;
-          const iceServers = data.ice_servers;
-
-          if (!streamId || !sessionId || !offer) {
-            throw new Error("Invalid init-stream payload");
-          }
-
-          streamIdRef.current = streamId;
-          sessionIdRef.current = sessionId;
-
-          const pc = new RTCPeerConnection({
-            iceServers: iceServers?.length ? iceServers : [{ urls: "stun:stun.l.google.com:19302" }],
-          });
-          peerConnectionRef.current = pc;
-
-          // Data channel to receive stream/ready
-          dataChannelRef.current = pc.createDataChannel("JanusDataChannel");
-          dataChannelRef.current.onmessage = (e) => {
-            const msg = String(e.data || "");
-            const eventName = msg.split(":")[0];
-            if (eventName === "stream/ready") {
-              console.log("[D-ID] stream/ready");
-              streamReadyRef.current = true;
-            }
-          };
-
-          pc.ontrack = (trackEvent) => {
-            if (trackEvent.streams?.[0] && videoRef.current) {
-              videoRef.current.srcObject = trackEvent.streams[0];
-            }
-          };
-
-          pc.onicecandidate = (iceEvent) => {
-            if (!iceEvent.candidate || !sessionIdRef.current) return;
-            send({
-              type: "ice",
-              payload: {
-                session_id: sessionIdRef.current,
-                presenter_type: "talk",
-                candidate: iceEvent.candidate.candidate,
-                sdpMid: iceEvent.candidate.sdpMid,
-                sdpMLineIndex: iceEvent.candidate.sdpMLineIndex,
+      pc.onicecandidate = async (event) => {
+        if (event.candidate && sessionIdRef.current && streamIdRef.current) {
+          await supabase.functions.invoke("did-stream", {
+            body: {
+              action: "ice",
+              streamId: streamIdRef.current,
+              sessionId: sessionIdRef.current,
+              iceCandidate: {
+                candidate: event.candidate.candidate,
+                sdpMid: event.candidate.sdpMid,
+                sdpMLineIndex: event.candidate.sdpMLineIndex,
               },
-            });
-          };
-
-          pc.onconnectionstatechange = () => {
-            if (pc.connectionState === "connected") {
-              setIsConnected(true);
-              setIsLoading(false);
-              options.onConnected?.();
-
-              // Fallback: consider stream ready after 5s if no event
-              setTimeout(() => {
-                if (!streamReadyRef.current) streamReadyRef.current = true;
-              }, 5000);
-            }
-
-            if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
-              setIsConnected(false);
-              setError("Connection lost");
-            }
-          };
-
-          await pc.setRemoteDescription(new RTCSessionDescription(offer));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-
-          send({
-            type: "sdp",
-            payload: {
-              answer,
-              session_id: sessionId,
-              presenter_type: "talk",
             },
           });
         }
       };
 
-      ws.onerror = () => {
-        throw new Error("D-ID WS connection error");
+      pc.onconnectionstatechange = () => {
+        console.log("[D-ID] Connection state:", pc.connectionState);
+        if (pc.connectionState === "connected") {
+          setIsConnected(true);
+          setIsLoading(false);
+          options.onConnected?.();
+        }
+        if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+          setIsConnected(false);
+          setError("Connection lost");
+        }
       };
 
-      ws.onclose = () => {
-        setIsConnected(false);
-        setIsLoading(false);
-      };
+      // Set remote offer and create answer
+      await pc.setRemoteDescription(new RTCSessionDescription(sdpOffer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      // Send SDP answer
+      await supabase.functions.invoke("did-stream", {
+        body: {
+          action: "sdp",
+          streamId,
+          sessionId,
+          sdpAnswer: answer,
+        },
+      });
+
+      console.log("[D-ID] SDP answer sent");
     } catch (e: any) {
-      console.error("[D-ID] init error", e);
+      console.error("[D-ID] Init error:", e);
       setError(e?.message || "Failed to initialize D-ID stream");
       setIsConnected(false);
       setIsLoading(false);
-      options.onError?.(e?.message || "Failed to initialize D-ID stream");
+      options.onError?.(e?.message || "Failed to initialize");
     }
-  }, [isLoading, isConnected, options.avatarUrl, options.onConnected, options.onError, send]);
+  }, [isLoading, isConnected, options]);
 
-  const sendPcmChunk = useCallback(
-    (pcmBytes: Uint8Array) => {
-      if (!streamIdRef.current || !sessionIdRef.current) return;
-      if (!streamReadyRef.current) return;
+  // Process text queue for D-ID TTS lip-sync
+  const processTextQueue = useCallback(async () => {
+    if (isProcessingRef.current || textQueueRef.current.length === 0) return;
+    if (!streamIdRef.current || !sessionIdRef.current) return;
 
-      const bytes = Array.from(pcmBytes);
-      if (bytes.length === 0) return;
+    isProcessingRef.current = true;
+    const text = textQueueRef.current.shift()!;
 
+    try {
       setIsSpeaking(true);
       options.onSpeaking?.(true);
 
-      send({
-        type: "stream-audio",
-        payload: {
-          script: {
-            type: "audio",
-            input: bytes,
-          },
-          config: { stitch: true },
-          index: audioIndexRef.current++,
-          session_id: sessionIdRef.current,
-          stream_id: streamIdRef.current,
-          presenter_type: "talk",
+      await supabase.functions.invoke("did-stream", {
+        body: {
+          action: "talk",
+          streamId: streamIdRef.current,
+          sessionId: sessionIdRef.current,
+          text,
         },
       });
-    },
-    [options, send]
-  );
+
+      // Estimate speech duration (~150ms per word)
+      const wordCount = text.split(/\s+/).length;
+      const duration = Math.max(1500, wordCount * 150);
+      
+      await new Promise((resolve) => setTimeout(resolve, duration));
+    } catch (e) {
+      console.error("[D-ID] Talk error:", e);
+    } finally {
+      setIsSpeaking(false);
+      options.onSpeaking?.(false);
+      isProcessingRef.current = false;
+      
+      // Process next in queue
+      if (textQueueRef.current.length > 0) {
+        processTextQueue();
+      }
+    }
+  }, [options]);
+
+  // Queue text for lip-synced speech
+  const streamText = useCallback((text: string) => {
+    if (!text.trim()) return;
+    textQueueRef.current.push(text);
+    processTextQueue();
+  }, [processTextQueue]);
+
+  // PCM chunk methods (kept for compatibility but use streamText instead)
+  const sendPcmChunk = useCallback((_pcmBytes: Uint8Array) => {
+    // D-ID doesn't support raw PCM via HTTP API, use streamText instead
+    console.warn("[D-ID] sendPcmChunk not supported, use streamText");
+  }, []);
 
   const endPcmStream = useCallback(() => {
-    if (!streamIdRef.current || !sessionIdRef.current) return;
-    if (!streamReadyRef.current) return;
-
-    send({
-      type: "stream-audio",
-      payload: {
-        script: {
-          type: "audio",
-          input: [],
-        },
-        config: { stitch: true },
-        index: audioIndexRef.current++,
-        session_id: sessionIdRef.current,
-        stream_id: streamIdRef.current,
-        presenter_type: "talk",
-      },
-    });
-
-    audioIndexRef.current = 0;
     setIsSpeaking(false);
     options.onSpeaking?.(false);
-  }, [options, send]);
+  }, [options]);
 
-  const destroy = useCallback(() => {
+  const destroy = useCallback(async () => {
     try {
       if (streamIdRef.current && sessionIdRef.current) {
-        send({
-          type: "delete-stream",
-          payload: {
-            stream_id: streamIdRef.current,
-            session_id: sessionIdRef.current,
+        await supabase.functions.invoke("did-stream", {
+          body: {
+            action: "destroy",
+            streamId: streamIdRef.current,
+            sessionId: sessionIdRef.current,
           },
         });
       }
-
-      wsRef.current?.close();
-      wsRef.current = null;
 
       peerConnectionRef.current?.close();
       peerConnectionRef.current = null;
@@ -252,21 +195,17 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
 
       streamIdRef.current = null;
       sessionIdRef.current = null;
-      streamReadyRef.current = false;
-      audioIndexRef.current = 0;
+      textQueueRef.current = [];
+      isProcessingRef.current = false;
 
       setIsConnected(false);
       setIsLoading(false);
       setIsSpeaking(false);
       setError(null);
     } catch {
-      // ignore
+      // ignore cleanup errors
     }
-  }, [send]);
-
-  useEffect(() => {
-    return () => destroy();
-  }, [destroy]);
+  }, []);
 
   return {
     isConnected,
@@ -276,6 +215,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
     initialize,
     destroy,
     setVideoElement,
+    streamText,
     sendPcmChunk,
     endPcmStream,
   };
