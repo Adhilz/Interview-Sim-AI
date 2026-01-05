@@ -18,6 +18,26 @@ const getCorsHeaders = (origin: string | null) => {
   };
 };
 
+const verifyAuth = async (req: Request) => {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    throw new Error('Missing authorization header');
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  
+  if (error || !user) {
+    throw new Error('Invalid authentication token');
+  }
+  
+  return user;
+};
+
 const RESUME_PARSING_PROMPT = `You are an advanced ATS resume parser.
 
 INPUT:
@@ -74,10 +94,20 @@ serve(async (req) => {
   }
 
   try {
+    // Verify authentication before processing
+    const user = await verifyAuth(req);
+    console.log(`[Parse Resume] Authenticated user: ${user.id}`);
+
     const { resumeText, resumeId, userId } = await req.json();
 
     if (!resumeText || !resumeId || !userId) {
       throw new Error('Missing required fields: resumeText, resumeId, userId');
+    }
+
+    // Verify the authenticated user matches the userId
+    if (user.id !== userId) {
+      console.warn(`[Parse Resume] User ${user.id} attempted to parse for user ${userId}`);
+      throw new Error('Unauthorized: User mismatch');
     }
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -212,6 +242,17 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in parse-resume function:', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to parse resume';
+    
+    // Return 401 for authentication errors
+    if (errorMessage === 'Missing authorization header' || 
+        errorMessage === 'Invalid authentication token' ||
+        errorMessage === 'Unauthorized: User mismatch') {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

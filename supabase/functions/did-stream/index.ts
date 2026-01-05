@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED_ORIGINS = [
   "https://ced75cca-36e3-43f9-8f56-881c9946e217.lovableproject.com",
@@ -14,6 +15,26 @@ const getCorsHeaders = (origin: string | null) => {
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Credentials": "true",
   };
+};
+
+const verifyAuth = async (req: Request) => {
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    throw new Error('Missing authorization header');
+  }
+
+  const token = authHeader.replace('Bearer ', '');
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  
+  if (error || !user) {
+    throw new Error('Invalid authentication token');
+  }
+  
+  return user;
 };
 
 const DID_HTTP_API_URL = "https://api.d-id.com";
@@ -136,6 +157,10 @@ serve(async (req) => {
 
   // HTTP mode (kept for backward-compat + stream creation if needed)
   try {
+    // Verify authentication before processing any requests
+    const user = await verifyAuth(req);
+    console.log(`[D-ID Stream] Authenticated user: ${user.id}`);
+
     const { action, streamId, sessionId, sdpAnswer, iceCandidate, avatarUrl, text } = await req.json();
     console.log(`[D-ID Stream] Action: ${action}, streamId: ${streamId}, sessionId: ${sessionId}`);
 
@@ -326,6 +351,15 @@ serve(async (req) => {
   } catch (error: unknown) {
     console.error("[D-ID Stream] Error:", error);
     const message = error instanceof Error ? error.message : "D-ID stream error";
+    
+    // Return 401 for authentication errors
+    if (message === 'Missing authorization header' || message === 'Invalid authentication token') {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
     return new Response(JSON.stringify({ error: message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
