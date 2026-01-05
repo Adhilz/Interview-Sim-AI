@@ -104,14 +104,14 @@ const InterviewRoom = ({
     return () => stopMedia();
   }, []);
 
-  // Auto-start VAPI when D-ID is ready
+  // Auto-start VAPI - don't wait for D-ID (it's optional for the interview)
   useEffect(() => {
-    if (status === "connecting" && !hasStartedVapi && !isLoading && !isConnected && isDidConnected && avatarUrl) {
-      console.log('[InterviewRoom] D-ID connected, starting VAPI');
+    if (status === "connecting" && !hasStartedVapi && !isLoading && !isConnected && avatarUrl) {
+      console.log('[InterviewRoom] Starting VAPI');
       setHasStartedVapi(true);
       startVapi();
     }
-  }, [status, hasStartedVapi, isLoading, isConnected, isDidConnected, startVapi, avatarUrl]);
+  }, [status, hasStartedVapi, isLoading, isConnected, startVapi, avatarUrl]);
 
   // Handle VAPI error
   useEffect(() => {
