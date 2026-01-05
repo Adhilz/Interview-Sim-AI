@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Brain, Eye, EyeOff, Loader2, GraduationCap, ArrowLeft, Shield, User } from "lucide-react";
+import { Brain, Eye, EyeOff, Loader2, GraduationCap, ArrowLeft } from "lucide-react";
 import { z } from "zod";
 
 const loginSchema = z.object({
@@ -13,20 +13,14 @@ const loginSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
-const studentSignupSchema = loginSchema.extend({
+const signupSchema = loginSchema.extend({
   fullName: z.string().min(2, "Full name is required"),
   universityCode: z.string().min(1, "University code is required"),
-});
-
-const adminSignupSchema = loginSchema.extend({
-  fullName: z.string().min(2, "Full name is required"),
 });
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
 });
-
-type RoleType = "student" | "admin";
 
 const Auth = () => {
   const location = useLocation();
@@ -40,7 +34,7 @@ const Auth = () => {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [universityCode, setUniversityCode] = useState("");
-  const [selectedRole, setSelectedRole] = useState<RoleType>("student");
+  
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -93,10 +87,8 @@ const Auth = () => {
         forgotPasswordSchema.parse({ email });
       } else if (isLogin) {
         loginSchema.parse({ email, password });
-      } else if (selectedRole === "admin") {
-        adminSignupSchema.parse({ email, password, fullName });
       } else {
-        studentSignupSchema.parse({ email, password, fullName, universityCode });
+        signupSchema.parse({ email, password, fullName, universityCode });
       }
       setErrors({});
       return true;
@@ -201,27 +193,24 @@ const Auth = () => {
 
     setIsLoading(true);
     try {
-      let codeData = null;
+      // Validate university code - required for all signups
+      const { data: codeData, error: codeError } = await supabase
+        .rpc('validate_university_code', { code_input: universityCode });
 
-      // Only validate university code for students
-      if (selectedRole === "student") {
-        const { data, error: codeError } = await supabase
-          .rpc('validate_university_code', { code_input: universityCode });
-
-        if (codeError || !data) {
-          toast({
-            title: "Invalid University Code",
-            description: "The university code is invalid, expired, or has reached its usage limit.",
-            variant: "destructive",
-          });
-          setIsLoading(false);
-          return;
-        }
-        codeData = data;
+      if (codeError || !codeData) {
+        toast({
+          title: "Invalid University Code",
+          description: "The university code is invalid, expired, or has reached its usage limit.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
       }
 
-      const redirectUrl = `${window.location.origin}/${selectedRole === 'admin' ? 'admin' : 'dashboard'}`;
+      const redirectUrl = `${window.location.origin}/dashboard`;
       
+      // SECURITY: Role is NOT sent to the server - the database trigger 
+      // always assigns 'student' role. Admin roles must be assigned separately.
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -230,7 +219,6 @@ const Auth = () => {
           data: {
             full_name: fullName,
             university_code_id: codeData,
-            role: selectedRole,
           },
         },
       });
@@ -482,57 +470,6 @@ const Auth = () => {
             {/* Signup Form */}
             {isSignup && (
               <form onSubmit={handleSignup} className="space-y-5">
-                {/* Role Selection */}
-                <div className="space-y-2">
-                  <Label>I am a</Label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedRole("student")}
-                      className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
-                        selectedRole === "student"
-                          ? "border-accent bg-accent/10"
-                          : "border-border hover:border-accent/50"
-                      }`}
-                    >
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        selectedRole === "student" ? "bg-accent" : "bg-muted"
-                      }`}>
-                        <User className={`w-5 h-5 ${
-                          selectedRole === "student" ? "text-accent-foreground" : "text-muted-foreground"
-                        }`} />
-                      </div>
-                      <span className={`font-medium ${
-                        selectedRole === "student" ? "text-foreground" : "text-muted-foreground"
-                      }`}>
-                        Student
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedRole("admin")}
-                      className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
-                        selectedRole === "admin"
-                          ? "border-accent bg-accent/10"
-                          : "border-border hover:border-accent/50"
-                      }`}
-                    >
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        selectedRole === "admin" ? "bg-accent" : "bg-muted"
-                      }`}>
-                        <Shield className={`w-5 h-5 ${
-                          selectedRole === "admin" ? "text-accent-foreground" : "text-muted-foreground"
-                        }`} />
-                      </div>
-                      <span className={`font-medium ${
-                        selectedRole === "admin" ? "text-foreground" : "text-muted-foreground"
-                      }`}>
-                        Admin
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
                 <div className="space-y-2">
                   <Label htmlFor="fullName">Full Name</Label>
                   <Input
@@ -587,28 +524,26 @@ const Auth = () => {
                   )}
                 </div>
 
-                {selectedRole === "student" && (
-                  <div className="space-y-2">
-                    <Label htmlFor="universityCode" className="flex items-center gap-2">
-                      <GraduationCap className="w-4 h-4" />
-                      University Code
-                    </Label>
-                    <Input
-                      id="universityCode"
-                      type="text"
-                      placeholder="Enter your university code"
-                      value={universityCode}
-                      onChange={(e) => setUniversityCode(e.target.value.toUpperCase())}
-                      className={errors.universityCode ? "border-destructive uppercase" : "uppercase"}
-                    />
-                    {errors.universityCode && (
-                      <p className="text-sm text-destructive">{errors.universityCode}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      Contact your university administrator if you don't have a code
-                    </p>
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label htmlFor="universityCode" className="flex items-center gap-2">
+                    <GraduationCap className="w-4 h-4" />
+                    University Code
+                  </Label>
+                  <Input
+                    id="universityCode"
+                    type="text"
+                    placeholder="Enter your university code"
+                    value={universityCode}
+                    onChange={(e) => setUniversityCode(e.target.value.toUpperCase())}
+                    className={errors.universityCode ? "border-destructive uppercase" : "uppercase"}
+                  />
+                  {errors.universityCode && (
+                    <p className="text-sm text-destructive">{errors.universityCode}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Contact your university administrator if you don't have a code
+                  </p>
+                </div>
 
                 <Button 
                   type="submit" 
