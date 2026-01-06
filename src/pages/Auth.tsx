@@ -281,22 +281,6 @@ const Auth = () => {
           });
         }
       } else if (signupData.user) {
-        // Update user role if admin
-        if (selectedRole === "admin") {
-          await supabase
-            .from('user_roles')
-            .update({ role: 'admin' })
-            .eq('user_id', signupData.user.id);
-          
-          // Update university with admin user id
-          if (universityId) {
-            await supabase
-              .from('university_codes')
-              .update({ admin_user_id: signupData.user.id })
-              .eq('id', universityId);
-          }
-        }
-
         toast({
           title: "Account created!",
           description: "Please check your email to verify your account.",
