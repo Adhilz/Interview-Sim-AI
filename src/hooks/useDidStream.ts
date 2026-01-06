@@ -46,10 +46,17 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
       }
 
       const { streamId, sdpOffer, iceServers, sessionId } = data;
+      
+      // Validate sessionId is a proper value (not an AWS cookie)
+      if (!sessionId || typeof sessionId !== 'string' || sessionId.includes('AWSALB')) {
+        console.error("[D-ID] Invalid sessionId received:", sessionId);
+        throw new Error("Invalid session ID from D-ID API");
+      }
+      
       streamIdRef.current = streamId;
       sessionIdRef.current = sessionId;
 
-      console.log("[D-ID] Stream created:", streamId);
+      console.log("[D-ID] Stream created:", streamId, "Session:", sessionId);
 
       // Set up WebRTC peer connection
       const pc = new RTCPeerConnection({
