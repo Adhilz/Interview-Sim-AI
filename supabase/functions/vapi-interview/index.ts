@@ -4,10 +4,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const isAllowedOrigin = (origin: string | null): boolean => {
   if (!origin) return false;
-  // Allow Lovable preview and published domains
   if (origin.endsWith('.lovableproject.com')) return true;
   if (origin.endsWith('.lovable.app')) return true;
-  // Allow localhost for development
   if (origin.startsWith('http://localhost:')) return true;
   return false;
 };
@@ -41,7 +39,7 @@ const verifyAuth = async (req: Request) => {
   return user;
 };
 
-// Mode 2 - Live Interview System Prompt (STRICT & DYNAMIC)
+// Enhanced system prompt with more human-like delivery
 const buildInterviewSystemPrompt = (candidateProfile: any, candidateName: string) => `You are a professional human interviewer conducting a real-time voice interview with ${candidateName || 'the candidate'}.
 
 CRITICAL GROUNDING RULES (NON-NEGOTIABLE):
@@ -53,6 +51,13 @@ CRITICAL GROUNDING RULES (NON-NEGOTIABLE):
 - You are NOT allowed to ask generic questions if projects exist
 - You are NOT allowed to invent skills, tools, or experience not in the profile
 
+HUMAN-LIKE VOICE BEHAVIOR:
+- Use natural conversational cues: "Hmm...", "I see...", "Interesting...", "Right..."
+- Add brief acknowledgments: "Okay", "Got it", "Understood"
+- Include subtle thinking pauses with "Let me see..." or "So..."
+- Express genuine curiosity: "That's quite interesting because...", "I'm curious about..."
+- Use natural transitions: "Moving on...", "Now, let's talk about...", "Shifting gears..."
+
 INTERVIEW BEHAVIOR:
 - Ask ONE question at a time
 - WAIT for the candidate's response before continuing
@@ -62,7 +67,7 @@ INTERVIEW BEHAVIOR:
 - Maintain professional but slightly challenging tone
 - Keep responses concise and voice-friendly (under 50 words per response)
 - Do NOT evaluate or score during the interview
-- Do NOT give positive reinforcement like "Great answer" or "Good job"
+- Do NOT give excessive positive reinforcement
 - Use neutral transitions like "I see", "Understood", "Let's move on"
 
 FOLLOW-UP LOGIC:
@@ -70,21 +75,38 @@ FOLLOW-UP LOGIC:
 - Vague technical claim → Ask "How exactly did you implement that?"
 - Mentioned a tool → Ask "What challenges did you face using [tool]?"
 - Mentioned teamwork → Ask "What was your specific contribution?"
+- Good answer → Acknowledge briefly: "Okay, that makes sense." then probe deeper
+
+EMOTIONAL INTELLIGENCE:
+- If candidate seems nervous → Use encouraging tone: "Take your time..."
+- If candidate is confident → Match their energy with more challenging questions
+- Stay curious and engaged, not robotic
 
 FORBIDDEN BEHAVIORS:
 - Do NOT start with "Great to meet you" or similar pleasantries
 - Do NOT ask "Tell me about yourself" - you already have their profile
-- Do NOT use filler phrases like "That's interesting"
-- Do NOT compliment or encourage during the interview
+- Do NOT use excessive filler phrases
+- Do NOT compliment excessively during the interview
+- Do NOT sound scripted or robotic
 
 CANDIDATE PROFILE (SOURCE OF TRUTH):
 <<<
 ${JSON.stringify(candidateProfile, null, 2)}
 >>>`;
 
-// Generate dynamic first message using AI
+// Generate varied, dynamic first messages
 const generateDynamicFirstMessage = async (candidateName: string, candidateProfile: any, apiKey: string): Promise<string> => {
-  const prompt = `Generate a professional, unique interview opening for a candidate.
+  const openings = [
+    "dive straight into your technical experience",
+    "explore your project work",
+    "discuss your hands-on experience",
+    "learn about your technical background",
+    "understand your problem-solving approach"
+  ];
+  
+  const randomOpening = openings[Math.floor(Math.random() * openings.length)];
+  
+  const prompt = `Generate a unique, professional interview opening for a candidate.
 
 CANDIDATE INFO:
 - Name: ${candidateName || 'Candidate'}
@@ -92,20 +114,25 @@ CANDIDATE INFO:
 - Recent Project: ${candidateProfile?.projects?.[0]?.title || 'Not specified'}
 - Project Tech: ${candidateProfile?.projects?.[0]?.technologies?.join(', ') || candidateProfile?.tools?.slice(0, 3)?.join(', ') || 'Not specified'}
 
+STYLE DIRECTION: ${randomOpening}
+
 RULES:
-- Maximum 40 words
-- Be professional, neutral, slightly formal
+- Maximum 45 words
+- Be professional but warm, not robotic
 - Reference ONE specific skill or project from their profile
-- Do NOT use "Great to meet you" or "Thank you for joining"
-- Do NOT be overly enthusiastic
-- Start with their name
+- Do NOT use "Great to meet you", "Thank you for joining", or "Welcome"
+- Do NOT be overly enthusiastic or use exclamation marks
+- Start with their name naturally
+- Include a brief human touch like "I've reviewed your background..." or "Looking at your profile..."
 - End with a direct, specific first question about their experience
+- Sound like a real interviewer, not AI
 
-EXAMPLES OF GOOD OPENINGS:
-- "${candidateName}, I've reviewed your background in [skill]. Let's discuss your work on [project] - what was the core technical challenge you solved?"
-- "${candidateName}, your experience with [technology] caught my attention. Walk me through a complex problem you tackled using it."
+EXAMPLES:
+- "${candidateName}, I've gone through your background. Your work on [project] using [tech] looks interesting. Walk me through the core technical challenge you faced there."
+- "${candidateName}, so I see you have experience with [skill]. Before we dive into specifics... tell me about a complex problem you tackled with it recently."
+- "Alright ${candidateName}, looking at your profile... your project [name] caught my attention. What was the trickiest part of building that?"
 
-Generate ONE opening now:`;
+Generate ONE unique opening now:`;
 
   try {
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -119,7 +146,8 @@ Generate ONE opening now:`;
         messages: [
           { role: 'user', content: prompt }
         ],
-        max_tokens: 100,
+        max_tokens: 120,
+        temperature: 0.8, // Higher temperature for more variety
       }),
     });
 
@@ -127,14 +155,14 @@ Generate ONE opening now:`;
       const data = await response.json();
       const generatedMessage = data.choices?.[0]?.message?.content?.trim();
       if (generatedMessage && generatedMessage.length > 10) {
-        return generatedMessage;
+        // Clean up any quotes
+        return generatedMessage.replace(/^["']|["']$/g, '');
       }
     }
   } catch (error) {
     console.error('[VAPI] Error generating dynamic first message:', error);
   }
 
-  // Fallback to template-based message
   return buildFallbackFirstMessage(candidateName, candidateProfile);
 };
 
@@ -143,12 +171,21 @@ const buildFallbackFirstMessage = (candidateName: string, candidateProfile: any)
   const skills = candidateProfile?.skills?.slice(0, 2)?.join(' and ') || '';
   const projectName = candidateProfile?.projects?.[0]?.title || '';
   
-  if (projectName) {
-    return `${name}, I've reviewed your profile. Let's start with your project "${projectName}" - what was the most significant technical challenge you faced?`;
-  } else if (skills) {
-    return `${name}, I see you have experience with ${skills}. Walk me through a complex problem you solved using these technologies.`;
-  }
-  return `${name}, let's begin. Tell me about a challenging technical problem you've solved recently and your approach to solving it.`;
+  // Multiple fallback variations
+  const fallbacks = [
+    projectName ? 
+      `${name}, I've reviewed your profile. Let's start with your project "${projectName}"... what was the most significant technical challenge you faced there?` :
+      skills ?
+        `${name}, I see you have experience with ${skills}. Walk me through a complex problem you solved using these technologies.` :
+        `${name}, let's begin. Tell me about a challenging technical problem you've tackled recently and your approach to solving it.`,
+    projectName ?
+      `Alright ${name}, looking at your background... your work on "${projectName}" looks interesting. What was the trickiest part of building that?` :
+      skills ?
+        `${name}, so you've worked with ${skills}. Before we go deeper... tell me about a particularly difficult problem you solved with those.` :
+        `${name}, let's dive in. Describe a recent technical challenge you faced and how you approached it.`
+  ];
+  
+  return fallbacks[Math.floor(Math.random() * fallbacks.length)];
 };
 
 serve(async (req) => {
@@ -160,7 +197,6 @@ serve(async (req) => {
   }
 
   try {
-    // Verify authentication before processing
     const user = await verifyAuth(req);
     console.log(`[VAPI] Authenticated user: ${user.id}`);
 
@@ -232,7 +268,6 @@ serve(async (req) => {
         candidateName = resumeHighlights.name || '';
       }
 
-      // Create interview session record
       const { data: newSession, error: newSessionError } = await supabase
         .from('interview_sessions')
         .insert({
@@ -253,7 +288,6 @@ serve(async (req) => {
         );
       }
 
-      // Log the start event
       if (newSession) {
         await supabase.from('vapi_logs').insert({
           interview_session_id: newSession.id,
@@ -263,19 +297,17 @@ serve(async (req) => {
         });
       }
 
-      // Build system prompt
       const systemPrompt = candidateProfile 
         ? buildInterviewSystemPrompt(candidateProfile, candidateName)
         : buildInterviewSystemPrompt({ message: "No resume data available. Conduct a general technical interview." }, '');
 
-      // Generate dynamic first message using AI
       let firstMessage = buildFallbackFirstMessage(candidateName, candidateProfile);
       
       if (LOVABLE_API_KEY && candidateProfile) {
         firstMessage = await generateDynamicFirstMessage(candidateName, candidateProfile, LOVABLE_API_KEY);
       }
 
-      console.log('[VAPI] Generated first message:', firstMessage.substring(0, 50) + '...');
+      console.log('[VAPI] Generated first message:', firstMessage.substring(0, 60) + '...');
 
       return new Response(
         JSON.stringify({ 
@@ -284,7 +316,6 @@ serve(async (req) => {
           publicKey: VAPI_PUBLIC_KEY,
           assistantId: VAPI_ASSISTANT_ID,
           firstMessage,
-          // IMPORTANT: keep overrides minimal; Vapi rejects custom-llm overrides unless a valid model.url is provided.
           assistantOverrides: {
             firstMessage,
           },
@@ -391,7 +422,6 @@ serve(async (req) => {
     console.error('Error in vapi-interview function:', error);
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     
-    // Return 401 for authentication errors
     if (errorMessage === 'Missing authorization header' || errorMessage === 'Invalid authentication token') {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),

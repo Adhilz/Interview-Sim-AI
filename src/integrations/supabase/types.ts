@@ -220,6 +220,7 @@ export type Database = {
           id: string
           microphone_permission: boolean | null
           university_code_id: string | null
+          university_id: string | null
           updated_at: string | null
           user_id: string
         }
@@ -232,6 +233,7 @@ export type Database = {
           id?: string
           microphone_permission?: boolean | null
           university_code_id?: string | null
+          university_id?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -244,6 +246,7 @@ export type Database = {
           id?: string
           microphone_permission?: boolean | null
           university_code_id?: string | null
+          university_id?: string | null
           updated_at?: string | null
           user_id?: string
         }
@@ -251,6 +254,13 @@ export type Database = {
           {
             foreignKeyName: "profiles_university_code_id_fkey"
             columns: ["university_code_id"]
+            isOneToOne: false
+            referencedRelation: "university_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_university_id_fkey"
+            columns: ["university_id"]
             isOneToOne: false
             referencedRelation: "university_codes"
             referencedColumns: ["id"]
@@ -342,6 +352,7 @@ export type Database = {
       }
       university_codes: {
         Row: {
+          admin_user_id: string | null
           code: string
           created_at: string | null
           current_uses: number | null
@@ -353,6 +364,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          admin_user_id?: string | null
           code: string
           created_at?: string | null
           current_uses?: number | null
@@ -364,6 +376,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          admin_user_id?: string | null
           code?: string
           created_at?: string | null
           current_uses?: number | null
@@ -437,11 +450,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_admin_university_id: {
+        Args: { _admin_user_id: string }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_in_admin_university: {
+        Args: { _admin_user_id: string; _user_id: string }
         Returns: boolean
       }
       validate_university_code: {

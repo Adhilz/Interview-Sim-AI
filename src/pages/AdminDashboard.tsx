@@ -50,7 +50,10 @@ import {
   AlertTriangle,
   Star,
   Building2,
-  Calendar
+  Calendar,
+  Copy,
+  Menu,
+  X
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -91,10 +94,17 @@ interface StudentProfile {
   last_interview: string | null;
 }
 
+interface AdminUniversity {
+  id: string;
+  university_name: string;
+  code: string;
+}
+
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
+  const [adminUniversity, setAdminUniversity] = useState<AdminUniversity | null>(null);
   const [totalStudents, setTotalStudents] = useState(0);
   const [totalInterviews, setTotalInterviews] = useState(0);
   const [completedInterviews, setCompletedInterviews] = useState(0);
@@ -104,15 +114,13 @@ const AdminDashboard = () => {
   const [universityCodes, setUniversityCodes] = useState<UniversityCode[]>([]);
   const [students, setStudents] = useState<StudentProfile[]>([]);
   const [weakAreas, setWeakAreas] = useState<{ area: string; count: number }[]>([]);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Filters
-  const [universityFilter, setUniversityFilter] = useState<string>("all");
   const [performanceFilter, setPerformanceFilter] = useState<string>("all");
-  const [dateFilter, setDateFilter] = useState<string>("all");
   
   // Dialog states
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false);
-  const [newCodeName, setNewCodeName] = useState("");
   const [newCodeMaxUses, setNewCodeMaxUses] = useState<string>("");
 
   useEffect(() => {
@@ -135,11 +143,30 @@ const AdminDashboard = () => {
         return;
       }
 
+      // Get admin's university
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('university_id')
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (profileData?.university_id) {
+        const { data: uniData } = await supabase
+          .from('university_codes')
+          .select('id, university_name, code')
+          .eq('id', profileData.university_id)
+          .single();
+        
+        if (uniData) {
+          setAdminUniversity(uniData);
+        }
+      }
+
       await Promise.all([
-        fetchAnalytics(),
-        fetchUniversityCodes(),
-        fetchStudents(),
-        fetchWeakAreas(),
+        fetchAnalytics(session.user.id, profileData?.university_id),
+        fetchUniversityCodes(profileData?.university_id),
+        fetchStudents(profileData?.university_id),
+        fetchWeakAreas(profileData?.university_id),
       ]);
       setIsLoading(false);
     };
@@ -147,28 +174,42 @@ const AdminDashboard = () => {
     checkAdminAndFetchData();
   }, [navigate]);
 
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = async (adminUserId: string, universityId?: string) => {
     try {
-      const { count: studentCount } = await supabase
-        .from('user_roles')
-        .select('*', { count: 'exact', head: true })
-        .eq('role', 'student');
-      
-      setTotalStudents(studentCount || 0);
+      // Get students from this university only
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('university_code_id', universityId);
 
-      const { data: interviews, count: interviewCount } = await supabase
+      const studentUserIds = profiles?.map(p => p.user_id) || [];
+      setTotalStudents(studentUserIds.length);
+
+      if (studentUserIds.length === 0) {
+        setSkillMetrics([
+          { name: "Technical Skills", average: 0, icon: <Zap className="w-5 h-5" /> },
+          { name: "Communication", average: 0, icon: <MessageSquare className="w-5 h-5" /> },
+          { name: "Confidence", average: 0, icon: <Target className="w-5 h-5" /> },
+        ]);
+        return;
+      }
+
+      // Get interviews for these students
+      const { data: interviews } = await supabase
         .from('interviews')
-        .select('*', { count: 'exact' })
+        .select('*')
+        .in('user_id', studentUserIds)
         .order('created_at', { ascending: false });
       
-      setTotalInterviews(interviewCount || 0);
-
+      setTotalInterviews(interviews?.length || 0);
       const completed = interviews?.filter(i => i.status === 'completed').length || 0;
       setCompletedInterviews(completed);
 
+      // Get evaluations for these students
       const { data: evaluations } = await supabase
         .from('evaluations')
-        .select('overall_score, technical_score, communication_score, confidence_score');
+        .select('overall_score, technical_score, communication_score, confidence_score')
+        .in('user_id', studentUserIds);
 
       if (evaluations && evaluations.length > 0) {
         const avgOverall = evaluations.reduce((sum, e) => sum + (e.overall_score || 0), 0) / evaluations.length;
@@ -183,15 +224,17 @@ const AdminDashboard = () => {
           { name: "Communication", average: Math.round(avgCommunication), icon: <MessageSquare className="w-5 h-5" /> },
           { name: "Confidence", average: Math.round(avgConfidence), icon: <Target className="w-5 h-5" /> },
         ]);
+      } else {
+        setSkillMetrics([
+          { name: "Technical Skills", average: 0, icon: <Zap className="w-5 h-5" /> },
+          { name: "Communication", average: 0, icon: <MessageSquare className="w-5 h-5" /> },
+          { name: "Confidence", average: 0, icon: <Target className="w-5 h-5" /> },
+        ]);
       }
 
-      const { data: recentData } = await supabase
-        .from('interviews')
-        .select('id, status, created_at, user_id')
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (recentData) {
+      // Get recent interviews with details
+      if (interviews && interviews.length > 0) {
+        const recentData = interviews.slice(0, 20);
         const interviewsWithDetails: StudentInterview[] = await Promise.all(
           recentData.map(async (interview) => {
             const { data: profile } = await supabase
@@ -225,16 +268,20 @@ const AdminDashboard = () => {
     }
   };
 
-  const fetchUniversityCodes = async () => {
+  const fetchUniversityCodes = async (universityId?: string) => {
+    if (!universityId) return;
+    
     const { data } = await supabase
       .from('university_codes')
       .select('*')
-      .order('created_at', { ascending: false });
+      .eq('id', universityId);
     
     setUniversityCodes(data || []);
   };
 
-  const fetchStudents = async () => {
+  const fetchStudents = async (universityId?: string) => {
+    if (!universityId) return;
+
     const { data: profiles } = await supabase
       .from('profiles')
       .select(`
@@ -244,7 +291,8 @@ const AdminDashboard = () => {
         email,
         university_code_id,
         university_codes(university_name)
-      `);
+      `)
+      .eq('university_code_id', universityId);
 
     if (profiles) {
       const studentsWithStats = await Promise.all(
@@ -280,10 +328,33 @@ const AdminDashboard = () => {
     }
   };
 
-  const fetchWeakAreas = async () => {
+  const fetchWeakAreas = async (universityId?: string) => {
+    if (!universityId) return;
+
+    // Get students from this university
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('user_id')
+      .eq('university_code_id', universityId);
+
+    const studentUserIds = profiles?.map(p => p.user_id) || [];
+    if (studentUserIds.length === 0) return;
+
+    // Get evaluations for these students
+    const { data: evaluations } = await supabase
+      .from('evaluations')
+      .select('id')
+      .in('user_id', studentUserIds);
+
+    if (!evaluations || evaluations.length === 0) return;
+
+    const evaluationIds = evaluations.map(e => e.id);
+
+    // Get suggestions for these evaluations
     const { data: suggestions } = await supabase
       .from('improvement_suggestions')
       .select('category')
+      .in('evaluation_id', evaluationIds)
       .limit(500);
 
     if (suggestions) {
@@ -302,19 +373,16 @@ const AdminDashboard = () => {
     }
   };
 
-  const generateUniversityCode = async () => {
-    if (!newCodeName.trim()) {
-      toast({ title: "Error", description: "University name is required", variant: "destructive" });
-      return;
-    }
+  const generateNewCode = async () => {
+    if (!adminUniversity) return;
 
-    const code = `${newCodeName.substring(0, 3).toUpperCase()}${Date.now().toString(36).toUpperCase().slice(-5)}`;
+    const code = `${adminUniversity.university_name.substring(0, 3).toUpperCase()}${Date.now().toString(36).toUpperCase().slice(-5)}`;
     
     const { error } = await supabase
       .from('university_codes')
       .insert({
         code,
-        university_name: newCodeName,
+        university_name: adminUniversity.university_name,
         max_uses: newCodeMaxUses ? parseInt(newCodeMaxUses) : null,
         is_active: true,
         current_uses: 0,
@@ -325,10 +393,14 @@ const AdminDashboard = () => {
     } else {
       toast({ title: "Success", description: `Code ${code} created` });
       setIsCodeDialogOpen(false);
-      setNewCodeName("");
       setNewCodeMaxUses("");
-      fetchUniversityCodes();
+      fetchUniversityCodes(adminUniversity.id);
     }
+  };
+
+  const copyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    toast({ title: "Copied!", description: "Code copied to clipboard" });
   };
 
   const toggleCodeStatus = async (id: string, currentStatus: boolean) => {
@@ -337,15 +409,16 @@ const AdminDashboard = () => {
       .update({ is_active: !currentStatus })
       .eq('id', id);
     
-    fetchUniversityCodes();
+    if (adminUniversity) {
+      fetchUniversityCodes(adminUniversity.id);
+    }
   };
 
   const exportToCSV = () => {
-    const headers = ['Student Name', 'Email', 'University', 'Interviews', 'Avg Score', 'Last Interview'];
+    const headers = ['Student Name', 'Email', 'Interviews', 'Avg Score', 'Last Interview'];
     const rows = students.map(s => [
       s.full_name,
       s.email,
-      s.university_name || 'N/A',
       s.interview_count.toString(),
       s.avg_score.toString(),
       s.last_interview ? format(new Date(s.last_interview), 'yyyy-MM-dd') : 'Never'
@@ -395,98 +468,123 @@ const AdminDashboard = () => {
 
   // Apply filters to students
   const filteredStudents = students.filter(s => {
-    if (universityFilter !== "all" && s.university_name !== universityFilter) return false;
     if (performanceFilter === "high" && s.avg_score < 80) return false;
     if (performanceFilter === "low" && s.avg_score >= 50) return false;
     return true;
   });
 
-  const uniqueUniversities = [...new Set(students.map(s => s.university_name).filter(Boolean))];
-
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b border-border bg-card sticky top-0 z-50">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="container mx-auto px-4 lg:px-6 py-4 flex items-center justify-between">
           <Link to="/admin" className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center">
-              <Brain className="w-6 h-6 text-primary-foreground" />
+            <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-xl gradient-hero flex items-center justify-center">
+              <Brain className="w-5 h-5 lg:w-6 lg:h-6 text-primary-foreground" />
             </div>
-            <div>
-              <span className="text-xl font-bold text-foreground">InterviewSim AI</span>
-              <Badge className="ml-2 bg-accent/10 text-accent">Admin</Badge>
+            <div className="hidden sm:block">
+              <span className="text-lg lg:text-xl font-bold text-foreground">InterviewSim AI</span>
+              <Badge className="ml-2 bg-accent/10 text-accent text-xs">Admin</Badge>
             </div>
           </Link>
-          <Button variant="ghost" size="sm" onClick={handleLogout}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Logout
-          </Button>
+          
+          <div className="flex items-center gap-2 lg:gap-4">
+            {adminUniversity && (
+              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary">
+                <Building2 className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium">{adminUniversity.university_name}</span>
+              </div>
+            )}
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="hidden sm:flex">
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="sm:hidden">
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </Button>
+          </div>
         </div>
+
+        {/* Mobile menu */}
+        {mobileMenuOpen && (
+          <div className="sm:hidden border-t border-border p-4 space-y-2">
+            {adminUniversity && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary">
+                <Building2 className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium">{adminUniversity.university_name}</span>
+              </div>
+            )}
+            <Button variant="ghost" className="w-full justify-start" onClick={handleLogout}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
+            </Button>
+          </div>
+        )}
       </header>
 
-      <main className="container mx-auto px-6 py-8">
+      <main className="container mx-auto px-4 lg:px-6 py-6 lg:py-8">
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full max-w-md grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="students">Students</TabsTrigger>
-            <TabsTrigger value="codes">Codes</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsList className="w-full max-w-full overflow-x-auto flex">
+            <TabsTrigger value="overview" className="flex-1 min-w-[80px]">Overview</TabsTrigger>
+            <TabsTrigger value="students" className="flex-1 min-w-[80px]">Students</TabsTrigger>
+            <TabsTrigger value="codes" className="flex-1 min-w-[80px]">Codes</TabsTrigger>
+            <TabsTrigger value="analytics" className="flex-1 min-w-[80px]">Analytics</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
               <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                      <Users className="w-6 h-6 text-blue-500" />
+                <CardContent className="p-4 lg:pt-6">
+                  <div className="flex items-center gap-3 lg:gap-4">
+                    <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                      <Users className="w-5 h-5 lg:w-6 lg:h-6 text-blue-500" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Total Students</p>
-                      <p className="text-2xl font-bold text-foreground">{totalStudents}</p>
+                      <p className="text-xs lg:text-sm text-muted-foreground">Students</p>
+                      <p className="text-xl lg:text-2xl font-bold text-foreground">{totalStudents}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                      <Video className="w-6 h-6 text-purple-500" />
+                <CardContent className="p-4 lg:pt-6">
+                  <div className="flex items-center gap-3 lg:gap-4">
+                    <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                      <Video className="w-5 h-5 lg:w-6 lg:h-6 text-purple-500" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Total Interviews</p>
-                      <p className="text-2xl font-bold text-foreground">{totalInterviews}</p>
+                      <p className="text-xs lg:text-sm text-muted-foreground">Interviews</p>
+                      <p className="text-xl lg:text-2xl font-bold text-foreground">{totalInterviews}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
-                      <TrendingUp className="w-6 h-6 text-green-500" />
+                <CardContent className="p-4 lg:pt-6">
+                  <div className="flex items-center gap-3 lg:gap-4">
+                    <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-green-500/10 flex items-center justify-center">
+                      <TrendingUp className="w-5 h-5 lg:w-6 lg:h-6 text-green-500" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Completed</p>
-                      <p className="text-2xl font-bold text-foreground">{completedInterviews}</p>
+                      <p className="text-xs lg:text-sm text-muted-foreground">Completed</p>
+                      <p className="text-xl lg:text-2xl font-bold text-foreground">{completedInterviews}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
-                      <Award className="w-6 h-6 text-accent" />
+                <CardContent className="p-4 lg:pt-6">
+                  <div className="flex items-center gap-3 lg:gap-4">
+                    <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-xl bg-accent/10 flex items-center justify-center">
+                      <Award className="w-5 h-5 lg:w-6 lg:h-6 text-accent" />
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Average Score</p>
-                      <p className="text-2xl font-bold text-foreground">{averageScore}/100</p>
+                      <p className="text-xs lg:text-sm text-muted-foreground">Avg Score</p>
+                      <p className="text-xl lg:text-2xl font-bold text-foreground">{averageScore}/100</p>
                     </div>
                   </div>
                 </CardContent>
@@ -494,22 +592,22 @@ const AdminDashboard = () => {
             </div>
 
             {/* Skill Metrics */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
               {skillMetrics.map((metric, index) => (
                 <Card key={index}>
-                  <CardContent className="pt-6">
+                  <CardContent className="p-4 lg:pt-6">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center text-accent">
                           {metric.icon}
                         </div>
-                        <span className="font-medium text-foreground">{metric.name}</span>
+                        <span className="font-medium text-foreground text-sm lg:text-base">{metric.name}</span>
                       </div>
-                      <span className="text-2xl font-bold text-foreground">{metric.average}</span>
+                      <span className="text-xl lg:text-2xl font-bold text-foreground">{metric.average}%</span>
                     </div>
-                    <div className="w-full bg-muted rounded-full h-2">
+                    <div className="h-2 bg-secondary rounded-full overflow-hidden">
                       <div 
-                        className="bg-accent h-2 rounded-full transition-all duration-500"
+                        className="h-full bg-accent rounded-full transition-all duration-500"
                         style={{ width: `${metric.average}%` }}
                       />
                     </div>
@@ -519,40 +617,37 @@ const AdminDashboard = () => {
             </div>
 
             {/* Weak Areas */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-warning" />
-                  Common Weak Areas
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                  {weakAreas.map((area, i) => (
-                    <div key={i} className="p-4 bg-secondary rounded-lg text-center">
-                      <p className="text-sm text-muted-foreground capitalize">{area.area}</p>
-                      <p className="text-xl font-bold text-foreground">{area.count}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+            {weakAreas.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base lg:text-lg">
+                    <AlertTriangle className="w-5 h-5 text-warning" />
+                    Common Weak Areas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {weakAreas.map((area, index) => (
+                      <Badge key={index} variant="outline" className="py-1.5 px-3 text-sm">
+                        {area.area} ({area.count})
+                      </Badge>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Recent Interviews */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5" />
-                  Recent Interviews
-                </CardTitle>
+                <CardTitle className="text-base lg:text-lg">Recent Interviews</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Student</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Date</TableHead>
+                      <TableHead className="hidden md:table-cell">Date</TableHead>
                       <TableHead>Score</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
@@ -560,19 +655,20 @@ const AdminDashboard = () => {
                   <TableBody>
                     {recentInterviews.slice(0, 10).map((interview) => (
                       <TableRow key={interview.id}>
-                        <TableCell className="font-medium">{interview.student_name}</TableCell>
-                        <TableCell className="text-muted-foreground">{interview.student_email}</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {interview.interview_date 
-                            ? format(new Date(interview.interview_date), 'MMM d, yyyy')
-                            : '-'
-                          }
+                        <TableCell>
+                          <div>
+                            <p className="font-medium text-sm">{interview.student_name}</p>
+                            <p className="text-xs text-muted-foreground hidden sm:block">{interview.student_email}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell text-sm">
+                          {interview.interview_date && format(new Date(interview.interview_date), 'MMM d, yyyy')}
                         </TableCell>
                         <TableCell>
                           {interview.score !== null ? (
-                            <span className="font-semibold">{interview.score}</span>
+                            <span className="font-medium text-sm">{interview.score}%</span>
                           ) : (
-                            <span className="text-muted-foreground">-</span>
+                            <span className="text-muted-foreground text-sm">-</span>
                           )}
                         </TableCell>
                         <TableCell>{getStatusBadge(interview.status)}</TableCell>
@@ -586,63 +682,47 @@ const AdminDashboard = () => {
 
           {/* Students Tab */}
           <TabsContent value="students" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold">Student Management</h2>
-              <div className="flex items-center gap-4">
-                <Select value={universityFilter} onValueChange={setUniversityFilter}>
-                  <SelectTrigger className="w-48">
-                    <Building2 className="w-4 h-4 mr-2" />
-                    <SelectValue placeholder="Filter by university" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Universities</SelectItem>
-                    {uniqueUniversities.map((uni) => (
-                      <SelectItem key={uni} value={uni!}>{uni}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <h2 className="text-xl lg:text-2xl font-bold">Students</h2>
+              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                 <Select value={performanceFilter} onValueChange={setPerformanceFilter}>
-                  <SelectTrigger className="w-40">
+                  <SelectTrigger className="w-full sm:w-[150px]">
                     <Filter className="w-4 h-4 mr-2" />
                     <SelectValue placeholder="Performance" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All</SelectItem>
                     <SelectItem value="high">High Performers</SelectItem>
-                    <SelectItem value="low">Low Performers</SelectItem>
+                    <SelectItem value="low">Need Support</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button variant="outline" onClick={exportToCSV}>
+                <Button variant="outline" onClick={exportToCSV} className="w-full sm:w-auto">
                   <Download className="w-4 h-4 mr-2" />
-                  Export CSV
+                  Export
                 </Button>
               </div>
             </div>
 
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="p-0 overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>University</TableHead>
+                      <TableHead className="hidden sm:table-cell">Email</TableHead>
                       <TableHead>Interviews</TableHead>
                       <TableHead>Avg Score</TableHead>
-                      <TableHead>Performance</TableHead>
-                      <TableHead>Last Interview</TableHead>
+                      <TableHead className="hidden md:table-cell">Last Active</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredStudents.map((student) => (
                       <TableRow key={student.id}>
-                        <TableCell className="font-medium">{student.full_name}</TableCell>
-                        <TableCell className="text-muted-foreground">{student.email}</TableCell>
-                        <TableCell>{student.university_name || 'N/A'}</TableCell>
-                        <TableCell>{student.interview_count}</TableCell>
-                        <TableCell className="font-semibold">{student.avg_score}</TableCell>
+                        <TableCell className="font-medium text-sm">{student.full_name}</TableCell>
+                        <TableCell className="hidden sm:table-cell text-sm">{student.email}</TableCell>
+                        <TableCell className="text-sm">{student.interview_count}</TableCell>
                         <TableCell>{getPerformanceBadge(student.avg_score)}</TableCell>
-                        <TableCell className="text-muted-foreground">
+                        <TableCell className="hidden md:table-cell text-sm">
                           {student.last_interview 
                             ? format(new Date(student.last_interview), 'MMM d, yyyy')
                             : 'Never'
@@ -656,199 +736,214 @@ const AdminDashboard = () => {
             </Card>
           </TabsContent>
 
-          {/* University Codes Tab */}
+          {/* Codes Tab */}
           <TabsContent value="codes" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold">University Codes</h2>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div>
+                <h2 className="text-xl lg:text-2xl font-bold">University Codes</h2>
+                <p className="text-sm text-muted-foreground">Share codes with students to join your university</p>
+              </div>
               <Dialog open={isCodeDialogOpen} onOpenChange={setIsCodeDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button>
+                  <Button variant="hero" className="w-full sm:w-auto">
                     <Plus className="w-4 h-4 mr-2" />
                     Generate Code
                   </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Generate University Code</DialogTitle>
+                    <DialogTitle>Generate New Code</DialogTitle>
                     <DialogDescription>
-                      Create a new code for a university. Students will use this to sign up.
+                      Create a new signup code for {adminUniversity?.university_name}
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                      <Label htmlFor="universityName">University Name</Label>
-                      <Input
-                        id="universityName"
-                        placeholder="e.g., Stanford University"
-                        value={newCodeName}
-                        onChange={(e) => setNewCodeName(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="maxUses">Max Uses (optional)</Label>
+                      <Label htmlFor="maxUses">Maximum Uses (optional)</Label>
                       <Input
                         id="maxUses"
                         type="number"
-                        placeholder="Leave empty for unlimited"
+                        placeholder="Unlimited"
                         value={newCodeMaxUses}
                         onChange={(e) => setNewCodeMaxUses(e.target.value)}
                       />
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsCodeDialogOpen(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={generateUniversityCode}>
-                      Generate
-                    </Button>
+                    <Button variant="outline" onClick={() => setIsCodeDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={generateNewCode}>Generate</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
             </div>
 
-            <Card>
-              <CardContent className="pt-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Code</TableHead>
-                      <TableHead>University</TableHead>
-                      <TableHead>Usage</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {universityCodes.map((code) => (
-                      <TableRow key={code.id}>
-                        <TableCell className="font-mono font-bold">{code.code}</TableCell>
-                        <TableCell>{code.university_name}</TableCell>
-                        <TableCell>
-                          {code.current_uses} / {code.max_uses || '∞'}
-                        </TableCell>
-                        <TableCell>
-                          {code.is_active ? (
-                            <Badge className="bg-green-500/10 text-green-500">Active</Badge>
-                          ) : (
-                            <Badge className="bg-red-500/10 text-red-500">Disabled</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {format(new Date(code.created_at), 'MMM d, yyyy')}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleCodeStatus(code.id, code.is_active)}
-                          >
-                            {code.is_active ? 'Disable' : 'Enable'}
-                          </Button>
-                        </TableCell>
+            {/* Main university code card */}
+            {adminUniversity && (
+              <Card className="border-accent/30 bg-accent/5">
+                <CardContent className="p-4 lg:p-6">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center">
+                        <Key className="w-6 h-6 text-accent" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Primary University Code</p>
+                        <p className="text-2xl font-mono font-bold text-foreground">{adminUniversity.code}</p>
+                      </div>
+                    </div>
+                    <Button variant="outline" onClick={() => copyCode(adminUniversity.code)} className="w-full sm:w-auto">
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copy Code
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Additional codes */}
+            {universityCodes.length > 1 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base lg:text-lg">Additional Codes</CardTitle>
+                </CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Code</TableHead>
+                        <TableHead className="hidden sm:table-cell">Uses</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {universityCodes.slice(1).map((code) => (
+                        <TableRow key={code.id}>
+                          <TableCell className="font-mono text-sm">{code.code}</TableCell>
+                          <TableCell className="hidden sm:table-cell text-sm">
+                            {code.current_uses}/{code.max_uses || '∞'}
+                          </TableCell>
+                          <TableCell>
+                            <Badge className={code.is_active ? "bg-green-500/10 text-green-500" : "bg-muted text-muted-foreground"}>
+                              {code.is_active ? "Active" : "Inactive"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="ghost" onClick={() => copyCode(code.code)}>
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                onClick={() => toggleCodeStatus(code.id, code.is_active)}
+                              >
+                                {code.is_active ? "Disable" : "Enable"}
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Analytics Tab */}
           <TabsContent value="analytics" className="space-y-6">
-            <h2 className="text-2xl font-bold">Performance Analytics</h2>
+            <h2 className="text-xl lg:text-2xl font-bold">Performance Analytics</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Score Distribution */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Score Distribution</CardTitle>
+                  <CardTitle className="text-base lg:text-lg">Score Distribution</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {[
-                      { label: '80-100 (High)', range: [80, 100], color: 'bg-green-500' },
-                      { label: '50-79 (Average)', range: [50, 79], color: 'bg-yellow-500' },
-                      { label: '0-49 (Low)', range: [0, 49], color: 'bg-red-500' },
-                    ].map((tier) => {
-                      const count = students.filter(s => 
-                        s.avg_score >= tier.range[0] && s.avg_score <= tier.range[1]
-                      ).length;
-                      const percentage = students.length ? (count / students.length) * 100 : 0;
-                      
-                      return (
-                        <div key={tier.label} className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>{tier.label}</span>
-                            <span>{count} students ({percentage.toFixed(0)}%)</span>
-                          </div>
-                          <div className="w-full bg-muted rounded-full h-2">
-                            <div 
-                              className={`${tier.color} h-2 rounded-full`}
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">High (80-100)</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-32 h-2 bg-secondary rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-green-500 rounded-full"
+                            style={{ width: `${(students.filter(s => s.avg_score >= 80).length / Math.max(students.length, 1)) * 100}%` }}
+                          />
                         </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Interview Completion Rate</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-center h-32">
-                    <div className="text-center">
-                      <p className="text-5xl font-bold text-accent">
-                        {totalInterviews ? Math.round((completedInterviews / totalInterviews) * 100) : 0}%
-                      </p>
-                      <p className="text-muted-foreground">
-                        {completedInterviews} of {totalInterviews} interviews completed
-                      </p>
+                        <span className="text-sm font-medium w-8">{students.filter(s => s.avg_score >= 80).length}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Average (50-79)</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-32 h-2 bg-secondary rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-yellow-500 rounded-full"
+                            style={{ width: `${(students.filter(s => s.avg_score >= 50 && s.avg_score < 80).length / Math.max(students.length, 1)) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-medium w-8">{students.filter(s => s.avg_score >= 50 && s.avg_score < 80).length}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">Needs Support (&lt;50)</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-32 h-2 bg-secondary rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-red-500 rounded-full"
+                            style={{ width: `${(students.filter(s => s.avg_score > 0 && s.avg_score < 50).length / Math.max(students.length, 1)) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-medium w-8">{students.filter(s => s.avg_score > 0 && s.avg_score < 50).length}</span>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-            </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>University Performance Comparison</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>University</TableHead>
-                      <TableHead>Students</TableHead>
-                      <TableHead>Avg Score</TableHead>
-                      <TableHead>Interviews</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {uniqueUniversities.map((uni) => {
-                      const uniStudents = students.filter(s => s.university_name === uni);
-                      const avgScore = uniStudents.length 
-                        ? uniStudents.reduce((sum, s) => sum + s.avg_score, 0) / uniStudents.length 
-                        : 0;
-                      const totalInt = uniStudents.reduce((sum, s) => sum + s.interview_count, 0);
-                      
-                      return (
-                        <TableRow key={uni}>
-                          <TableCell className="font-medium">{uni}</TableCell>
-                          <TableCell>{uniStudents.length}</TableCell>
-                          <TableCell>{Math.round(avgScore)}</TableCell>
-                          <TableCell>{totalInt}</TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+              {/* Interview Completion */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base lg:text-lg">Interview Completion</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-center">
+                    <div className="relative w-32 h-32">
+                      <svg className="w-full h-full transform -rotate-90">
+                        <circle
+                          cx="64"
+                          cy="64"
+                          r="56"
+                          stroke="currentColor"
+                          strokeWidth="12"
+                          fill="transparent"
+                          className="text-secondary"
+                        />
+                        <circle
+                          cx="64"
+                          cy="64"
+                          r="56"
+                          stroke="currentColor"
+                          strokeWidth="12"
+                          fill="transparent"
+                          strokeDasharray={`${(completedInterviews / Math.max(totalInterviews, 1)) * 352} 352`}
+                          className="text-accent"
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-2xl font-bold">{totalInterviews > 0 ? Math.round((completedInterviews / totalInterviews) * 100) : 0}%</span>
+                        <span className="text-xs text-muted-foreground">Completed</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-4 text-center text-sm text-muted-foreground">
+                    {completedInterviews} of {totalInterviews} interviews completed
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </main>
