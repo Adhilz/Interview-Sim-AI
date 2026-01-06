@@ -197,13 +197,27 @@ serve(async (req) => {
         }
 
         const streamData = await createResponse.json();
+        
+        console.log("[D-ID Stream] Create response:", JSON.stringify({
+          id: streamData.id,
+          session_id: streamData.session_id,
+          has_offer: !!streamData.offer,
+          has_ice_servers: !!streamData.ice_servers,
+        }));
+
+        // Validate session_id is present and is a proper UUID/string (not a cookie)
+        const sessionIdValue = streamData.session_id;
+        if (!sessionIdValue || typeof sessionIdValue !== 'string' || sessionIdValue.includes('AWSALB')) {
+          console.error("[D-ID Stream] Invalid session_id received:", sessionIdValue);
+          throw new Error("Invalid session_id from D-ID API");
+        }
 
         return new Response(
           JSON.stringify({
             streamId: streamData.id,
             sdpOffer: streamData.offer,
             iceServers: streamData.ice_servers,
-            sessionId: streamData.session_id,
+            sessionId: sessionIdValue,
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
