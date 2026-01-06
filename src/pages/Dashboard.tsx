@@ -203,9 +203,14 @@ const Dashboard = () => {
           </div>
           <span className="font-bold text-foreground">InterviewSim</span>
         </Link>
-        <Button variant="ghost" size="icon" onClick={handleLogout}>
-          <LogOut className="w-5 h-5" />
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/interview")}>
+            <Mic className="w-5 h-5" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={handleLogout}>
+            <LogOut className="w-5 h-5" />
+          </Button>
+        </div>
       </header>
 
       {/* Main content */}

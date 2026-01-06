@@ -9,11 +9,12 @@ import {
   Clock,
   Loader2,
   Settings,
-  Volume2
+  User
 } from "lucide-react";
 import { useVapi } from "@/hooks/useVapi";
+import { supabase } from "@/integrations/supabase/client";
 import DidAvatar, { DidAvatarRef } from "./DidAvatar";
-
+import InterviewSettings, { InterviewSettingsState } from "./InterviewSettings";
 
 interface InterviewRoomProps {
   status: "connecting" | "in_progress" | "ended";
@@ -51,6 +52,30 @@ const InterviewRoom = ({
   const [isAvatarSpeaking, setIsAvatarSpeaking] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isAvatarLoading, setIsAvatarLoading] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [audioInputDevices, setAudioInputDevices] = useState<MediaDeviceInfo[]>([]);
+  const [audioOutputDevices, setAudioOutputDevices] = useState<MediaDeviceInfo[]>([]);
+  const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
+  const [currentTranscript, setCurrentTranscript] = useState<string>("");
+  
+  const [settings, setSettings] = useState<InterviewSettingsState>(() => {
+    const saved = localStorage.getItem('interviewSettings');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        // ignore
+      }
+    }
+    return {
+      selectedMic: '',
+      selectedSpeaker: '',
+      cameraEnabled: true,
+      avatarVisible: true,
+      voiceSpeed: 1,
+      captionsEnabled: false,
+    };
+  });
 
   const {
     isConnected,
@@ -78,12 +103,11 @@ const InterviewRoom = ({
       onVapiError?.(e.message || 'VAPI connection failed');
     },
     onMessage: (message) => {
-      // Update transcript on each message
       if (message.type === 'transcript') {
-        const currentTranscript = getTranscript();
-        onTranscriptUpdate?.(currentTranscript);
+        const transcript = getTranscript();
+        onTranscriptUpdate?.(transcript);
+        setCurrentTranscript(message.transcript || '');
         
-        // Send assistant speech to D-ID for lip-sync
         if (message.role === 'assistant' && message.transcript && didAvatarRef.current?.isConnected) {
           didAvatarRef.current.streamText(message.transcript);
         }
@@ -91,7 +115,40 @@ const InterviewRoom = ({
     },
   });
 
-  // Use the app-hosted avatar from /public/avatars so D-ID can fetch it reliably
+  // Fetch user's profile avatar
+  useEffect(() => {
+    const fetchUserAvatar = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('avatar_url')
+          .eq('user_id', session.user.id)
+          .single();
+        
+        if (profile?.avatar_url) {
+          setUserAvatarUrl(profile.avatar_url);
+        }
+      }
+    };
+    fetchUserAvatar();
+  }, []);
+
+  // Enumerate devices
+  useEffect(() => {
+    const getDevices = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        setAudioInputDevices(devices.filter(d => d.kind === 'audioinput'));
+        setAudioOutputDevices(devices.filter(d => d.kind === 'audiooutput'));
+      } catch (error) {
+        console.error('Error enumerating devices:', error);
+      }
+    };
+    getDevices();
+  }, []);
+
+  // Use the app-hosted avatar from /public/avatars
   useEffect(() => {
     setIsAvatarLoading(true);
     setAvatarUrl(new URL('/avatars/interviewer.png', window.location.origin).toString());
@@ -104,7 +161,7 @@ const InterviewRoom = ({
     return () => stopMedia();
   }, []);
 
-  // Auto-start VAPI - don't wait for D-ID (it's optional for the interview)
+  // Auto-start VAPI
   useEffect(() => {
     if (status === "connecting" && !hasStartedVapi && !isLoading && !isConnected && avatarUrl) {
       console.log('[InterviewRoom] Starting VAPI');
@@ -120,12 +177,24 @@ const InterviewRoom = ({
     }
   }, [vapiError, onVapiError]);
 
+  // Apply camera setting
+  useEffect(() => {
+    if (streamRef.current) {
+      streamRef.current.getVideoTracks().forEach(track => {
+        track.enabled = settings.cameraEnabled;
+      });
+      setIsVideoOn(settings.cameraEnabled);
+    }
+  }, [settings.cameraEnabled]);
+
   const startMedia = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      const constraints: MediaStreamConstraints = {
         video: true,
-        audio: true,
-      });
+        audio: settings.selectedMic ? { deviceId: { exact: settings.selectedMic } } : true,
+      };
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -182,7 +251,6 @@ const InterviewRoom = ({
 
   const handleDidError = (error: string) => {
     console.error('[InterviewRoom] D-ID error:', error);
-    // D-ID errors are non-fatal, we can still do audio-only interview
   };
 
   const isActuallyConnected = isConnected || status === "in_progress";
@@ -190,10 +258,10 @@ const InterviewRoom = ({
   return (
     <div className="fixed inset-0 bg-[#202124] flex flex-col">
       {/* Main content area */}
-      <div className="flex-1 relative flex items-center justify-center p-4">
+      <div className="flex-1 relative flex items-center justify-center p-2 sm:p-4">
         {/* AI Interviewer Avatar - Center */}
-        <div className="relative w-full max-w-4xl aspect-video rounded-2xl overflow-hidden">
-          {!isAvatarLoading && avatarUrl && (
+        <div className="relative w-full h-full max-w-4xl max-h-[70vh] sm:max-h-[75vh] aspect-video rounded-xl sm:rounded-2xl overflow-hidden">
+          {settings.avatarVisible && !isAvatarLoading && avatarUrl && (
             <DidAvatar
               ref={didAvatarRef}
               autoStart={true}
@@ -205,15 +273,24 @@ const InterviewRoom = ({
             />
           )}
           
-          {isAvatarLoading && (
+          {!settings.avatarVisible && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#3c4043]">
-              <Loader2 className="w-16 h-16 text-accent animate-spin mb-4" />
+              <div className="w-24 h-24 rounded-full bg-accent/20 flex items-center justify-center mb-4">
+                <User className="w-12 h-12 text-accent" />
+              </div>
+              <p className="text-white/70">AI Interviewer</p>
+            </div>
+          )}
+          
+          {isAvatarLoading && settings.avatarVisible && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#3c4043]">
+              <Loader2 className="w-12 h-12 sm:w-16 sm:h-16 text-accent animate-spin mb-4" />
               <p className="text-white/70 text-sm">Loading avatar...</p>
             </div>
           )}
 
           {/* User's self video - bottom right */}
-          <div className="absolute bottom-4 right-4 w-40 h-28 md:w-52 md:h-36 rounded-xl overflow-hidden bg-[#3c4043] border-2 border-white/10 shadow-2xl z-10">
+          <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 w-24 h-18 sm:w-40 sm:h-28 md:w-52 md:h-36 rounded-lg sm:rounded-xl overflow-hidden bg-[#3c4043] border-2 border-white/10 shadow-2xl z-10">
             <video
               ref={videoRef}
               autoPlay
@@ -223,22 +300,26 @@ const InterviewRoom = ({
             />
             {!isVideoOn && (
               <div className="w-full h-full flex items-center justify-center bg-[#3c4043]">
-                <div className="w-14 h-14 rounded-full bg-accent/20 flex items-center justify-center">
-                  <VideoOff className="w-7 h-7 text-white/50" />
-                </div>
+                {userAvatarUrl ? (
+                  <img src={userAvatarUrl} alt="You" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-accent/20 flex items-center justify-center">
+                    <VideoOff className="w-5 h-5 sm:w-7 sm:h-7 text-white/50" />
+                  </div>
+                )}
               </div>
             )}
-            <div className="absolute bottom-2 left-2 text-xs text-white/70 bg-black/40 px-2 py-0.5 rounded">
+            <div className="absolute bottom-1 left-1 sm:bottom-2 sm:left-2 text-xs text-white/70 bg-black/40 px-1.5 py-0.5 sm:px-2 rounded">
               You
             </div>
           </div>
 
           {/* Timer - top right */}
-          <div className={`absolute top-4 right-4 flex items-center gap-2 px-4 py-2 rounded-lg z-10 ${
+          <div className={`absolute top-2 right-2 sm:top-4 sm:right-4 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg z-10 ${
             timeRemaining < 60 ? "bg-destructive/80" : "bg-black/50"
           }`}>
-            <Clock className="w-5 h-5 text-white" />
-            <span className={`text-lg font-mono font-bold ${
+            <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+            <span className={`text-sm sm:text-lg font-mono font-bold ${
               timeRemaining < 60 ? "text-white animate-pulse" : "text-white"
             }`}>
               {formatTime(timeRemaining)}
@@ -246,73 +327,93 @@ const InterviewRoom = ({
           </div>
 
           {/* Connection status */}
-          <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/50 z-10">
+          <div className="absolute top-2 left-2 sm:top-4 sm:left-4 flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-black/50 z-10">
             <div className={`w-2 h-2 rounded-full ${isActuallyConnected ? "bg-success" : isLoading ? "bg-warning animate-pulse" : "bg-muted"}`} />
-            <span className="text-white/70 text-sm">
+            <span className="text-white/70 text-xs sm:text-sm">
               {isActuallyConnected ? "Connected" : isLoading ? "Connecting..." : "Disconnected"}
             </span>
           </div>
 
           {/* VAPI status indicator */}
           {isActuallyConnected && !isSpeaking && (
-            <div className="absolute bottom-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-black/50 z-10">
-              <Mic className="w-4 h-4 text-success animate-pulse" />
-              <span className="text-white/70 text-sm">Listening...</span>
+            <div className="absolute bottom-14 sm:bottom-4 left-2 sm:left-4 flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-black/50 z-10">
+              <Mic className="w-3 h-3 sm:w-4 sm:h-4 text-success animate-pulse" />
+              <span className="text-white/70 text-xs sm:text-sm">Listening...</span>
+            </div>
+          )}
+
+          {/* Captions */}
+          {settings.captionsEnabled && currentTranscript && (
+            <div className="absolute bottom-16 sm:bottom-20 left-1/2 transform -translate-x-1/2 max-w-[90%] px-4 py-2 rounded-lg bg-black/70 z-10">
+              <p className="text-white text-sm sm:text-base text-center">{currentTranscript}</p>
             </div>
           )}
 
           {/* VAPI error display */}
           {vapiError && (
-            <div className="absolute top-16 left-4 right-4 p-3 bg-destructive/80 rounded-lg z-10">
-              <p className="text-white text-sm">{vapiError}</p>
+            <div className="absolute top-14 sm:top-16 left-2 right-2 sm:left-4 sm:right-4 p-2 sm:p-3 bg-destructive/80 rounded-lg z-10">
+              <p className="text-white text-xs sm:text-sm">{vapiError}</p>
             </div>
           )}
         </div>
       </div>
 
       {/* Bottom controls bar */}
-      <div className="h-20 bg-[#202124] border-t border-white/10 flex items-center justify-center gap-4 px-4">
+      <div className="h-16 sm:h-20 bg-[#202124] border-t border-white/10 flex items-center justify-center gap-2 sm:gap-4 px-4">
         {/* Mic toggle */}
         <button
           onClick={toggleMic}
-          className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
+          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-colors ${
             isMicOn ? "bg-[#3c4043] hover:bg-[#4a4f54]" : "bg-destructive hover:bg-destructive/90"
           }`}
         >
           {isMicOn ? (
-            <Mic className="w-5 h-5 text-white" />
+            <Mic className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           ) : (
-            <MicOff className="w-5 h-5 text-white" />
+            <MicOff className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           )}
         </button>
 
         {/* Video toggle */}
         <button
           onClick={toggleVideo}
-          className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
+          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-colors ${
             isVideoOn ? "bg-[#3c4043] hover:bg-[#4a4f54]" : "bg-destructive hover:bg-destructive/90"
           }`}
         >
           {isVideoOn ? (
-            <Video className="w-5 h-5 text-white" />
+            <Video className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           ) : (
-            <VideoOff className="w-5 h-5 text-white" />
+            <VideoOff className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           )}
         </button>
 
         {/* End call button */}
         <button
           onClick={handleEndCall}
-          className="w-14 h-12 rounded-full bg-destructive hover:bg-destructive/90 flex items-center justify-center transition-colors"
+          className="w-12 h-10 sm:w-14 sm:h-12 rounded-full bg-destructive hover:bg-destructive/90 flex items-center justify-center transition-colors"
         >
-          <PhoneOff className="w-5 h-5 text-white" />
+          <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
         </button>
 
-        {/* Settings placeholder */}
-        <button className="w-12 h-12 rounded-full bg-[#3c4043] hover:bg-[#4a4f54] flex items-center justify-center transition-colors">
-          <Settings className="w-5 h-5 text-white" />
+        {/* Settings button */}
+        <button 
+          onClick={() => setSettingsOpen(true)}
+          className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#3c4043] hover:bg-[#4a4f54] flex items-center justify-center transition-colors"
+        >
+          <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
         </button>
       </div>
+
+      {/* Settings Dialog */}
+      <InterviewSettings
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        settings={settings}
+        onSettingsChange={setSettings}
+        audioInputDevices={audioInputDevices}
+        audioOutputDevices={audioOutputDevices}
+      />
     </div>
   );
 };
