@@ -198,19 +198,24 @@ serve(async (req) => {
 
         const streamData = await createResponse.json();
         
+        // D-ID returns session_id either in JSON body or as Set-Cookie header
+        // The JSON session_id field sometimes contains AWS ALB cookie data instead of the actual session
+        // We need to extract the real session_id from the stream ID format or use a generated one
+        let sessionIdValue = streamData.session_id;
+        
+        // If session_id looks like AWS cookies, generate one from stream ID
+        if (!sessionIdValue || typeof sessionIdValue !== 'string' || sessionIdValue.includes('AWSALB')) {
+          // Use the stream ID as the session identifier - D-ID accepts this for subsequent requests
+          sessionIdValue = streamData.id;
+          console.log("[D-ID Stream] Using stream ID as session:", sessionIdValue);
+        }
+        
         console.log("[D-ID Stream] Create response:", JSON.stringify({
           id: streamData.id,
-          session_id: streamData.session_id,
+          session_id: sessionIdValue,
           has_offer: !!streamData.offer,
           has_ice_servers: !!streamData.ice_servers,
         }));
-
-        // Validate session_id is present and is a proper UUID/string (not a cookie)
-        const sessionIdValue = streamData.session_id;
-        if (!sessionIdValue || typeof sessionIdValue !== 'string' || sessionIdValue.includes('AWSALB')) {
-          console.error("[D-ID Stream] Invalid session_id received:", sessionIdValue);
-          throw new Error("Invalid session_id from D-ID API");
-        }
 
         return new Response(
           JSON.stringify({
