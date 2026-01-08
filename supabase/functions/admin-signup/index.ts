@@ -1,18 +1,123 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW_MS = 3600000; // 1 hour
+const MAX_SIGNUPS_PER_WINDOW = 3; // Max 3 admin signups per IP per hour
+const signupAttempts = new Map<string, { count: number; timestamp: number }>();
+
+// Cleanup old entries periodically
+function cleanupRateLimitMap() {
+  const now = Date.now();
+  for (const [ip, data] of signupAttempts.entries()) {
+    if (now - data.timestamp > RATE_LIMIT_WINDOW_MS) {
+      signupAttempts.delete(ip);
+    }
+  }
+}
+
+// Get CORS headers with origin validation
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigins = [
+    '.lovableproject.com',
+    '.lovable.app',
+    'localhost'
+  ];
+  
+  let allowedOrigin = 'https://lovable.app'; // Default fallback
+  
+  if (origin) {
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (allowed === 'localhost') {
+        return origin.includes('localhost') || origin.includes('127.0.0.1');
+      }
+      return origin.endsWith(allowed);
+    });
+    
+    if (isAllowed) {
+      allowedOrigin = origin;
+    }
+  }
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+}
+
+// Check rate limit
+function checkRateLimit(clientIp: string): { allowed: boolean; retryAfter?: number } {
+  cleanupRateLimitMap();
+  
+  const now = Date.now();
+  const attempts = signupAttempts.get(clientIp);
+  
+  if (attempts) {
+    const timeElapsed = now - attempts.timestamp;
+    
+    if (timeElapsed < RATE_LIMIT_WINDOW_MS) {
+      if (attempts.count >= MAX_SIGNUPS_PER_WINDOW) {
+        const retryAfter = Math.ceil((RATE_LIMIT_WINDOW_MS - timeElapsed) / 1000);
+        return { allowed: false, retryAfter };
+      }
+      // Increment count
+      signupAttempts.set(clientIp, { count: attempts.count + 1, timestamp: attempts.timestamp });
+    } else {
+      // Reset window
+      signupAttempts.set(clientIp, { count: 1, timestamp: now });
+    }
+  } else {
+    signupAttempts.set(clientIp, { count: 1, timestamp: now });
+  }
+  
+  return { allowed: true };
+}
 
 serve(async (req) => {
+  const origin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin);
+  
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Only allow POST
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
   try {
+    // Get client IP for rate limiting
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
+                     req.headers.get('cf-connecting-ip') || 
+                     req.headers.get('x-real-ip') || 
+                     'unknown';
+    
+    // Check rate limit
+    const rateLimitResult = checkRateLimit(clientIp);
+    if (!rateLimitResult.allowed) {
+      console.warn(`Rate limit exceeded for IP: ${clientIp}`);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Too many signup attempts. Please try again later.',
+          retryAfter: rateLimitResult.retryAfter 
+        }),
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json',
+            'Retry-After': String(rateLimitResult.retryAfter)
+          } 
+        }
+      );
+    }
+
     const { email, password, fullName, universityName } = await req.json();
 
     // Validate required fields
@@ -40,10 +145,17 @@ serve(async (req) => {
       );
     }
 
-    // Validate names
-    if (fullName.length < 2 || universityName.length < 2) {
+    // Validate names with length limits
+    if (fullName.length < 2 || fullName.length > 100) {
       return new Response(
-        JSON.stringify({ error: 'Full name and university name must be at least 2 characters' }),
+        JSON.stringify({ error: 'Full name must be between 2 and 100 characters' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    if (universityName.length < 2 || universityName.length > 200) {
+      return new Response(
+        JSON.stringify({ error: 'University name must be between 2 and 200 characters' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -137,7 +249,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Admin account created successfully: ${email} for university: ${universityName}`);
+    console.log(`Admin account created successfully: ${email} for university: ${universityName} from IP: ${clientIp}`);
 
     return new Response(
       JSON.stringify({
