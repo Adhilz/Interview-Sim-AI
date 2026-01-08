@@ -38,8 +38,35 @@ const verifyAuth = async (req: Request) => {
   return user;
 };
 
+// Verify auth from query params (for WebSocket connections)
+const verifyAuthFromQueryParams = async (url: URL) => {
+  const token = url.searchParams.get('token');
+  if (!token) {
+    throw new Error('Missing authentication token');
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  
+  if (error || !user) {
+    throw new Error('Invalid authentication token');
+  }
+  
+  return user;
+};
+
 const DID_HTTP_API_URL = "https://api.d-id.com";
 const DID_WS_API_URL = "wss://ws-api.d-id.com";
+
+// Rate limiting: track per-user connections and message rates
+const userConnections = new Map<string, number>();
+const userMessageTimestamps = new Map<string, number[]>();
+const MAX_CONNECTIONS_PER_USER = 3;
+const MAX_MESSAGES_PER_MINUTE = 100;
+const MAX_MESSAGE_SIZE = 65536; // 64KB
 
 // Only allow custom avatar URLs that are publicly reachable (avoid storage URLs that D-ID can't fetch reliably)
 const getAvatarUrl = (customUrl?: string): string | undefined => {
@@ -49,7 +76,17 @@ const getAvatarUrl = (customUrl?: string): string | undefined => {
   return undefined;
 };
 
-const upgradeToWebSocketProxy = (req: Request, didApiKey: string) => {
+const upgradeToWebSocketProxy = (req: Request, didApiKey: string, userId: string) => {
+  // Check connection limit per user
+  const currentConns = userConnections.get(userId) || 0;
+  if (currentConns >= MAX_CONNECTIONS_PER_USER) {
+    console.warn(`[D-ID WS PROXY] User ${userId} exceeded max connections (${MAX_CONNECTIONS_PER_USER})`);
+    return new Response('Too many connections', { status: 429 });
+  }
+  
+  userConnections.set(userId, currentConns + 1);
+  console.log(`[D-ID WS PROXY] User ${userId} connections: ${currentConns + 1}`);
+
   const { socket: client, response } = Deno.upgradeWebSocket(req);
 
   let didWs: WebSocket | null = null;
@@ -104,8 +141,34 @@ const upgradeToWebSocketProxy = (req: Request, didApiKey: string) => {
         return;
       }
 
-      // Minimal validation: only proxy known message types.
       const raw = typeof event.data === "string" ? event.data : new TextDecoder().decode(event.data);
+      
+      // Check message size limit
+      if (raw.length > MAX_MESSAGE_SIZE) {
+        console.warn(`[D-ID WS PROXY] Message too large from user ${userId}: ${raw.length} bytes`);
+        client.close(1009, 'Message too large');
+        return;
+      }
+      
+      // Check rate limit
+      const now = Date.now();
+      const timestamps = userMessageTimestamps.get(userId) || [];
+      timestamps.push(now);
+      
+      // Remove timestamps older than 1 minute
+      const oneMinuteAgo = now - 60000;
+      while (timestamps.length > 0 && timestamps[0] < oneMinuteAgo) {
+        timestamps.shift();
+      }
+      userMessageTimestamps.set(userId, timestamps);
+      
+      if (timestamps.length > MAX_MESSAGES_PER_MINUTE) {
+        console.warn(`[D-ID WS PROXY] Rate limit exceeded for user ${userId}`);
+        client.close(1008, 'Rate limit exceeded');
+        return;
+      }
+
+      // Minimal validation: only proxy known message types.
       const parsed = JSON.parse(raw);
       const allowed = new Set(["init-stream", "sdp", "ice", "stream-audio", "stream-text", "delete-stream"]);
       if (!parsed?.type || !allowed.has(parsed.type)) {
@@ -129,6 +192,13 @@ const upgradeToWebSocketProxy = (req: Request, didApiKey: string) => {
 
   client.onclose = () => {
     console.log("[D-ID WS PROXY] Client WS closed");
+    // Decrement user connection count
+    const conns = userConnections.get(userId) || 1;
+    if (conns <= 1) {
+      userConnections.delete(userId);
+    } else {
+      userConnections.set(userId, conns - 1);
+    }
     safeClose(didWs, 1000, "client ws closed");
   };
 
@@ -151,9 +221,17 @@ serve(async (req) => {
     });
   }
 
-  // WebSocket proxy mode (for real-time PCM chunk streaming)
+  // WebSocket proxy mode (for real-time PCM chunk streaming) - requires auth via query param
   if (req.headers.get("upgrade")?.toLowerCase() === "websocket") {
-    return upgradeToWebSocketProxy(req, DID_API_KEY);
+    try {
+      const url = new URL(req.url);
+      const user = await verifyAuthFromQueryParams(url);
+      console.log(`[D-ID WS PROXY] Authenticated user: ${user.id}`);
+      return upgradeToWebSocketProxy(req, DID_API_KEY, user.id);
+    } catch (authError) {
+      console.error("[D-ID WS PROXY] Auth failed:", authError);
+      return new Response('Unauthorized', { status: 401, headers: corsHeaders });
+    }
   }
 
   // HTTP mode (kept for backward-compat + stream creation if needed)
