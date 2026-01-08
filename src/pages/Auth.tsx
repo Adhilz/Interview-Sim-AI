@@ -205,63 +205,78 @@ const Auth = () => {
 
     setIsLoading(true);
     try {
-      let universityCodeId: string | null = null;
-      let universityId: string | null = null;
+      if (selectedRole === "admin") {
+        // Use secure edge function for admin signup
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-signup`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            },
+            body: JSON.stringify({
+              email,
+              password,
+              fullName,
+              universityName,
+            }),
+          }
+        );
 
-      if (selectedRole === "student") {
-        // Validate university code for students
-        const { data: codeData, error: codeError } = await supabase
-          .rpc('validate_university_code', { code_input: universityCode });
+        const result = await response.json();
 
-        if (codeError || !codeData) {
-          toast({
-            title: "Invalid University Code",
-            description: "The university code is invalid, expired, or has reached its usage limit.",
-            variant: "destructive",
-          });
+        if (!response.ok) {
+          if (result.error?.includes("already") || result.error?.includes("registered")) {
+            toast({
+              title: "Account exists",
+              description: "This email is already registered. Please login instead.",
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "Signup failed",
+              description: result.error || "Failed to create admin account",
+              variant: "destructive",
+            });
+          }
           setIsLoading(false);
           return;
         }
-        universityCodeId = codeData;
-      } else if (selectedRole === "admin") {
-        // Create new university for admin
-        const code = `${universityName.substring(0, 3).toUpperCase()}${Date.now().toString(36).toUpperCase().slice(-5)}`;
-        
-        const { data: newUniversity, error: uniError } = await supabase
-          .from('university_codes')
-          .insert({
-            code,
-            university_name: universityName,
-            is_active: true,
-            current_uses: 0,
-          })
-          .select()
-          .single();
 
-        if (uniError || !newUniversity) {
-          toast({
-            title: "Error",
-            description: "Failed to create university. Please try again.",
-            variant: "destructive",
-          });
-          setIsLoading(false);
-          return;
-        }
-        universityId = newUniversity.id;
+        toast({
+          title: "Admin account created!",
+          description: `Your university code is: ${result.universityCode}. You can now login.`,
+        });
+
+        // Redirect to login page
+        navigate("/login");
+        return;
       }
 
-      const redirectUrl = selectedRole === "admin" ? `${window.location.origin}/admin` : `${window.location.origin}/dashboard`;
-      
+      // Student signup flow
+      // Validate university code for students
+      const { data: codeData, error: codeError } = await supabase
+        .rpc('validate_university_code', { code_input: universityCode });
+
+      if (codeError || !codeData) {
+        toast({
+          title: "Invalid University Code",
+          description: "The university code is invalid, expired, or has reached its usage limit.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+
       const { data: signupData, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: redirectUrl,
+          emailRedirectTo: `${window.location.origin}/dashboard`,
           data: {
             full_name: fullName,
-            university_code_id: universityCodeId,
-            university_id: universityId,
-            role: selectedRole,
+            university_code_id: codeData,
           },
         },
       });
