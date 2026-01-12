@@ -46,6 +46,8 @@ const Dashboard = () => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [totalInterviews, setTotalInterviews] = useState(0);
+  const [completedInterviews, setCompletedInterviews] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -84,7 +86,24 @@ const Dashboard = () => {
         setProfile(profileData as Profile);
       }
 
-      // Fetch interviews
+      // Fetch total interview count (not limited)
+      const { count: totalCount } = await supabase
+        .from("interviews")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId);
+      
+      setTotalInterviews(totalCount || 0);
+
+      // Fetch completed interview count
+      const { count: completedCount } = await supabase
+        .from("interviews")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId)
+        .eq("status", "completed");
+      
+      setCompletedInterviews(completedCount || 0);
+
+      // Fetch recent 5 interviews for display
       const { data: interviewsData } = await supabase
         .from("interviews")
         .select("*")
@@ -124,8 +143,6 @@ const Dashboard = () => {
   const averageScore = evaluations.length > 0
     ? Math.round(evaluations.reduce((acc, e) => acc + (e.overall_score || 0), 0) / evaluations.length)
     : 0;
-
-  const completedInterviews = interviews.filter(i => i.status === "completed").length;
 
   if (isLoading) {
     return (
@@ -234,7 +251,7 @@ const Dashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between">
-                  <span className="text-4xl font-bold text-foreground">{interviews.length}</span>
+                  <span className="text-4xl font-bold text-foreground">{totalInterviews}</span>
                   <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
                     <Mic className="w-6 h-6 text-accent" />
                   </div>
