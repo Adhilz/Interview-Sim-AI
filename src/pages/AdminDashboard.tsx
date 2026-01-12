@@ -282,25 +282,34 @@ const AdminDashboard = () => {
   const fetchStudents = async (universityId?: string) => {
     if (!universityId) return;
 
-    const { data: profiles } = await supabase
+    // Get students where university_code_id matches the admin's university_id
+    const { data: profiles, error } = await supabase
       .from('profiles')
-      .select(`
-        id,
-        user_id,
-        full_name,
-        email,
-        university_code_id,
-        university_codes(university_name)
-      `)
+      .select('id, user_id, full_name, email, university_code_id')
       .eq('university_code_id', universityId);
 
-    if (profiles) {
+    if (error) {
+      console.error('Error fetching students:', error);
+      return;
+    }
+
+    // Get the university name separately
+    const { data: uniData } = await supabase
+      .from('university_codes')
+      .select('university_name')
+      .eq('id', universityId)
+      .maybeSingle();
+
+    const universityName = uniData?.university_name || null;
+
+    if (profiles && profiles.length > 0) {
       const studentsWithStats = await Promise.all(
-        profiles.map(async (profile: any) => {
+        profiles.map(async (profile) => {
           const { data: interviews } = await supabase
             .from('interviews')
             .select('id, created_at')
-            .eq('user_id', profile.user_id);
+            .eq('user_id', profile.user_id)
+            .order('created_at', { ascending: false });
 
           const { data: evaluations } = await supabase
             .from('evaluations')
@@ -316,7 +325,7 @@ const AdminDashboard = () => {
             user_id: profile.user_id,
             full_name: profile.full_name || 'Unknown',
             email: profile.email,
-            university_name: profile.university_codes?.university_name || null,
+            university_name: universityName,
             interview_count: interviews?.length || 0,
             avg_score: Math.round(avgScore),
             last_interview: interviews?.length ? interviews[0].created_at : null,
@@ -325,6 +334,8 @@ const AdminDashboard = () => {
       );
 
       setStudents(studentsWithStats);
+    } else {
+      setStudents([]);
     }
   };
 
