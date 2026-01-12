@@ -425,11 +425,22 @@ const AdminDashboard = () => {
     }
   };
 
+  // Sanitize CSV fields to prevent formula injection attacks
+  const sanitizeCSVField = (value: string | null | undefined): string => {
+    if (!value) return '""';
+    const str = String(value);
+    // Prefix dangerous characters that could trigger formula execution in Excel/LibreOffice
+    const dangerous = /^[=+\-@\t\r]/;
+    const safe = dangerous.test(str) ? `'${str}` : str;
+    // Escape double quotes and wrap in quotes
+    return `"${safe.replace(/"/g, '""')}"`;
+  };
+
   const exportToCSV = () => {
     const headers = ['Student Name', 'Email', 'Interviews', 'Avg Score', 'Last Interview'];
     const rows = students.map(s => [
-      s.full_name,
-      s.email,
+      sanitizeCSVField(s.full_name),
+      sanitizeCSVField(s.email),
       s.interview_count.toString(),
       s.avg_score.toString(),
       s.last_interview ? format(new Date(s.last_interview), 'yyyy-MM-dd') : 'Never'
