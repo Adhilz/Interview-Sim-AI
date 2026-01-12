@@ -20,7 +20,8 @@ import {
   RefreshCw,
   Briefcase,
   GraduationCap,
-  Code
+  Code,
+  Menu
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import type { Json } from "@/integrations/supabase/types";
@@ -75,6 +76,7 @@ const Resume = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -427,17 +429,69 @@ const Resume = () => {
           </div>
           <span className="font-bold text-foreground">InterviewSim</span>
         </Link>
-        <Button variant="ghost" size="icon" onClick={handleLogout}>
-          <LogOut className="w-5 h-5" />
+        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </Button>
       </header>
 
+      {/* Mobile menu */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden fixed top-16 left-0 right-0 bottom-0 z-40 bg-card border-t border-border p-4">
+          <nav className="space-y-2">
+            <Link 
+              to="/dashboard"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <TrendingUp className="w-5 h-5" />
+              Dashboard
+            </Link>
+            <Link 
+              to="/interview"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Mic className="w-5 h-5" />
+              New Interview
+            </Link>
+            <Link 
+              to="/resume"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-accent/10 text-accent font-medium"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <FileText className="w-5 h-5" />
+              Resume
+            </Link>
+            <Link 
+              to="/history"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <History className="w-5 h-5" />
+              History
+            </Link>
+            <Link 
+              to="/profile"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <User className="w-5 h-5" />
+              Profile
+            </Link>
+            <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive">
+              <LogOut className="w-5 h-5" />
+              Logout
+            </Button>
+          </nav>
+        </div>
+      )}
+
       {/* Main content */}
       <main className="lg:ml-64 pt-20 lg:pt-0">
-        <div className="p-6 lg:p-10 max-w-4xl">
-          <div className="mb-10">
-            <h1 className="text-3xl font-bold text-foreground mb-2">Resume</h1>
-            <p className="text-muted-foreground">
+        <div className="p-4 sm:p-6 lg:p-10 max-w-4xl">
+          <div className="mb-6 sm:mb-10">
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Resume</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
               Upload your resume to get personalized interview questions
             </p>
           </div>
