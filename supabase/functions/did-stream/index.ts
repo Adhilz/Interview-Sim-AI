@@ -240,8 +240,9 @@ serve(async (req) => {
     const user = await verifyAuth(req);
     console.log(`[D-ID Stream] Authenticated user: ${user.id}`);
 
-    const { action, streamId, sessionId, sdpAnswer, iceCandidate, avatarUrl, text } = await req.json();
-    console.log(`[D-ID Stream] Action: ${action}, streamId: ${streamId}, sessionId: ${sessionId}`);
+    const body = await req.json();
+    const { action, streamId, sessionId, sdpAnswer, iceCandidate, avatarUrl, text, cookies } = body;
+    console.log(`[D-ID Stream] Action: ${action}, streamId: ${streamId}, sessionId: ${sessionId}, hasCookies: ${!!cookies}`);
 
     switch (action) {
       case "create": {
@@ -276,14 +277,32 @@ serve(async (req) => {
 
         const streamData = await createResponse.json();
         
-        // D-ID returns session_id either in JSON body or as Set-Cookie header
-        // The JSON session_id field sometimes contains AWS ALB cookie data instead of the actual session
-        // We need to extract the real session_id from the stream ID format or use a generated one
+        // D-ID returns session_id in cookies - extract from Set-Cookie header
+        // The cookies contain the actual session identifier needed for subsequent calls
+        const setCookieHeader = createResponse.headers.get("set-cookie");
         let sessionIdValue = streamData.session_id;
+        let cookieString = "";
         
-        // If session_id looks like AWS cookies, generate one from stream ID
+        // Extract session cookies from Set-Cookie header for use in subsequent requests
+        if (setCookieHeader) {
+          // Parse all cookies from the header
+          const cookies = setCookieHeader.split(/,(?=[^;]+=[^;]+)/).map(c => c.trim());
+          const sessionCookies: string[] = [];
+          
+          for (const cookie of cookies) {
+            // Extract just the cookie name=value part (before any attributes like Path, Secure, etc.)
+            const cookiePart = cookie.split(";")[0].trim();
+            if (cookiePart) {
+              sessionCookies.push(cookiePart);
+            }
+          }
+          
+          cookieString = sessionCookies.join("; ");
+          console.log("[D-ID Stream] Captured session cookies:", cookieString.substring(0, 100) + "...");
+        }
+        
+        // If session_id from JSON is invalid, use stream ID as fallback
         if (!sessionIdValue || typeof sessionIdValue !== 'string' || sessionIdValue.includes('AWSALB')) {
-          // Use the stream ID as the session identifier - D-ID accepts this for subsequent requests
           sessionIdValue = streamData.id;
           console.log("[D-ID Stream] Using stream ID as session:", sessionIdValue);
         }
@@ -293,6 +312,7 @@ serve(async (req) => {
           session_id: sessionIdValue,
           has_offer: !!streamData.offer,
           has_ice_servers: !!streamData.ice_servers,
+          has_cookies: !!cookieString,
         }));
 
         return new Response(
@@ -301,6 +321,7 @@ serve(async (req) => {
             sdpOffer: streamData.offer,
             iceServers: streamData.ice_servers,
             sessionId: sessionIdValue,
+            cookies: cookieString, // Pass cookies to client for subsequent requests
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
@@ -311,12 +332,19 @@ serve(async (req) => {
           throw new Error("streamId, sessionId, and sdpAnswer required for SDP action");
         }
 
+        const sdpHeaders: Record<string, string> = {
+          Authorization: `Basic ${DID_API_KEY}`,
+          "Content-Type": "application/json",
+        };
+        
+        // Include cookies if provided for session continuity
+        if (cookies) {
+          sdpHeaders["Cookie"] = cookies;
+        }
+
         const sdpResponse = await fetch(`${DID_HTTP_API_URL}/talks/streams/${streamId}/sdp`, {
           method: "POST",
-          headers: {
-            Authorization: `Basic ${DID_API_KEY}`,
-            "Content-Type": "application/json",
-          },
+          headers: sdpHeaders,
           body: JSON.stringify({
             answer: sdpAnswer,
             session_id: sessionId,
@@ -339,12 +367,18 @@ serve(async (req) => {
           throw new Error("streamId, sessionId, and iceCandidate required for ICE action");
         }
 
+        const iceHeaders: Record<string, string> = {
+          Authorization: `Basic ${DID_API_KEY}`,
+          "Content-Type": "application/json",
+        };
+        
+        if (cookies) {
+          iceHeaders["Cookie"] = cookies;
+        }
+
         const iceResponse = await fetch(`${DID_HTTP_API_URL}/talks/streams/${streamId}/ice`, {
           method: "POST",
-          headers: {
-            Authorization: `Basic ${DID_API_KEY}`,
-            "Content-Type": "application/json",
-          },
+          headers: iceHeaders,
           body: JSON.stringify({
             candidate: iceCandidate.candidate,
             sdpMid: iceCandidate.sdpMid,
@@ -368,12 +402,18 @@ serve(async (req) => {
           throw new Error("streamId, sessionId, and text required for talk action");
         }
 
+        const talkHeaders: Record<string, string> = {
+          Authorization: `Basic ${DID_API_KEY}`,
+          "Content-Type": "application/json",
+        };
+        
+        if (cookies) {
+          talkHeaders["Cookie"] = cookies;
+        }
+
         const talkResponse = await fetch(`${DID_HTTP_API_URL}/talks/streams/${streamId}`, {
           method: "POST",
-          headers: {
-            Authorization: `Basic ${DID_API_KEY}`,
-            "Content-Type": "application/json",
-          },
+          headers: talkHeaders,
           body: JSON.stringify({
             script: {
               type: "text",
@@ -421,12 +461,18 @@ serve(async (req) => {
           throw new Error("streamId and sessionId required for destroy action");
         }
 
+        const destroyHeaders: Record<string, string> = {
+          Authorization: `Basic ${DID_API_KEY}`,
+          "Content-Type": "application/json",
+        };
+        
+        if (cookies) {
+          destroyHeaders["Cookie"] = cookies;
+        }
+
         const destroyResponse = await fetch(`${DID_HTTP_API_URL}/talks/streams/${streamId}`, {
           method: "DELETE",
-          headers: {
-            Authorization: `Basic ${DID_API_KEY}`,
-            "Content-Type": "application/json",
-          },
+          headers: destroyHeaders,
           body: JSON.stringify({ session_id: sessionId }),
         });
 

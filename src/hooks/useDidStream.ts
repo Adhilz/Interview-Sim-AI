@@ -19,6 +19,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamIdRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const cookiesRef = useRef<string | null>(null);
   const textQueueRef = useRef<string[]>([]);
   const isProcessingRef = useRef(false);
 
@@ -45,7 +46,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
         throw new Error(fnError?.message || "Failed to create D-ID stream");
       }
 
-      const { streamId, sdpOffer, iceServers, sessionId } = data;
+      const { streamId, sdpOffer, iceServers, sessionId, cookies } = data;
       
       // Validate sessionId is a proper value (not an AWS cookie)
       if (!sessionId || typeof sessionId !== 'string' || sessionId.includes('AWSALB')) {
@@ -55,8 +56,9 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
       
       streamIdRef.current = streamId;
       sessionIdRef.current = sessionId;
+      cookiesRef.current = cookies || null;
 
-      console.log("[D-ID] Stream created:", streamId, "Session:", sessionId);
+      console.log("[D-ID] Stream created:", streamId, "Session:", sessionId, "HasCookies:", !!cookies);
 
       // Set up WebRTC peer connection
       const pc = new RTCPeerConnection({
@@ -78,6 +80,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
               action: "ice",
               streamId: streamIdRef.current,
               sessionId: sessionIdRef.current,
+              cookies: cookiesRef.current,
               iceCandidate: {
                 candidate: event.candidate.candidate,
                 sdpMid: event.candidate.sdpMid,
@@ -112,6 +115,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
           action: "sdp",
           streamId,
           sessionId,
+          cookies: cookiesRef.current,
           sdpAnswer: answer,
         },
       });
@@ -144,6 +148,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
           action: "talk",
           streamId: streamIdRef.current,
           sessionId: sessionIdRef.current,
+          cookies: cookiesRef.current,
           text,
         },
       });
@@ -204,6 +209,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
             action: "destroy",
             streamId: streamIdRef.current,
             sessionId: sessionIdRef.current,
+            cookies: cookiesRef.current,
           },
         });
       }
@@ -215,6 +221,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
 
       streamIdRef.current = null;
       sessionIdRef.current = null;
+      cookiesRef.current = null;
       textQueueRef.current = [];
       isProcessingRef.current = false;
 
