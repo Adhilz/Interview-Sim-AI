@@ -14,7 +14,9 @@ import {
   Clock,
   Award,
   ChevronRight,
-  Calendar
+  Calendar,
+  Menu,
+  X
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
@@ -52,6 +54,7 @@ const InterviewHistory = () => {
   const [improvements, setImprovements] = useState<Record<string, Improvement[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [selectedInterview, setSelectedInterview] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -226,17 +229,69 @@ const InterviewHistory = () => {
           </div>
           <span className="font-bold text-foreground">InterviewSim</span>
         </Link>
-        <Button variant="ghost" size="icon" onClick={handleLogout}>
-          <LogOut className="w-5 h-5" />
+        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </Button>
       </header>
 
+      {/* Mobile menu */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden fixed top-16 left-0 right-0 bottom-0 z-40 bg-card border-t border-border p-4">
+          <nav className="space-y-2">
+            <Link 
+              to="/dashboard"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <TrendingUp className="w-5 h-5" />
+              Dashboard
+            </Link>
+            <Link 
+              to="/interview"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Mic className="w-5 h-5" />
+              New Interview
+            </Link>
+            <Link 
+              to="/resume"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <FileText className="w-5 h-5" />
+              Resume
+            </Link>
+            <Link 
+              to="/history"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-accent/10 text-accent font-medium"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <History className="w-5 h-5" />
+              History
+            </Link>
+            <Link 
+              to="/profile"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <User className="w-5 h-5" />
+              Profile
+            </Link>
+            <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive">
+              <LogOut className="w-5 h-5" />
+              Logout
+            </Button>
+          </nav>
+        </div>
+      )}
+
       {/* Main content */}
       <main className="lg:ml-64 pt-20 lg:pt-0">
-        <div className="p-6 lg:p-10">
-          <div className="mb-10">
-            <h1 className="text-3xl font-bold text-foreground mb-2">Interview History</h1>
-            <p className="text-muted-foreground">
+        <div className="p-4 sm:p-6 lg:p-10">
+          <div className="mb-6 sm:mb-10">
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Interview History</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
               Review your past interviews and evaluations
             </p>
           </div>
@@ -254,9 +309,9 @@ const InterviewHistory = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid lg:grid-cols-3 gap-6">
+            <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-6">
               {/* Interview list */}
-              <div className="lg:col-span-1 space-y-3">
+              <div className="lg:col-span-1 space-y-2 sm:space-y-3">
                 {interviews.map((interview) => (
                   <Card 
                     key={interview.id}
@@ -265,27 +320,27 @@ const InterviewHistory = () => {
                     }`}
                     onClick={() => setSelectedInterview(interview.id)}
                   >
-                    <CardContent className="p-4">
+                    <CardContent className="p-3 sm:p-4">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                            <Mic className="w-5 h-5 text-accent" />
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                            <Mic className="w-4 h-4 sm:w-5 sm:h-5 text-accent" />
                           </div>
                           <div>
-                            <p className="font-medium text-foreground">
+                            <p className="font-medium text-foreground text-sm sm:text-base">
                               {interview.duration} Min Interview
                             </p>
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-muted-foreground">
                               <Calendar className="w-3 h-3" />
                               {new Date(interview.created_at).toLocaleDateString()}
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(interview.status)}`}>
+                        <div className="flex items-center gap-1 sm:gap-2">
+                          <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium ${getStatusColor(interview.status)}`}>
                             {interview.status}
                           </span>
-                          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          <ChevronRight className="w-4 h-4 text-muted-foreground hidden sm:block" />
                         </div>
                       </div>
                     </CardContent>
@@ -294,37 +349,36 @@ const InterviewHistory = () => {
               </div>
 
               {/* Detail panel */}
-              <div className="lg:col-span-2">
-                {selectedInterview ? (
+              <div className="lg:col-span-2">{selectedInterview ? (
                   <Card className="border-border/50">
-                    <CardHeader>
-                      <CardTitle>Interview Details</CardTitle>
-                      <CardDescription>
+                    <CardHeader className="p-4 sm:p-6">
+                      <CardTitle className="text-base sm:text-lg">Interview Details</CardTitle>
+                      <CardDescription className="text-xs sm:text-sm">
                         {selectedInterviewData && new Date(selectedInterviewData.created_at).toLocaleString()}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-6">
+                    <CardContent className="p-4 sm:p-6 pt-0 space-y-4 sm:space-y-6">
                       {/* Interview info */}
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="p-4 rounded-xl bg-secondary/50 text-center">
-                          <Clock className="w-6 h-6 text-accent mx-auto mb-2" />
-                          <p className="text-2xl font-bold text-foreground">
+                      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                        <div className="p-2 sm:p-4 rounded-lg sm:rounded-xl bg-secondary/50 text-center">
+                          <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-accent mx-auto mb-1 sm:mb-2" />
+                          <p className="text-lg sm:text-2xl font-bold text-foreground">
                             {selectedInterviewData?.duration}
                           </p>
-                          <p className="text-sm text-muted-foreground">Minutes</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground">Minutes</p>
                         </div>
-                        <div className="p-4 rounded-xl bg-secondary/50 text-center">
-                          <Award className="w-6 h-6 text-accent mx-auto mb-2" />
-                          <p className="text-2xl font-bold text-foreground">
+                        <div className="p-2 sm:p-4 rounded-lg sm:rounded-xl bg-secondary/50 text-center">
+                          <Award className="w-5 h-5 sm:w-6 sm:h-6 text-accent mx-auto mb-1 sm:mb-2" />
+                          <p className="text-lg sm:text-2xl font-bold text-foreground">
                             {selectedEval?.overall_score || "--"}%
                           </p>
-                          <p className="text-sm text-muted-foreground">Overall</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground">Overall</p>
                         </div>
-                        <div className="p-4 rounded-xl bg-secondary/50 text-center">
-                          <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedInterviewData?.status || "")}`}>
+                        <div className="p-2 sm:p-4 rounded-lg sm:rounded-xl bg-secondary/50 text-center">
+                          <span className={`inline-block px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-medium ${getStatusColor(selectedInterviewData?.status || "")}`}>
                             {selectedInterviewData?.status}
                           </span>
-                          <p className="text-sm text-muted-foreground mt-2">Status</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground mt-1 sm:mt-2">Status</p>
                         </div>
                       </div>
 

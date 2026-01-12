@@ -72,93 +72,93 @@ const Landing = () => {
     <div className="min-h-screen bg-background">
       {/* Navigation */}
       <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-border/50">
-        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center">
-              <Brain className="w-6 h-6 text-primary-foreground" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl gradient-hero flex items-center justify-center">
+              <Brain className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold text-foreground">InterviewSim AI</span>
+            <span className="text-lg sm:text-xl font-bold text-foreground">InterviewSim AI</span>
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <Link to="/login">
-              <Button variant="ghost" size="sm">Login</Button>
+              <Button variant="ghost" size="sm" className="text-sm">Login</Button>
             </Link>
             <Link to="/signup">
-              <Button variant="hero" size="sm">Get Started</Button>
+              <Button variant="hero" size="sm" className="text-sm">Get Started</Button>
             </Link>
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-32 pb-20 overflow-hidden">
+      <section className="relative pt-24 sm:pt-32 pb-12 sm:pb-20 overflow-hidden">
         {/* Background gradient */}
         <div className="absolute inset-0 gradient-hero opacity-[0.03]" />
-        <div className="absolute top-20 left-1/4 w-96 h-96 bg-accent/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
+        <div className="absolute top-20 left-1/4 w-64 sm:w-96 h-64 sm:h-96 bg-accent/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-1/4 w-64 sm:w-96 h-64 sm:h-96 bg-primary/10 rounded-full blur-3xl" />
         
-        <div className="container mx-auto px-6 relative">
+        <div className="container mx-auto px-4 sm:px-6 relative">
           <div className="max-w-4xl mx-auto text-center">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent/10 text-accent mb-8 animate-fade-in">
+            <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-accent/10 text-accent mb-6 sm:mb-8 animate-fade-in">
               <GraduationCap className="w-4 h-4" />
-              <span className="text-sm font-medium">University Edition</span>
+              <span className="text-xs sm:text-sm font-medium">University Edition</span>
             </div>
             
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold text-foreground mb-6 animate-slide-up leading-tight">
+            <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-foreground mb-4 sm:mb-6 animate-slide-up leading-tight">
               Master Your Interview
               <span className="block text-accent">With AI Precision</span>
             </h1>
             
-            <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto animate-slide-up stagger-1">
+            <p className="text-base sm:text-xl text-muted-foreground mb-8 sm:mb-10 max-w-2xl mx-auto animate-slide-up stagger-1 px-4">
               Practice with our AI-powered voice interviewer, get instant feedback, 
               and land your dream job. Designed exclusively for university students.
             </p>
             
-            <div className="flex flex-col sm:flex-row gap-4 justify-center animate-slide-up stagger-2">
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center animate-slide-up stagger-2 px-4">
               <Link to="/signup">
-                <Button variant="hero" size="xl" className="w-full sm:w-auto">
+                <Button variant="hero" size="lg" className="w-full sm:w-auto">
                   Start Practicing Now
                   <ChevronRight className="w-5 h-5" />
                 </Button>
               </Link>
               <Link to="/login">
-                <Button variant="outline" size="xl" className="w-full sm:w-auto">
+                <Button variant="outline" size="lg" className="w-full sm:w-auto">
                   Login to Dashboard
                 </Button>
               </Link>
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-8 mt-16 pt-16 border-t border-border animate-fade-in stagger-3">
+            <div className="grid grid-cols-3 gap-4 sm:gap-8 mt-12 sm:mt-16 pt-8 sm:pt-16 border-t border-border animate-fade-in stagger-3">
               <div>
-                <div className="text-4xl font-bold text-foreground">
+                <div className="text-2xl sm:text-4xl font-bold text-foreground">
                   {isLoading ? (
-                    <span className="inline-block w-16 h-10 bg-muted animate-pulse rounded" />
+                    <span className="inline-block w-12 sm:w-16 h-8 sm:h-10 bg-muted animate-pulse rounded" />
                   ) : (
                     totalUsers > 0 ? formatNumber(totalUsers) : "5K+"
                   )}
                 </div>
-                <div className="text-sm text-muted-foreground mt-1">Students Trained</div>
+                <div className="text-xs sm:text-sm text-muted-foreground mt-1">Students Trained</div>
               </div>
               <div>
-                <div className="text-4xl font-bold text-foreground">
+                <div className="text-2xl sm:text-4xl font-bold text-foreground">
                   {isLoading ? (
-                    <span className="inline-block w-16 h-10 bg-muted animate-pulse rounded" />
+                    <span className="inline-block w-12 sm:w-16 h-8 sm:h-10 bg-muted animate-pulse rounded" />
                   ) : (
                     totalInterviews > 0 ? formatNumber(totalInterviews) : "50+"
                   )}
                 </div>
-                <div className="text-sm text-muted-foreground mt-1">Interviews Conducted</div>
+                <div className="text-xs sm:text-sm text-muted-foreground mt-1">Interviews</div>
               </div>
               <div>
-                <div className="text-4xl font-bold text-accent">
+                <div className="text-2xl sm:text-4xl font-bold text-accent">
                   {isLoading ? (
-                    <span className="inline-block w-16 h-10 bg-muted animate-pulse rounded" />
+                    <span className="inline-block w-12 sm:w-16 h-8 sm:h-10 bg-muted animate-pulse rounded" />
                   ) : (
                     successRate > 0 ? `${successRate}%` : "92%"
                   )}
                 </div>
-                <div className="text-sm text-muted-foreground mt-1">Success Rate</div>
+                <div className="text-xs sm:text-sm text-muted-foreground mt-1">Success Rate</div>
               </div>
             </div>
           </div>
@@ -166,18 +166,18 @@ const Landing = () => {
       </section>
 
       {/* How It Works */}
-      <section className="py-24 bg-secondary/30">
-        <div className="container mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+      <section className="py-16 sm:py-24 bg-secondary/30">
+        <div className="container mx-auto px-4 sm:px-6">
+          <div className="text-center mb-10 sm:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mb-3 sm:mb-4">
               How It Works
             </h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto">
               Get interview-ready in four simple steps
             </p>
           </div>
 
-          <div className="grid md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8">
             {[
               {
                 step: "01",
@@ -195,30 +195,30 @@ const Landing = () => {
                 step: "03",
                 icon: Mic,
                 title: "Live Interview",
-                description: "Engage in real-time voice interview with AI interviewer"
+                description: "Engage in real-time voice interview with AI"
               },
               {
                 step: "04",
                 icon: Award,
                 title: "Get Feedback",
-                description: "Receive detailed scores and improvement suggestions"
+                description: "Receive detailed scores and improvements"
               }
             ].map((item, index) => (
               <div 
                 key={index}
                 className="relative group"
               >
-                <div className="bg-card rounded-2xl p-8 shadow-md hover:shadow-lg transition-all duration-300 h-full border border-border/50">
-                  <div className="text-6xl font-bold text-accent/20 absolute top-4 right-4">
+                <div className="bg-card rounded-xl sm:rounded-2xl p-4 sm:p-8 shadow-md hover:shadow-lg transition-all duration-300 h-full border border-border/50">
+                  <div className="text-3xl sm:text-6xl font-bold text-accent/20 absolute top-2 right-2 sm:top-4 sm:right-4">
                     {item.step}
                   </div>
-                  <div className="w-14 h-14 rounded-xl bg-accent/10 flex items-center justify-center mb-6 group-hover:bg-accent/20 transition-colors">
-                    <item.icon className="w-7 h-7 text-accent" />
+                  <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-lg sm:rounded-xl bg-accent/10 flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-accent/20 transition-colors">
+                    <item.icon className="w-5 h-5 sm:w-7 sm:h-7 text-accent" />
                   </div>
-                  <h3 className="text-xl font-semibold text-foreground mb-3">
+                  <h3 className="text-base sm:text-xl font-semibold text-foreground mb-1 sm:mb-3">
                     {item.title}
                   </h3>
-                  <p className="text-muted-foreground">
+                  <p className="text-xs sm:text-base text-muted-foreground">
                     {item.description}
                   </p>
                 </div>

@@ -15,7 +15,9 @@ import {
   Clock,
   Award,
   TrendingUp,
-  Plus
+  Plus,
+  Menu,
+  X
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 
@@ -49,6 +51,7 @@ const Dashboard = () => {
   const [totalInterviews, setTotalInterviews] = useState(0);
   const [completedInterviews, setCompletedInterviews] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -220,31 +223,78 @@ const Dashboard = () => {
           </div>
           <span className="font-bold text-foreground">InterviewSim</span>
         </Link>
-        <div className="flex gap-2">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/interview")}>
-            <Mic className="w-5 h-5" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={handleLogout}>
-            <LogOut className="w-5 h-5" />
-          </Button>
-        </div>
+        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </Button>
       </header>
+
+      {/* Mobile menu */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden fixed top-16 left-0 right-0 bottom-0 z-40 bg-card border-t border-border p-4">
+          <nav className="space-y-2">
+            <Link 
+              to="/dashboard"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-accent/10 text-accent font-medium"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <TrendingUp className="w-5 h-5" />
+              Dashboard
+            </Link>
+            <Link 
+              to="/interview"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Mic className="w-5 h-5" />
+              New Interview
+            </Link>
+            <Link 
+              to="/resume"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <FileText className="w-5 h-5" />
+              Resume
+            </Link>
+            <Link 
+              to="/history"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <History className="w-5 h-5" />
+              History
+            </Link>
+            <Link 
+              to="/profile"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <UserIcon className="w-5 h-5" />
+              Profile
+            </Link>
+            <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive">
+              <LogOut className="w-5 h-5" />
+              Logout
+            </Button>
+          </nav>
+        </div>
+      )}
 
       {/* Main content */}
       <main className="lg:ml-64 pt-20 lg:pt-0">
-        <div className="p-6 lg:p-10">
+        <div className="p-4 sm:p-6 lg:p-10">
           {/* Welcome section */}
-          <div className="mb-10">
-            <h1 className="text-3xl font-bold text-foreground mb-2">
+          <div className="mb-6 sm:mb-10">
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
               Welcome back, {profile?.full_name?.split(" ")[0] || "Student"}!
             </h1>
-            <p className="text-muted-foreground">
+            <p className="text-sm sm:text-base text-muted-foreground">
               Ready to practice your interview skills?
             </p>
           </div>
 
           {/* Stats cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-10">
             <Card className="border-border/50">
               <CardHeader className="pb-2">
                 <CardDescription>Total Interviews</CardDescription>
@@ -289,7 +339,7 @@ const Dashboard = () => {
           </div>
 
           {/* Quick actions */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-10">
             <Card className="border-border/50 hover:shadow-md transition-shadow cursor-pointer group" onClick={() => navigate("/interview")}>
               <CardContent className="p-6">
                 <div className="flex items-center gap-6">
