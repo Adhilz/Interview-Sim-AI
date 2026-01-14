@@ -472,6 +472,13 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
             <UserIcon className="w-5 h-5" />
             Profile
           </Link>
+          <Link 
+            to="/help"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+          >
+            <HelpCircle className="w-5 h-5" />
+            Help
+          </Link>
         </nav>
 
         <Button variant="ghost" onClick={handleLogout} className="justify-start gap-3 text-muted-foreground hover:text-destructive">
@@ -536,6 +543,14 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
             >
               <UserIcon className="w-5 h-5" />
               Profile
+            </Link>
+            <Link 
+              to="/help"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <HelpCircle className="w-5 h-5" />
+              Help
             </Link>
             <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive">
               <LogOut className="w-5 h-5" />

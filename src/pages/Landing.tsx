@@ -13,7 +13,8 @@ import {
   GraduationCap,
   Brain,
   Target,
-  Users
+  Users,
+  HelpCircle
 } from "lucide-react";
 
 const Landing = () => {
@@ -80,6 +81,12 @@ const Landing = () => {
             <span className="text-lg sm:text-xl font-bold text-foreground">InterviewSim AI</span>
           </Link>
           <div className="flex items-center gap-2 sm:gap-4">
+            <Link to="/help">
+              <Button variant="ghost" size="sm" className="text-sm hidden sm:inline-flex">
+                <HelpCircle className="w-4 h-4 mr-1" />
+                Help
+              </Button>
+            </Link>
             <Link to="/login">
               <Button variant="ghost" size="sm" className="text-sm">Login</Button>
             </Link>
@@ -329,8 +336,19 @@ const Landing = () => {
               </div>
               <span className="font-semibold text-foreground">InterviewSim AI</span>
             </div>
-            <div className="flex items-center gap-8 text-sm text-muted-foreground">
-              <span>© 2024 InterviewSim AI. All rights reserved.</span>
+            <div className="flex items-center gap-6 text-sm">
+              <Link to="/help" className="text-muted-foreground hover:text-accent transition-colors">
+                Help & Support
+              </Link>
+              <Link to="/login" className="text-muted-foreground hover:text-accent transition-colors">
+                Login
+              </Link>
+              <Link to="/signup" className="text-muted-foreground hover:text-accent transition-colors">
+                Sign Up
+              </Link>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              <span>© {new Date().getFullYear()} InterviewSim AI. All rights reserved.</span>
             </div>
           </div>
         </div>
