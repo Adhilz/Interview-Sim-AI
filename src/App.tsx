@@ -11,6 +11,7 @@ import Resume from "./pages/Resume";
 import Interview from "./pages/Interview";
 import InterviewHistory from "./pages/InterviewHistory";
 import Profile from "./pages/Profile";
+import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/login" element={<Auth />} />
           <Route path="/signup" element={<Auth />} />
           <Route path="/forgot-password" element={<Auth />} />
+          <Route path="/help" element={<Help />} />
           
           {/* Student Routes */}
           <Route path="/dashboard" element={

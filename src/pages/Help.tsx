@@ -1,0 +1,477 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Brain,
+  HelpCircle,
+  Mail,
+  MessageSquare,
+  Send,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  ArrowLeft,
+  Phone,
+  Clock,
+  Server,
+  Video,
+  Mic,
+  FileText,
+  Shield,
+} from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { z } from 'zod';
+
+const contactSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(100),
+  email: z.string().email('Please enter a valid email address'),
+  role: z.enum(['student', 'admin', 'other']),
+  message: z.string().min(10, 'Message must be at least 10 characters').max(1000),
+});
+
+interface SystemStatus {
+  service: string;
+  status: 'operational' | 'degraded' | 'outage';
+  icon: React.ReactNode;
+}
+
+const SUPPORT_EMAILS = [
+  'adhilsalam200@gmail.com',
+  'adhensarageorge06@gmail.com',
+  'eldhosoorajgeorge04@gmail.com',
+  'angelelizabethgeorge22@gmail.com',
+];
+
+const FAQ_ITEMS = [
+  {
+    question: 'How do I start a mock interview?',
+    answer: 'Navigate to the Interview page from your dashboard, grant camera and microphone permissions, select your preferred duration (3 or 5 minutes), and click "Start Interview". The AI interviewer will begin asking questions based on your resume.',
+  },
+  {
+    question: 'Why do I need to upload a resume?',
+    answer: 'Your resume helps the AI interviewer ask relevant, personalized questions based on your skills, experience, and projects. This makes the interview more realistic and valuable for your preparation.',
+  },
+  {
+    question: 'What is a University Code?',
+    answer: 'A University Code is a unique identifier provided by your university administrator. Students must enter this code during signup to link their account to their institution, enabling their admin to track progress and provide guidance.',
+  },
+  {
+    question: 'How is my interview evaluated?',
+    answer: 'After each interview, our AI analyzes your responses across multiple dimensions: technical accuracy, communication clarity, confidence, and problem-solving approach. You receive detailed feedback and improvement suggestions.',
+  },
+  {
+    question: 'Can I retake an interview?',
+    answer: 'Yes! You can take as many practice interviews as you like. Each interview is recorded separately, allowing you to track your improvement over time through the History page.',
+  },
+  {
+    question: 'What if my camera or microphone doesn\'t work?',
+    answer: 'First, ensure you\'ve granted browser permissions for camera and microphone access. Try refreshing the page or using a different browser. If issues persist, check your device settings or contact support.',
+  },
+  {
+    question: 'Is my data secure?',
+    answer: 'Yes, we take security seriously. All data is encrypted, interviews are stored securely, and access is strictly controlled. University admins can only see data from students in their institution.',
+  },
+  {
+    question: 'How do I reset my password?',
+    answer: 'Click "Forgot Password" on the login page, enter your registered email, and you\'ll receive a password reset link. Follow the link to set a new password.',
+  },
+];
+
+const Help = () => {
+  const { toast } = useToast();
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    role: '' as 'student' | 'admin' | 'other' | '',
+    message: '',
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const systemStatus: SystemStatus[] = [
+    { service: 'Interview Service', status: 'operational', icon: <Mic className="w-4 h-4" /> },
+    { service: 'Video Streaming', status: 'operational', icon: <Video className="w-4 h-4" /> },
+    { service: 'Resume Processing', status: 'operational', icon: <FileText className="w-4 h-4" /> },
+    { service: 'Authentication', status: 'operational', icon: <Shield className="w-4 h-4" /> },
+    { service: 'Database', status: 'operational', icon: <Server className="w-4 h-4" /> },
+  ];
+
+  const validateForm = () => {
+    try {
+      contactSchema.parse(formData);
+      setErrors({});
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const newErrors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          if (err.path[0]) {
+            newErrors[err.path[0] as string] = err.message;
+          }
+        });
+        setErrors(newErrors);
+      }
+      return false;
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateForm()) return;
+
+    setIsSubmitting(true);
+
+    // Build mailto link
+    const subject = encodeURIComponent(`[InterviewSim Support] Message from ${formData.name}`);
+    const body = encodeURIComponent(
+      `Name: ${formData.name}\n` +
+      `Email: ${formData.email}\n` +
+      `Role: ${formData.role}\n\n` +
+      `Message:\n${formData.message}`
+    );
+    
+    // Create mailto link with all recipients
+    const mailtoLink = `mailto:${SUPPORT_EMAILS.join(',')}?subject=${subject}&body=${body}`;
+    
+    // Open email client
+    window.location.href = mailtoLink;
+
+    // Show success message
+    setTimeout(() => {
+      setIsSubmitting(false);
+      toast({
+        title: 'Email client opened',
+        description: 'Please send the email from your mail application.',
+      });
+      
+      // Reset form
+      setFormData({ name: '', email: '', role: '', message: '' });
+    }, 500);
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'operational':
+        return (
+          <Badge variant="default" className="bg-success/20 text-success border-success/30">
+            <CheckCircle className="w-3 h-3 mr-1" />
+            Operational
+          </Badge>
+        );
+      case 'degraded':
+        return (
+          <Badge variant="secondary" className="bg-warning/20 text-warning border-warning/30">
+            <AlertCircle className="w-3 h-3 mr-1" />
+            Degraded
+          </Badge>
+        );
+      case 'outage':
+        return (
+          <Badge variant="destructive">
+            <AlertCircle className="w-3 h-3 mr-1" />
+            Outage
+          </Badge>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border bg-card">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center">
+                <Brain className="w-6 h-6 text-primary-foreground" />
+              </div>
+              <span className="text-lg font-bold text-foreground">InterviewSim</span>
+            </Link>
+            <Link to="/">
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Home
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8 sm:py-12">
+        <div className="max-w-6xl mx-auto">
+          {/* Page Header */}
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent/10 text-accent text-sm font-medium mb-4">
+              <HelpCircle className="w-4 h-4" />
+              Help & Support
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
+              How can we help you?
+            </h1>
+            <p className="text-muted-foreground max-w-2xl mx-auto">
+              Find answers to common questions or reach out to our support team for assistance.
+            </p>
+          </div>
+
+          <div className="grid lg:grid-cols-3 gap-8">
+            {/* Left Column - Contact Form */}
+            <div className="lg:col-span-2 space-y-8">
+              {/* Contact Form */}
+              <Card className="border-border/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-accent" />
+                    Contact Support
+                  </CardTitle>
+                  <CardDescription>
+                    Fill out the form below and we'll get back to you as soon as possible.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleSubmit} className="space-y-6">
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Your Name</Label>
+                        <Input
+                          id="name"
+                          placeholder="John Doe"
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          className={errors.name ? 'border-destructive' : ''}
+                        />
+                        {errors.name && (
+                          <p className="text-xs text-destructive">{errors.name}</p>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="email">Email Address</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="john@example.com"
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          className={errors.email ? 'border-destructive' : ''}
+                        />
+                        {errors.email && (
+                          <p className="text-xs text-destructive">{errors.email}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="role">Your Role</Label>
+                      <Select
+                        value={formData.role}
+                        onValueChange={(value: 'student' | 'admin' | 'other') => 
+                          setFormData({ ...formData, role: value })
+                        }
+                      >
+                        <SelectTrigger className={errors.role ? 'border-destructive' : ''}>
+                          <SelectValue placeholder="Select your role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="student">Student</SelectItem>
+                          <SelectItem value="admin">University Admin</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {errors.role && (
+                        <p className="text-xs text-destructive">{errors.role}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="message">Message</Label>
+                      <Textarea
+                        id="message"
+                        placeholder="Describe your issue or question in detail..."
+                        rows={5}
+                        value={formData.message}
+                        onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                        className={errors.message ? 'border-destructive' : ''}
+                      />
+                      {errors.message && (
+                        <p className="text-xs text-destructive">{errors.message}</p>
+                      )}
+                    </div>
+
+                    <Button
+                      type="submit"
+                      variant="hero"
+                      className="w-full sm:w-auto"
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Opening Email...
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4 mr-2" />
+                          Send Message
+                        </>
+                      )}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              {/* FAQ Section */}
+              <Card className="border-border/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <HelpCircle className="w-5 h-5 text-accent" />
+                    Frequently Asked Questions
+                  </CardTitle>
+                  <CardDescription>
+                    Quick answers to common questions
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Accordion type="single" collapsible className="w-full">
+                    {FAQ_ITEMS.map((item, index) => (
+                      <AccordionItem key={index} value={`item-${index}`}>
+                        <AccordionTrigger className="text-left">
+                          {item.question}
+                        </AccordionTrigger>
+                        <AccordionContent className="text-muted-foreground">
+                          {item.answer}
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column - System Status & Quick Links */}
+            <div className="space-y-6">
+              {/* System Status */}
+              <Card className="border-border/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Server className="w-5 h-5 text-accent" />
+                    System Status
+                  </CardTitle>
+                  <CardDescription>
+                    Current status of our services
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {systemStatus.map((item, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-3 rounded-lg bg-secondary/30"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="text-muted-foreground">{item.icon}</div>
+                          <span className="text-sm font-medium">{item.service}</span>
+                        </div>
+                        {getStatusBadge(item.status)}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Clock className="w-4 h-4" />
+                      Last updated: {new Date().toLocaleTimeString()}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Contact Info */}
+              <Card className="border-border/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Mail className="w-5 h-5 text-accent" />
+                    Contact Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <Mail className="w-5 h-5 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium">Email Support</p>
+                      <a
+                        href={`mailto:${SUPPORT_EMAILS[0]}`}
+                        className="text-sm text-accent hover:underline"
+                      >
+                        {SUPPORT_EMAILS[0]}
+                      </a>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Clock className="w-5 h-5 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium">Response Time</p>
+                      <p className="text-sm text-muted-foreground">
+                        Within 24-48 hours
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Quick Links */}
+              <Card className="border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-lg">Quick Links</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Link to="/login">
+                    <Button variant="ghost" className="w-full justify-start">
+                      Login to your account
+                    </Button>
+                  </Link>
+                  <Link to="/signup">
+                    <Button variant="ghost" className="w-full justify-start">
+                      Create new account
+                    </Button>
+                  </Link>
+                  <Link to="/forgot-password">
+                    <Button variant="ghost" className="w-full justify-start">
+                      Reset your password
+                    </Button>
+                  </Link>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-border mt-12 py-8">
+        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
+          <p>© {new Date().getFullYear()} InterviewSim AI. All rights reserved.</p>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default Help;
