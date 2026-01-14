@@ -20,10 +20,12 @@ import {
   Loader2,
   CheckCircle,
   Menu,
-  X
+  X,
+  HelpCircle
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import InterviewRoom from "@/components/interview/InterviewRoom";
+import PreInterviewSetup from "@/components/interview/PreInterviewSetup";
 
 type InterviewDuration = "3" | "5";
 type InterviewStatus = "setup" | "ready" | "connecting" | "in_progress" | "evaluating" | "completed";
@@ -369,6 +371,21 @@ const Interview = () => {
     navigate("/");
   };
 
+  // Handler when PreInterviewSetup completes all device tests
+  const handlePreInterviewReady = (mediaStream: MediaStream) => {
+    streamRef.current = mediaStream;
+    if (videoRef.current) {
+      videoRef.current.srcObject = mediaStream;
+    }
+    setIsMicOn(true);
+    setIsVideoOn(true);
+    setStatus("ready");
+    toast({
+      title: "All systems ready",
+      description: "You can now start your interview.",
+    });
+  };
+
   // Build resume context for VAPI
   const resumeContext = resumeHighlights 
     ? `Skills: ${resumeHighlights.skills?.join(', ') || 'Not specified'}
@@ -544,6 +561,54 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
             </p>
           </div>
 
+          {/* Pre-Interview Setup - Device Tests & Avatar Preview */}
+          {status === "setup" && (
+            <div className="max-w-5xl">
+              <PreInterviewSetup 
+                onReady={handlePreInterviewReady}
+                onAvatarReady={() => console.log('[Interview] Avatar ready')}
+              />
+              
+              {/* Resume status card */}
+              <div className="mt-6 grid lg:grid-cols-2 gap-4">
+                {!resumeHighlights ? (
+                  <Card className="border-warning/50 bg-warning/5">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <AlertCircle className="w-5 h-5 text-warning flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">No resume uploaded</p>
+                          <p className="text-xs text-muted-foreground">
+                            Upload a resume for personalized questions.{" "}
+                            <Link to="/resume" className="text-accent hover:underline">
+                              Upload now →
+                            </Link>
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card className="border-success/50 bg-success/5">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        <FileText className="w-5 h-5 text-success flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Resume ready</p>
+                          <p className="text-xs text-muted-foreground">
+                            Questions will be based on your background
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Ready/Completed/Evaluating states - Original two-column layout */}
+          {(status === "ready" || status === "completed" || status === "evaluating") && (
           <div className="grid lg:grid-cols-2 gap-4 sm:gap-8 max-w-5xl">
             {/* Video preview panel */}
             <Card className="border-border/50 overflow-hidden">
@@ -564,7 +629,7 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
                         </div>
                       )}
                     </>
-                  ) : status === "completed" || status === "evaluating" ? (
+                  ) : (
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className="text-center">
                         {status === "evaluating" ? (
@@ -582,15 +647,6 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
                             <p className="text-muted-foreground">Check your history for results</p>
                           </>
                         )}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center">
-                        <div className="w-20 h-20 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-4">
-                          <Video className="w-10 h-10 text-muted-foreground/50" />
-                        </div>
-                        <p className="text-muted-foreground">Video preview will appear here</p>
                       </div>
                     </div>
                   )}
@@ -821,6 +877,7 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
               )}
             </div>
           </div>
+          )}
         </div>
       </main>
     </div>
