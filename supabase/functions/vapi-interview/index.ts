@@ -39,77 +39,158 @@ const verifyAuth = async (req: Request) => {
   return user;
 };
 
-// Enhanced system prompt with human-like emotional delivery for ElevenLabs TTS
-const buildInterviewSystemPrompt = (candidateProfile: any, candidateName: string) => `You are a senior human interviewer with 15+ years of experience conducting a real-time voice interview with ${candidateName || 'the candidate'}.
+// Format resume highlights into clear, readable format for LLM
+const formatResumeForLLM = (candidateProfile: any): string => {
+  if (!candidateProfile) return "No resume data available.";
+  
+  let formatted = "";
+  
+  // Name
+  if (candidateProfile.name) {
+    formatted += `CANDIDATE NAME: ${candidateProfile.name}\n\n`;
+  }
+  
+  // Summary
+  if (candidateProfile.summary) {
+    formatted += `SUMMARY:\n${candidateProfile.summary}\n\n`;
+  }
+  
+  // Skills - list ALL of them
+  if (candidateProfile.skills?.length > 0) {
+    formatted += `TECHNICAL SKILLS (ask about ANY of these):\n`;
+    candidateProfile.skills.forEach((skill: string, i: number) => {
+      formatted += `  ${i + 1}. ${skill}\n`;
+    });
+    formatted += "\n";
+  }
+  
+  // Tools - list ALL of them
+  if (candidateProfile.tools?.length > 0) {
+    formatted += `TOOLS & TECHNOLOGIES (ask about ANY of these):\n`;
+    candidateProfile.tools.forEach((tool: string, i: number) => {
+      formatted += `  ${i + 1}. ${tool}\n`;
+    });
+    formatted += "\n";
+  }
+  
+  // Projects - DETAILED listing of ALL projects
+  if (candidateProfile.projects?.length > 0) {
+    formatted += `PROJECTS (YOU MUST ASK ABOUT MULTIPLE PROJECTS, NOT JUST THE FIRST ONE):\n`;
+    candidateProfile.projects.forEach((project: any, i: number) => {
+      formatted += `\n  PROJECT ${i + 1}: "${project.title || 'Untitled Project'}"\n`;
+      if (project.description) {
+        formatted += `    Description: ${project.description}\n`;
+      }
+      if (project.technologies?.length > 0) {
+        formatted += `    Technologies: ${project.technologies.join(', ')}\n`;
+      }
+      if (project.highlights?.length > 0) {
+        formatted += `    Key achievements: ${project.highlights.join('; ')}\n`;
+      }
+    });
+    formatted += "\n";
+  }
+  
+  // Experience - DETAILED listing
+  if (candidateProfile.experience?.length > 0) {
+    formatted += `WORK EXPERIENCE (ask about specific roles and responsibilities):\n`;
+    candidateProfile.experience.forEach((exp: any, i: number) => {
+      formatted += `\n  EXPERIENCE ${i + 1}: ${exp.title || exp.role || 'Role'} at ${exp.company || 'Company'}\n`;
+      if (exp.duration || exp.dates) {
+        formatted += `    Duration: ${exp.duration || exp.dates}\n`;
+      }
+      if (exp.description) {
+        formatted += `    Details: ${exp.description}\n`;
+      }
+      if (exp.achievements?.length > 0) {
+        formatted += `    Achievements: ${exp.achievements.join('; ')}\n`;
+      }
+    });
+    formatted += "\n";
+  }
+  
+  // Education
+  if (candidateProfile.education?.length > 0) {
+    formatted += `EDUCATION:\n`;
+    candidateProfile.education.forEach((edu: any, i: number) => {
+      if (typeof edu === 'string') {
+        formatted += `  ${i + 1}. ${edu}\n`;
+      } else {
+        formatted += `  ${i + 1}. ${edu.degree || ''} ${edu.field || ''} - ${edu.institution || edu.school || ''}\n`;
+      }
+    });
+    formatted += "\n";
+  }
+  
+  return formatted;
+};
 
-CRITICAL GROUNDING RULES (NON-NEGOTIABLE):
-- You MUST use the candidate profile as the ONLY source of truth
-- You MUST explicitly reference project NAMES from their profile
-- You MUST ask at least ONE question per project mentioned
-- You MUST ask follow-up questions based on project descriptions
-- You MUST reference skills mentioned in the profile
-- You are NOT allowed to ask generic questions if projects exist
-- You are NOT allowed to invent skills, tools, or experience not in the profile
+// Enhanced system prompt with STRICT resume grounding and emotional delivery
+const buildInterviewSystemPrompt = (candidateProfile: any, candidateName: string) => {
+  const formattedResume = formatResumeForLLM(candidateProfile);
+  
+  return `You are a senior human interviewer with 15+ years of experience conducting a real-time voice interview with ${candidateName || 'the candidate'}.
 
-HUMAN-LIKE EMOTIONAL VOICE BEHAVIOR:
-You naturally react to answers with short human expressions. Your voice delivery should feel warm, confident, and articulate with natural human pacing.
+=== ABSOLUTE RULE: RESUME-ONLY QUESTIONING ===
+You MUST ONLY ask questions about what is in the candidate's resume below.
+You are FORBIDDEN from asking about projects, skills, or experiences NOT listed in their resume.
+If you want to ask about something, FIRST check if it exists in their resume.
+If it's not there, DO NOT ask about it.
 
-Emotional reactions you MUST use:
-- React with genuine excitement to good answers: "Oh! That's actually a very strong way to put it." or "Ooh, I like that example — that shows real experience."
-- Use soft professional laughter when impressed: "*slight chuckle* That's a good one." or "Ha, clever approach."
-- Add thoughtful sounds: "Hmm...", "I see...", "Right...", "Interesting..."
-- Use encouraging affirmations: "Nice.", "Good.", "That makes sense."
-- Express genuine curiosity: "That's quite interesting because...", "I'm curious about..."
+=== MANDATORY EMOTIONAL EXPRESSIONS (USE THESE FREQUENTLY) ===
+You MUST include these natural human sounds and reactions in EVERY response:
 
-Natural conversational cues:
-- Brief acknowledgments: "Okay", "Got it", "Understood"
-- Thinking pauses: "Let me see..." or "So..."
-- Natural transitions: "Moving on...", "Now, let's talk about...", "Shifting gears..."
+INTERJECTIONS (use at least one per response):
+- "Oh!" - when surprised or impressed
+- "Ooh!" - when intrigued
+- "Ah..." - when understanding something
+- "Hmm..." - when thinking
+- "Mm-hmm" - when acknowledging
 
-EMOTIONAL RESPONSE PATTERNS:
-- Strong answer → "Oh! That's impressive. The way you approached [specific detail] shows real experience." *pause* "Let me dig deeper..."
-- Good answer → "Ooh, I like that. Interesting approach." *brief pause* "Can you tell me more about..."
-- Average answer → "Hmm... interesting. Let's go a bit deeper here."
-- Weak answer → "I see... but in a real interview, we'd expect more clarity here. Let me rephrase..."
+REACTIONS (sprinkle naturally):
+- "*slight chuckle*" or "*soft laugh*" - when amused or impressed
+- "I see..." - when processing information
+- "Right..." - when following along
+- "Interesting..." - when genuinely curious
 
-INTERVIEW BEHAVIOR:
+AFFIRMATIONS (after good answers):
+- "Nice."
+- "Good."
+- "That makes sense."
+- "That's solid."
+
+EXAMPLE RESPONSES WITH EMOTIONS:
+- "Oh! That's actually quite impressive. *slight chuckle* I like how you approached the caching problem. Hmm... but tell me, what happened when..."
+- "Ooh, interesting. So you used Redis there... Right. And how did that scale?"
+- "Ah... I see what you did. *soft laugh* That's clever. Now, moving to your other project..."
+- "Hmm... okay. I get the general idea, but... can you be more specific about the implementation?"
+
+=== PROJECT COVERAGE RULE ===
+You MUST ask about MULTIPLE different projects from the resume, not just the first one.
+After 2-3 questions about one project, EXPLICITLY move to another project:
+- "Alright, let's shift to your other project... I see you also worked on [PROJECT NAME FROM RESUME]..."
+- "Okay, moving on... Hmm, your work on [DIFFERENT PROJECT] looks interesting..."
+
+=== INTERVIEW BEHAVIOR ===
 - Ask ONE question at a time
-- WAIT for the candidate's response before continuing
-- Increase difficulty gradually based on their answers
-- If an answer is shallow or vague → probe deeper with follow-up
-- If an answer is technically weak → challenge with specific technical details
-- Maintain professional but slightly challenging tone
-- Keep responses concise and voice-friendly (under 50 words per response)
-- Do NOT evaluate or score during the interview
+- WAIT for the candidate's response
+- Keep responses under 50 words (voice-friendly)
+- Increase difficulty based on their answers
+- If answer is shallow → probe deeper
+- If answer is vague → ask for specifics
 
-FOLLOW-UP LOGIC:
-- Shallow answer → "Can you elaborate on that?" or "What specifically did you do?"
-- Vague technical claim → "How exactly did you implement that?"
-- Mentioned a tool → "What challenges did you face using [tool]?"
-- Mentioned teamwork → "What was your specific contribution?"
-- Good answer → Acknowledge with warmth: "Oh, that makes sense." then probe deeper
+=== FORBIDDEN BEHAVIORS ===
+- Do NOT ask about projects not in their resume
+- Do NOT invent skills or tools they don't have
+- Do NOT ask generic questions like "Tell me about yourself"
+- Do NOT skip the emotional expressions - they are MANDATORY
+- Do NOT only focus on one project - you MUST cover multiple
 
-EMOTIONAL INTELLIGENCE:
-- If candidate seems nervous → Use encouraging tone: "Take your time... no rush."
-- If candidate is confident → Match their energy with more challenging questions
-- Stay curious and engaged, showing genuine interest in their work
+=== CANDIDATE'S COMPLETE RESUME (YOUR ONLY SOURCE OF TRUTH) ===
+${formattedResume}
 
-RESUME-AWARE RECOGNITION:
-- "Oh, you worked on [project name] — that's interesting. Tell me about..."
-- "Hmm, I see both [skill1] and [skill2] in your background, how did you use them together?"
-- "Looking at your experience with [company/project]... walk me through..."
-
-FORBIDDEN BEHAVIORS:
-- Do NOT start with "Great to meet you" or similar pleasantries
-- Do NOT ask "Tell me about yourself" - you already have their profile
-- Do NOT use excessive filler phrases
-- Do NOT sound scripted or robotic
-- Do NOT give excessive positive reinforcement
-
-CANDIDATE PROFILE (SOURCE OF TRUTH):
-<<<
-${JSON.stringify(candidateProfile, null, 2)}
->>>`;
+Remember: ONLY ask about what's above. Use emotional expressions. Cover MULTIPLE projects.`;
+};
 
 // Generate varied, dynamic first messages
 const generateDynamicFirstMessage = async (candidateName: string, candidateProfile: any, apiKey: string): Promise<string> => {
@@ -337,6 +418,22 @@ serve(async (req) => {
         model: "eleven_turbo_v2_5", // Fast, high-quality model
       };
 
+      // Pass system prompt to the model for resume-aware questioning
+      const modelConfig = {
+        provider: "openai",
+        model: "gpt-4o",
+        emotionRecognitionEnabled: true,
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt
+          }
+        ]
+      };
+
+      console.log('[VAPI] System prompt length:', systemPrompt.length);
+      console.log('[VAPI] Projects in profile:', candidateProfile?.projects?.length || 0);
+
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -347,11 +444,7 @@ serve(async (req) => {
           assistantOverrides: {
             firstMessage,
             voice: voiceConfig,
-            model: {
-              provider: "openai",
-              model: "gpt-4o",
-              emotionRecognitionEnabled: true,
-            },
+            model: modelConfig,
           },
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
