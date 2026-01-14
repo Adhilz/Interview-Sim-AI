@@ -21,6 +21,7 @@ export const useVapi = (options: UseVapiOptions) => {
   const [callId, setCallId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string[]>([]);
   const vapiRef = useRef<Vapi | null>(null);
+  const callIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!options.publicKey) {
@@ -35,14 +36,19 @@ export const useVapi = (options: UseVapiOptions) => {
       console.log('[VAPI] Call started');
       setIsConnected(true);
       setIsLoading(false);
-      // Get call ID from VAPI
-      const currentCallId = (vapi as any).call?.id;
-      if (currentCallId) {
-        setCallId(currentCallId);
-        options.onCallStart?.(currentCallId);
-      } else {
-        options.onCallStart?.('');
-      }
+      
+      // Try multiple ways to get the call ID
+      setTimeout(() => {
+        const currentCallId = callIdRef.current || (vapi as any).call?.id || (vapi as any).callId;
+        console.log('[VAPI] Call ID from call-start:', currentCallId);
+        if (currentCallId) {
+          setCallId(currentCallId);
+          options.onCallStart?.(currentCallId);
+        } else {
+          console.warn('[VAPI] No call ID available yet');
+          options.onCallStart?.('');
+        }
+      }, 100);
     });
 
     vapi.on('call-end', () => {
@@ -63,10 +69,19 @@ export const useVapi = (options: UseVapiOptions) => {
     });
 
     vapi.on('message', (message: any) => {
+      console.log('[VAPI] Message received:', message.type, message);
       options.onMessage?.(message);
-      // Capture transcript messages
-      if (message.type === 'transcript' && message.transcript) {
-        setTranscript(prev => [...prev, `${message.role}: ${message.transcript}`]);
+      
+      // Capture final transcripts for both user and assistant
+      if (message.type === 'transcript' && message.transcriptType === 'final' && message.transcript) {
+        const role = message.role === 'assistant' ? 'Interviewer' : 'Candidate';
+        setTranscript(prev => [...prev, `${role}: ${message.transcript}`]);
+        console.log('[VAPI] Final transcript captured:', `${role}: ${message.transcript}`);
+      }
+      
+      // Also capture conversation-update messages which contain full conversation
+      if (message.type === 'conversation-update' && message.conversation) {
+        console.log('[VAPI] Conversation update received with', message.conversation.length, 'messages');
       }
     });
 
@@ -93,14 +108,24 @@ export const useVapi = (options: UseVapiOptions) => {
     setIsLoading(true);
     setError(null);
     setTranscript([]);
+    callIdRef.current = null;
 
     try {
+      console.log('[VAPI] Starting call with assistantId:', options.assistantId);
       const call = await vapiRef.current.start(options.assistantId, options.assistantOverrides);
-      // The call object should contain the call ID
-      if (call && typeof call === 'object' && 'id' in call) {
-        setCallId((call as any).id);
-        return (call as any).id;
+      console.log('[VAPI] Call started, response:', call);
+      
+      // Capture call ID from the response
+      if (call && typeof call === 'object') {
+        const id = (call as any).id || (call as any).callId;
+        if (id) {
+          console.log('[VAPI] Call ID captured from start response:', id);
+          callIdRef.current = id;
+          setCallId(id);
+          return id;
+        }
       }
+      
       return null;
     } catch (e: any) {
       console.error('[VAPI] Start error:', e);
@@ -126,7 +151,9 @@ export const useVapi = (options: UseVapiOptions) => {
   }, []);
 
   const getTranscript = useCallback(() => {
-    return transcript.join('\n');
+    const fullTranscript = transcript.join('\n');
+    console.log('[VAPI] getTranscript called, lines:', transcript.length);
+    return fullTranscript;
   }, [transcript]);
 
   return { isConnected, isLoading, isSpeaking, error, callId, transcript, start, stop, toggleMute, getTranscript };

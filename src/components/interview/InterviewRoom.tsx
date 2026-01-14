@@ -57,6 +57,7 @@ const InterviewRoom = ({
   const [audioOutputDevices, setAudioOutputDevices] = useState<MediaDeviceInfo[]>([]);
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [currentTranscript, setCurrentTranscript] = useState<string>("");
+  const [fullTranscript, setFullTranscript] = useState<string[]>([]);
   
   const [settings, setSettings] = useState<InterviewSettingsState>(() => {
     const saved = localStorage.getItem('interviewSettings');
@@ -103,12 +104,23 @@ const InterviewRoom = ({
       onVapiError?.(e.message || 'VAPI connection failed');
     },
     onMessage: (message) => {
-      if (message.type === 'transcript') {
-        const transcript = getTranscript();
-        onTranscriptUpdate?.(transcript);
-        setCurrentTranscript(message.transcript || '');
+      // Handle transcript messages
+      if (message.type === 'transcript' && message.transcriptType === 'final' && message.transcript) {
+        const role = message.role === 'assistant' ? 'Interviewer' : 'Candidate';
+        const line = `${role}: ${message.transcript}`;
         
-        if (message.role === 'assistant' && message.transcript && didAvatarRef.current?.isConnected) {
+        // Accumulate full transcript
+        setFullTranscript(prev => [...prev, line]);
+        
+        // Update current display
+        setCurrentTranscript(message.transcript);
+        
+        // Notify parent with full transcript
+        const allTranscripts = [...fullTranscript, line];
+        onTranscriptUpdate?.(allTranscripts.join('\n'));
+        
+        // Stream to D-ID avatar if assistant is speaking
+        if (message.role === 'assistant' && didAvatarRef.current?.isConnected) {
           didAvatarRef.current.streamText(message.transcript);
         }
       }
@@ -237,11 +249,18 @@ const InterviewRoom = ({
   };
 
   const handleEndCall = () => {
-    const transcript = getTranscript();
+    // Get transcript from useVapi hook first, then fallback to local accumulation
+    const vapiTranscript = getTranscript();
+    const localTranscript = fullTranscript.join('\n');
+    const finalTranscript = vapiTranscript || localTranscript;
+    
+    console.log('[InterviewRoom] Ending call with transcript lines:', 
+      vapiTranscript ? vapiTranscript.split('\n').length : fullTranscript.length);
+    
     stopVapi();
     stopMedia();
     didAvatarRef.current?.destroy();
-    onEndInterview(transcript);
+    onEndInterview(finalTranscript);
   };
 
   const handleDidConnected = () => {
