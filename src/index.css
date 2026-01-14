@@ -82,9 +82,9 @@
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 
-  .dark,
+  /* System preference dark mode - only applies when no manual class is set */
   @media (prefers-color-scheme: dark) {
-    :root:not(.light) {
+    :root:not(.light):not(.dark) {
       --background: 222 47% 8%;
       --foreground: 210 40% 98%;
 
@@ -129,6 +129,7 @@
     }
   }
 
+  /* Manual dark mode class */
   .dark {
     --background: 222 47% 8%;
     --foreground: 210 40% 98%;
