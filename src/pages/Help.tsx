@@ -54,10 +54,10 @@ interface SystemStatus {
 }
 
 const SUPPORT_EMAILS = [
-  'adhilsalam200@gmail.com',
   'adhensarageorge06@gmail.com',
-  'eldhosoorajgeorge04@gmail.com',
+  'adhilsalam200@gmail.com',
   'angelelizabethgeorge22@gmail.com',
+  'eldhosoorajgeroge04@gmail.com',
 ];
 
 const FAQ_ITEMS = [
@@ -412,19 +412,37 @@ const Help = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex items-start gap-3">
-                    <Mail className="w-5 h-5 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium">Email Support</p>
-                      <a
-                        href={`mailto:${SUPPORT_EMAILS[0]}`}
-                        className="text-sm text-accent hover:underline"
-                      >
-                        {SUPPORT_EMAILS[0]}
-                      </a>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-muted-foreground" />
+                      Email Support
+                    </p>
+                    <div className="space-y-1 pl-6">
+                      {SUPPORT_EMAILS.map((email, index) => (
+                        <a
+                          key={index}
+                          href={`mailto:${email}`}
+                          className="block text-sm text-accent hover:underline"
+                        >
+                          {email}
+                        </a>
+                      ))}
                     </div>
                   </div>
-                  <div className="flex items-start gap-3">
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      window.location.href = `mailto:${SUPPORT_EMAILS.join(',')}?subject=${encodeURIComponent('[InterviewSim] Support Request')}`;
+                    }}
+                  >
+                    <Send className="w-4 h-4 mr-2" />
+                    Email All Support
+                  </Button>
+
+                  <div className="flex items-start gap-3 pt-2 border-t border-border">
                     <Clock className="w-5 h-5 text-muted-foreground mt-0.5" />
                     <div>
                       <p className="text-sm font-medium">Response Time</p>
