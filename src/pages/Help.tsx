@@ -435,7 +435,8 @@ const Help = () => {
                     size="sm"
                     className="w-full"
                     onClick={() => {
-                      window.location.href = `mailto:${SUPPORT_EMAILS.join(',')}?subject=${encodeURIComponent('[InterviewSim] Support Request')}`;
+                      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${SUPPORT_EMAILS.join(',')}&su=${encodeURIComponent('[InterviewSim] Support Request')}`;
+                      window.open(gmailUrl, '_blank');
                     }}
                   >
                     <Send className="w-4 h-4 mr-2" />
