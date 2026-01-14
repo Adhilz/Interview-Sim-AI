@@ -579,10 +579,7 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
           {/* Pre-Interview Setup - Device Tests & Avatar Preview */}
           {status === "setup" && (
             <div className="max-w-5xl">
-              <PreInterviewSetup 
-                onReady={handlePreInterviewReady}
-                onAvatarReady={() => console.log('[Interview] Avatar ready')}
-              />
+              <PreInterviewSetup onReady={handlePreInterviewReady} />
               
               {/* Resume status card */}
               <div className="mt-6 grid lg:grid-cols-2 gap-4">
