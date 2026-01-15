@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_notifications: {
+        Row: {
+          admin_user_id: string
+          created_at: string
+          id: string
+          interview_id: string | null
+          interview_type: string | null
+          is_read: boolean | null
+          message: string
+          student_id: string
+          student_name: string | null
+          university_id: string | null
+        }
+        Insert: {
+          admin_user_id: string
+          created_at?: string
+          id?: string
+          interview_id?: string | null
+          interview_type?: string | null
+          is_read?: boolean | null
+          message: string
+          student_id: string
+          student_name?: string | null
+          university_id?: string | null
+        }
+        Update: {
+          admin_user_id?: string
+          created_at?: string
+          id?: string
+          interview_id?: string | null
+          interview_type?: string | null
+          is_read?: boolean | null
+          message?: string
+          student_id?: string
+          student_name?: string | null
+          university_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_notifications_interview_id_fkey"
+            columns: ["interview_id"]
+            isOneToOne: false
+            referencedRelation: "interviews"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "admin_notifications_university_id_fkey"
+            columns: ["university_id"]
+            isOneToOne: false
+            referencedRelation: "university_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       avatar_sessions: {
         Row: {
           avatar_provider: string | null

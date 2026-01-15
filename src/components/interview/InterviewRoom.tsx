@@ -27,6 +27,7 @@ interface InterviewRoomProps {
   onVapiConnected?: (callId: string) => void;
   onVapiError?: (error: string) => void;
   onTranscriptUpdate?: (transcript: string) => void;
+  onTimeWarning?: () => void;
 }
 
 const InterviewRoom = ({ 
@@ -40,6 +41,7 @@ const InterviewRoom = ({
   onVapiConnected,
   onVapiError,
   onTranscriptUpdate,
+  onTimeWarning,
 }: InterviewRoomProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -58,6 +60,8 @@ const InterviewRoom = ({
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null);
   const [currentTranscript, setCurrentTranscript] = useState<string>("");
   const [fullTranscript, setFullTranscript] = useState<string[]>([]);
+  const [hasShown30SecWarning, setHasShown30SecWarning] = useState(false);
+  const [hasSpokenEndMessage, setHasSpokenEndMessage] = useState(false);
   
   const [settings, setSettings] = useState<InterviewSettingsState>(() => {
     const saved = localStorage.getItem('interviewSettings');
@@ -88,6 +92,7 @@ const InterviewRoom = ({
     stop: stopVapi,
     toggleMute,
     getTranscript,
+    say,
   } = useVapi({
     publicKey,
     assistantId,
@@ -102,6 +107,15 @@ const InterviewRoom = ({
     onError: (e) => {
       console.error('[InterviewRoom] VAPI error:', e);
       onVapiError?.(e.message || 'VAPI connection failed');
+    },
+    onSpeechEnd: () => {
+      // Check if we need to speak the 30-second warning after current utterance ends
+      if (timeRemaining <= 30 && timeRemaining > 0 && !hasShown30SecWarning && isConnected) {
+        console.log('[InterviewRoom] INTERVIEW_END_WARNING: Speaking 30-second warning');
+        setHasShown30SecWarning(true);
+        say("You have about thirty seconds remaining. Please wrap up your current answer.");
+        onTimeWarning?.();
+      }
     },
     onMessage: (message) => {
       // Handle transcript messages
@@ -126,6 +140,27 @@ const InterviewRoom = ({
       }
     },
   });
+
+  // 30-second warning effect - trigger check when time hits 30 seconds
+  useEffect(() => {
+    if (timeRemaining === 30 && !hasShown30SecWarning && isConnected && !isSpeaking) {
+      // If assistant is not currently speaking, trigger warning immediately
+      console.log('[InterviewRoom] INTERVIEW_END_WARNING: Time reached 30 seconds, speaking warning');
+      setHasShown30SecWarning(true);
+      say("You have about thirty seconds remaining. Please wrap up your current answer.");
+      onTimeWarning?.();
+    }
+  }, [timeRemaining, hasShown30SecWarning, isConnected, isSpeaking, say, onTimeWarning]);
+
+  // Interview end effect - speak closing message when time reaches 0
+  useEffect(() => {
+    if (timeRemaining === 0 && !hasSpokenEndMessage && isConnected) {
+      console.log('[InterviewRoom] INTERVIEW_ENDED: Speaking closing message');
+      setHasSpokenEndMessage(true);
+      // Use say with endCallAfter=true to end after speaking
+      say("Thank you. This concludes your interview.", true);
+    }
+  }, [timeRemaining, hasSpokenEndMessage, isConnected, say]);
 
   // Fetch user's profile avatar
   useEffect(() => {
