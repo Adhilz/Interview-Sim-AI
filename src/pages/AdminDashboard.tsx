@@ -53,9 +53,19 @@ import {
   Calendar,
   Copy,
   Menu,
-  X
+  X,
+  Bell
 } from "lucide-react";
 import { format } from "date-fns";
+
+interface AdminNotification {
+  id: string;
+  student_name: string | null;
+  interview_type: string | null;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
 
 interface StudentInterview {
   id: string;
@@ -115,6 +125,9 @@ const AdminDashboard = () => {
   const [students, setStudents] = useState<StudentProfile[]>([]);
   const [weakAreas, setWeakAreas] = useState<{ area: string; count: number }[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   
   // Filters
   const [performanceFilter, setPerformanceFilter] = useState<string>("all");
@@ -167,12 +180,83 @@ const AdminDashboard = () => {
         fetchUniversityCodes(profileData?.university_id),
         fetchStudents(profileData?.university_id),
         fetchWeakAreas(profileData?.university_id),
+        fetchNotifications(session.user.id),
       ]);
       setIsLoading(false);
+
+      // Subscribe to realtime notifications
+      const channel = supabase
+        .channel('admin-notifications')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'admin_notifications',
+            filter: `admin_user_id=eq.${session.user.id}`,
+          },
+          (payload) => {
+            console.log('[AdminDashboard] New notification received:', payload);
+            const newNotification = payload.new as AdminNotification;
+            setNotifications(prev => [newNotification, ...prev]);
+            setUnreadCount(prev => prev + 1);
+            
+            // Show toast notification
+            toast({
+              title: "Interview Completed",
+              description: newNotification.message,
+            });
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     };
 
     checkAdminAndFetchData();
-  }, [navigate]);
+  }, [navigate, toast]);
+
+  const fetchNotifications = async (adminUserId: string) => {
+    const { data } = await supabase
+      .from('admin_notifications')
+      .select('id, student_name, interview_type, message, is_read, created_at')
+      .eq('admin_user_id', adminUserId)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    
+    if (data) {
+      setNotifications(data);
+      setUnreadCount(data.filter(n => !n.is_read).length);
+    }
+  };
+
+  const markNotificationAsRead = async (notificationId: string) => {
+    await supabase
+      .from('admin_notifications')
+      .update({ is_read: true })
+      .eq('id', notificationId);
+    
+    setNotifications(prev => 
+      prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n)
+    );
+    setUnreadCount(prev => Math.max(0, prev - 1));
+  };
+
+  const markAllAsRead = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
+
+    await supabase
+      .from('admin_notifications')
+      .update({ is_read: true })
+      .eq('admin_user_id', session.user.id)
+      .eq('is_read', false);
+    
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    setUnreadCount(0);
+  };
 
   const fetchAnalytics = async (adminUserId: string, universityId?: string) => {
     try {
@@ -517,6 +601,63 @@ const AdminDashboard = () => {
                 <span className="text-sm font-medium">{adminUniversity.university_name}</span>
               </div>
             )}
+            
+            {/* Notification Bell */}
+            <div className="relative">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="relative"
+              >
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-destructive text-destructive-foreground text-xs flex items-center justify-center">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </Button>
+              
+              {/* Notification Dropdown */}
+              {showNotifications && (
+                <div className="absolute right-0 top-full mt-2 w-80 max-h-96 overflow-y-auto bg-card border border-border rounded-lg shadow-lg z-50">
+                  <div className="p-3 border-b border-border flex items-center justify-between">
+                    <h3 className="font-semibold text-sm">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <Button variant="ghost" size="sm" onClick={markAllAsRead} className="text-xs h-7">
+                        Mark all read
+                      </Button>
+                    )}
+                  </div>
+                  <div className="divide-y divide-border">
+                    {notifications.length === 0 ? (
+                      <div className="p-4 text-center text-muted-foreground text-sm">
+                        No notifications yet
+                      </div>
+                    ) : (
+                      notifications.map((notification) => (
+                        <div 
+                          key={notification.id}
+                          className={`p-3 hover:bg-secondary/50 cursor-pointer transition-colors ${
+                            !notification.is_read ? 'bg-accent/5' : ''
+                          }`}
+                          onClick={() => markNotificationAsRead(notification.id)}
+                        >
+                          <p className="text-sm text-foreground">{notification.message}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {format(new Date(notification.created_at), 'MMM d, h:mm a')}
+                          </p>
+                          {!notification.is_read && (
+                            <span className="inline-block w-2 h-2 rounded-full bg-accent mt-1" />
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <Button variant="ghost" size="sm" onClick={handleLogout} className="hidden sm:flex">
               <LogOut className="w-4 h-4 mr-2" />
               Logout

@@ -156,5 +156,35 @@ export const useVapi = (options: UseVapiOptions) => {
     return fullTranscript;
   }, [transcript]);
 
-  return { isConnected, isLoading, isSpeaking, error, callId, transcript, start, stop, toggleMute, getTranscript };
+  // Send a system message to inject into the conversation
+  // This uses VAPI's say method to make the assistant speak
+  const say = useCallback((message: string, endCallAfter: boolean = false) => {
+    if (vapiRef.current && isConnected) {
+      console.log('[VAPI] Sending say message:', message);
+      vapiRef.current.say(message, endCallAfter);
+    }
+  }, [isConnected]);
+
+  // Send a message/event to the assistant
+  const send = useCallback((message: any) => {
+    if (vapiRef.current && isConnected) {
+      console.log('[VAPI] Sending message:', message);
+      vapiRef.current.send(message);
+    }
+  }, [isConnected]);
+
+  return { 
+    isConnected, 
+    isLoading, 
+    isSpeaking, 
+    error, 
+    callId, 
+    transcript, 
+    start, 
+    stop, 
+    toggleMute, 
+    getTranscript,
+    say,
+    send
+  };
 };
