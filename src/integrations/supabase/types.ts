@@ -68,6 +68,71 @@ export type Database = {
           },
         ]
       }
+      ats_scores: {
+        Row: {
+          created_at: string | null
+          formatting_issues: string[] | null
+          id: string
+          improvement_suggestions: Json | null
+          job_role: string | null
+          keyword_match_percentage: number | null
+          missing_keywords: string[] | null
+          optimized_bullets: Json | null
+          overall_score: number | null
+          recruiter_review: string | null
+          resume_id: string
+          section_scores: Json | null
+          strengths: string[] | null
+          updated_at: string | null
+          user_id: string
+          weaknesses: string[] | null
+        }
+        Insert: {
+          created_at?: string | null
+          formatting_issues?: string[] | null
+          id?: string
+          improvement_suggestions?: Json | null
+          job_role?: string | null
+          keyword_match_percentage?: number | null
+          missing_keywords?: string[] | null
+          optimized_bullets?: Json | null
+          overall_score?: number | null
+          recruiter_review?: string | null
+          resume_id: string
+          section_scores?: Json | null
+          strengths?: string[] | null
+          updated_at?: string | null
+          user_id: string
+          weaknesses?: string[] | null
+        }
+        Update: {
+          created_at?: string | null
+          formatting_issues?: string[] | null
+          id?: string
+          improvement_suggestions?: Json | null
+          job_role?: string | null
+          keyword_match_percentage?: number | null
+          missing_keywords?: string[] | null
+          optimized_bullets?: Json | null
+          overall_score?: number | null
+          recruiter_review?: string | null
+          resume_id?: string
+          section_scores?: Json | null
+          strengths?: string[] | null
+          updated_at?: string | null
+          user_id?: string
+          weaknesses?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ats_scores_resume_id_fkey"
+            columns: ["resume_id"]
+            isOneToOne: false
+            referencedRelation: "resumes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       avatar_sessions: {
         Row: {
           avatar_provider: string | null

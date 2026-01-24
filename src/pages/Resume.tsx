@@ -21,10 +21,12 @@ import {
   Briefcase,
   GraduationCap,
   Code,
-  Menu
+  Menu,
+  Target
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import type { Json } from "@/integrations/supabase/types";
+import { ATSAnalysisPanel } from "@/components/ats/ATSAnalysisPanel";
 
 interface Resume {
   id: string;
@@ -64,6 +66,22 @@ interface ResumeHighlight {
   education: Education[] | null;
 }
 
+interface ATSScore {
+  id: string;
+  overall_score: number;
+  keyword_match_percentage: number;
+  section_scores: any;
+  missing_keywords: string[];
+  strengths: string[];
+  weaknesses: string[];
+  improvement_suggestions: any[];
+  recruiter_review: string;
+  formatting_issues: string[];
+  optimized_bullets: any[];
+  job_role: string;
+  created_at: string;
+}
+
 const Resume = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -72,11 +90,14 @@ const Resume = () => {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [resume, setResume] = useState<Resume | null>(null);
   const [highlights, setHighlights] = useState<ResumeHighlight | null>(null);
+  const [atsScore, setAtsScore] = useState<ATSScore | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
+  const [isAnalyzingATS, setIsAnalyzingATS] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [resumeTextCache, setResumeTextCache] = useState<string>("");
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -133,6 +154,19 @@ const Resume = () => {
             education: highlightsData.education as unknown as Education[] | null,
           };
           setHighlights(parsed);
+        }
+
+        // Fetch latest ATS score
+        const { data: atsData } = await supabase
+          .from("ats_scores")
+          .select("*")
+          .eq("resume_id", resumeData.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (atsData) {
+          setAtsScore(atsData as ATSScore);
         }
       }
     } catch (error) {
@@ -277,6 +311,9 @@ const Resume = () => {
         throw new Error('Could not extract text from resume. Please ensure the PDF contains selectable text.');
       }
 
+      // Cache the resume text for ATS analysis
+      setResumeTextCache(resumeText);
+
       const { data, error } = await supabase.functions.invoke('parse-resume', {
         body: {
           resumeText,
@@ -318,6 +355,56 @@ const Resume = () => {
       });
     } finally {
       setIsParsing(false);
+    }
+  };
+
+  const analyzeATS = async (jobRole: string) => {
+    if (!user || !resume) return;
+
+    setIsAnalyzingATS(true);
+    try {
+      let resumeText = resumeTextCache;
+      
+      // If no cached text, fetch and extract
+      if (!resumeText && resume?.file_url) {
+        const response = await fetch(resume.file_url);
+        const blob = await response.blob();
+        const fetchedFile = new File([blob], resume.file_name, { type: 'application/pdf' });
+        resumeText = await extractTextFromPDF(fetchedFile);
+        setResumeTextCache(resumeText);
+      }
+
+      if (!resumeText) {
+        throw new Error('Could not extract text from resume');
+      }
+
+      const { data, error } = await supabase.functions.invoke('ats-score', {
+        body: {
+          resumeText,
+          resumeId: resume.id,
+          userId: user.id,
+          jobRole,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data?.atsScore) {
+        setAtsScore(data.atsScore as ATSScore);
+        toast({
+          title: "ATS Analysis Complete!",
+          description: `Your resume scored ${data.atsScore.overall_score}/100 for ${jobRole}`,
+        });
+      }
+    } catch (error: any) {
+      console.error('ATS analysis error:', error);
+      toast({
+        title: "Analysis failed",
+        description: error.message || "Failed to analyze resume. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzingATS(false);
     }
   };
 
@@ -600,6 +687,16 @@ const Resume = () => {
               </CardContent>
             </Card>
           )}
+
+          {/* ATS Score & Optimization Panel */}
+          <div className="mb-8">
+            <ATSAnalysisPanel
+              atsScore={atsScore}
+              isAnalyzing={isAnalyzingATS}
+              onAnalyze={analyzeATS}
+              hasResume={!!resume}
+            />
+          </div>
 
           {/* Resume highlights */}
           {highlights && (
