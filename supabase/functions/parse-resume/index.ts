@@ -39,15 +39,16 @@ const verifyAuth = async (req: Request) => {
   return user;
 };
 
-const RESUME_PARSING_PROMPT = `You are an advanced ATS resume parser.
+const RESUME_PARSING_PROMPT = `You are an expert ATS resume parser with 15 years of experience.
 
 INPUT:
-- Plain extracted text from a PDF resume
-- Text may be poorly formatted or broken
+- Plain extracted text from a PDF resume (may include OCR artifacts)
+- Text may be poorly formatted, have OCR errors, or be disorganized
 
 TASK:
-Extract ALL available information from the resume.
-Do NOT guess missing data.
+Extract ALL available information from the resume, cleaning up any OCR artifacts.
+Do NOT guess or invent information - only extract what's present.
+Handle multi-column layouts, graphics-based sections, and unusual formatting gracefully.
 
 OUTPUT:
 Return ONLY valid JSON in the following schema:
@@ -55,7 +56,9 @@ Return ONLY valid JSON in the following schema:
   "name": "",
   "email": "",
   "phone": "",
+  "summary": "",
   "skills": [],
+  "tools": [],
   "projects": [
     {
       "title": "",
@@ -81,10 +84,107 @@ Return ONLY valid JSON in the following schema:
 }
 
 RULES:
+- Clean up OCR artifacts (random characters, broken words)
 - If information is missing, use "" or []
-- Do NOT add extra fields
-- Do NOT add explanations
-- Do NOT summarize`;
+- Extract ALL projects found, not just the first few
+- Preserve technical terminology accurately
+- Do NOT add extra fields or explanations`;
+
+const OCR_EXTRACTION_PROMPT = `You are an expert OCR system specialized in reading resume images.
+
+TASK:
+Carefully extract ALL text from this resume image/PDF scan.
+The resume may be:
+- Scanned/photographed document
+- Multi-column layout
+- Contains graphics, icons, or charts
+- Has unusual fonts or styling
+
+EXTRACTION RULES:
+1. Read ALL text visible in the image
+2. Preserve section structure (Education, Experience, Skills, Projects)
+3. Handle multi-column layouts - read left column fully, then right
+4. Extract text from within graphics/charts if present
+5. Clean up any obvious OCR errors
+6. Preserve bullet points and list structures
+7. Include contact information (email, phone, LinkedIn)
+
+OUTPUT:
+Return the extracted text as clean, structured plain text preserving the resume's organization.
+Do NOT add any commentary - just the extracted text.`;
+
+// Vision-based OCR using Lovable AI
+async function performOCR(base64Image: string, mimeType: string, apiKey: string): Promise<string> {
+  console.log('[OCR] Starting Gemini Vision OCR extraction...');
+  
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: OCR_EXTRACTION_PROMPT
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:${mimeType};base64,${base64Image}`
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 4000,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[OCR] Gemini Vision error:', response.status, errorText);
+    throw new Error(`OCR extraction failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const extractedText = data.choices?.[0]?.message?.content?.trim();
+  
+  if (!extractedText) {
+    throw new Error('OCR returned empty result');
+  }
+
+  console.log('[OCR] Extracted', extractedText.length, 'characters via Vision AI');
+  return extractedText;
+}
+
+// Detect if text extraction likely failed (scanned PDF)
+function isTextExtractionLikelyFailed(text: string | null | undefined): boolean {
+  if (!text) return true;
+  
+  const trimmed = text.trim();
+  
+  // Empty or nearly empty
+  if (trimmed.length < 50) return true;
+  
+  // Check for gibberish (high ratio of special characters)
+  const alphanumeric = trimmed.replace(/[^a-zA-Z0-9\s]/g, '').length;
+  const ratio = alphanumeric / trimmed.length;
+  if (ratio < 0.5) return true;
+  
+  // Check for common resume keywords - if none present, likely failed
+  const resumeKeywords = ['experience', 'education', 'skills', 'project', 'work', 'university', 'degree', 'developer', 'engineer'];
+  const lowerText = trimmed.toLowerCase();
+  const foundKeywords = resumeKeywords.filter(kw => lowerText.includes(kw));
+  if (foundKeywords.length < 2) return true;
+  
+  return false;
+}
 
 serve(async (req) => {
   const origin = req.headers.get('origin');
@@ -99,10 +199,10 @@ serve(async (req) => {
     const user = await verifyAuth(req);
     console.log(`[Parse Resume] Authenticated user: ${user.id}`);
 
-    const { resumeText, resumeId, userId } = await req.json();
+    const { resumeText, resumeId, userId, fileBase64, mimeType, useOCR } = await req.json();
 
-    if (!resumeText || !resumeId || !userId) {
-      throw new Error('Missing required fields: resumeText, resumeId, userId');
+    if (!resumeId || !userId) {
+      throw new Error('Missing required fields: resumeId, userId');
     }
 
     // Verify the authenticated user matches the userId
@@ -116,8 +216,43 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    console.log('Parsing resume with AI - Mode 1 (Resume Parsing)...');
-    console.log('Resume text length:', resumeText.length);
+    let finalResumeText = resumeText;
+    let ocrUsed = false;
+
+    // Check if we need OCR
+    if (isTextExtractionLikelyFailed(resumeText)) {
+      console.log('[Parse Resume] Text extraction appears failed, attempting OCR...');
+      
+      if (fileBase64 && mimeType) {
+        try {
+          finalResumeText = await performOCR(fileBase64, mimeType, LOVABLE_API_KEY);
+          ocrUsed = true;
+          console.log('[Parse Resume] OCR successful, extracted text length:', finalResumeText.length);
+        } catch (ocrError) {
+          console.error('[Parse Resume] OCR failed:', ocrError);
+          // Fall back to original text if OCR fails
+          if (!resumeText || resumeText.trim().length === 0) {
+            throw new Error('Could not extract text from resume. The PDF may be a scanned image. Please try uploading a PDF with selectable text.');
+          }
+        }
+      } else if (useOCR && fileBase64) {
+        // Forced OCR mode
+        try {
+          finalResumeText = await performOCR(fileBase64, mimeType || 'application/pdf', LOVABLE_API_KEY);
+          ocrUsed = true;
+        } catch (ocrError) {
+          console.error('[Parse Resume] Forced OCR failed:', ocrError);
+          throw new Error('OCR extraction failed. Please try a different resume format.');
+        }
+      }
+    }
+
+    if (!finalResumeText || finalResumeText.trim().length < 50) {
+      throw new Error('Could not extract meaningful text from resume. Please ensure the PDF contains readable text or try re-uploading.');
+    }
+
+    console.log('[Parse Resume] Parsing resume with AI - Mode 1 (Resume Parsing)...');
+    console.log('[Parse Resume] Resume text length:', finalResumeText.length, 'OCR used:', ocrUsed);
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -134,7 +269,7 @@ serve(async (req) => {
           },
           {
             role: 'user',
-            content: `RESUME TEXT:\n<<<\n${resumeText}\n>>>`
+            content: `RESUME TEXT:\n<<<\n${finalResumeText}\n>>>`
           }
         ],
       }),
@@ -165,7 +300,7 @@ serve(async (req) => {
       throw new Error('No content in AI response');
     }
 
-    console.log('AI response received, parsing JSON...');
+    console.log('[Parse Resume] AI response received, parsing JSON...');
 
     // Parse the JSON response
     let parsedData;
@@ -233,10 +368,15 @@ serve(async (req) => {
       .update({ parsed_at: new Date().toISOString() })
       .eq('id', resumeId);
 
-    console.log('Resume parsed successfully');
+    console.log('[Parse Resume] Resume parsed successfully, OCR used:', ocrUsed);
 
     return new Response(
-      JSON.stringify({ success: true, highlights: result.data }),
+      JSON.stringify({ 
+        success: true, 
+        highlights: result.data,
+        ocrUsed,
+        extractedTextLength: finalResumeText.length
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

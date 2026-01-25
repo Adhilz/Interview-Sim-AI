@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { motion } from "framer-motion";
 import { 
   Mic, 
   Video, 
@@ -10,12 +11,15 @@ import {
   Clock, 
   Award, 
   Shield, 
-  ChevronRight, 
+  ArrowRight, 
   GraduationCap,
   Brain,
   Target,
-  Users,
-  HelpCircle
+  CheckCircle,
+  HelpCircle,
+  Sparkles,
+  BarChart3,
+  MessageSquare
 } from "lucide-react";
 
 const Landing = () => {
@@ -27,28 +31,24 @@ const Landing = () => {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        // Get total users (students)
         const { count: userCount } = await supabase
           .from('profiles')
           .select('*', { count: 'exact', head: true });
         
         setTotalUsers(userCount || 0);
 
-        // Get total interviews
         const { count: interviewCount } = await supabase
           .from('interviews')
           .select('*', { count: 'exact', head: true });
         
         setTotalInterviews(interviewCount || 0);
 
-        // Get average score for success rate
         const { data: evaluations } = await supabase
           .from('evaluations')
           .select('overall_score');
 
         if (evaluations && evaluations.length > 0) {
           const avgScore = evaluations.reduce((sum, e) => sum + (e.overall_score || 0), 0) / evaluations.length;
-          // Convert to percentage (score is out of 10, so multiply by 10)
           setSuccessRate(Math.round(avgScore * 10));
         } else {
           setSuccessRate(0);
@@ -67,290 +67,265 @@ const Landing = () => {
     if (num >= 1000) {
       return `${(num / 1000).toFixed(1)}K+`;
     }
-    return num.toString();
+    return num > 0 ? num.toString() : "—";
+  };
+
+  const fadeIn = {
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.5 }
+  };
+
+  const stagger = {
+    animate: {
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
   };
 
   return (
     <div className="min-h-screen bg-background">
       {/* Navigation */}
-      <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-border/50">
-        <div className="container mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl gradient-hero flex items-center justify-center">
-              <Brain className="w-5 h-5 sm:w-6 sm:h-6 text-primary-foreground" />
+      <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-md">
+        <div className="container mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-foreground flex items-center justify-center">
+              <Brain className="w-5 h-5 text-background" />
             </div>
-            <span className="text-lg sm:text-xl font-bold text-foreground">InterviewSim AI</span>
+            <span className="text-lg font-semibold text-foreground">InterviewSim</span>
           </Link>
-          <div className="flex items-center gap-2 sm:gap-4">
-            <Link to="/help">
-              <Button variant="ghost" size="sm" className="text-sm hidden sm:inline-flex">
-                <HelpCircle className="w-4 h-4 mr-1" />
+          <div className="flex items-center gap-3">
+            <Link to="/help" className="hidden sm:block">
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+                <HelpCircle className="w-4 h-4 mr-1.5" />
                 Help
               </Button>
             </Link>
             <ThemeToggle />
             <Link to="/login">
-              <Button variant="ghost" size="sm" className="text-sm">Login</Button>
+              <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+                Log in
+              </Button>
             </Link>
             <Link to="/signup">
-              <Button variant="hero" size="sm" className="text-sm">Get Started</Button>
+              <Button size="sm" className="bg-foreground text-background hover:bg-foreground/90">
+                Get Started
+              </Button>
             </Link>
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="relative pt-24 sm:pt-32 pb-12 sm:pb-20 overflow-hidden">
-        {/* Background gradient */}
-        <div className="absolute inset-0 gradient-hero opacity-[0.03]" />
-        <div className="absolute top-20 left-1/4 w-64 sm:w-96 h-64 sm:h-96 bg-accent/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-64 sm:w-96 h-64 sm:h-96 bg-primary/10 rounded-full blur-3xl" />
-        
-        <div className="container mx-auto px-4 sm:px-6 relative">
-          <div className="max-w-4xl mx-auto text-center">
-            <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-accent/10 text-accent mb-6 sm:mb-8 animate-fade-in">
-              <GraduationCap className="w-4 h-4" />
-              <span className="text-xs sm:text-sm font-medium">University Edition</span>
-            </div>
-            
-            <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-foreground mb-4 sm:mb-6 animate-slide-up leading-tight">
-              Master Your Interview
-              <span className="block text-accent">With AI Precision</span>
-            </h1>
-            
-            <p className="text-base sm:text-xl text-muted-foreground mb-8 sm:mb-10 max-w-2xl mx-auto animate-slide-up stagger-1 px-4">
-              Practice with our AI-powered voice interviewer, get instant feedback, 
-              and land your dream job. Designed exclusively for university students.
-            </p>
-            
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center animate-slide-up stagger-2 px-4">
-              <Link to="/signup">
-                <Button variant="hero" size="lg" className="w-full sm:w-auto">
-                  Start Practicing Now
-                  <ChevronRight className="w-5 h-5" />
-                </Button>
-              </Link>
-              <Link to="/login">
-                <Button variant="outline" size="lg" className="w-full sm:w-auto">
-                  Login to Dashboard
-                </Button>
-              </Link>
-            </div>
+      <section className="pt-32 pb-20 px-4 sm:px-6">
+        <div className="container mx-auto max-w-4xl text-center">
+          <motion.div 
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 text-accent text-sm font-medium mb-8"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <GraduationCap className="w-4 h-4" />
+            University Edition
+          </motion.div>
+          
+          <motion.h1 
+            className="text-4xl sm:text-5xl lg:text-6xl font-semibold text-foreground mb-6 leading-[1.1] tracking-tight"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            Practice interviews
+            <span className="block text-muted-foreground">with AI precision</span>
+          </motion.h1>
+          
+          <motion.p 
+            className="text-lg text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            Voice-powered mock interviews that adapt to your resume. 
+            Get instant, actionable feedback to land your dream role.
+          </motion.p>
+          
+          <motion.div 
+            className="flex flex-col sm:flex-row gap-3 justify-center"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+          >
+            <Link to="/signup">
+              <Button size="lg" className="bg-foreground text-background hover:bg-foreground/90 h-12 px-6">
+                Start practicing
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+            <Link to="/login">
+              <Button variant="outline" size="lg" className="h-12 px-6">
+                Sign in to dashboard
+              </Button>
+            </Link>
+          </motion.div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-4 sm:gap-8 mt-12 sm:mt-16 pt-8 sm:pt-16 border-t border-border animate-fade-in stagger-3">
-              <div>
-                <div className="text-2xl sm:text-4xl font-bold text-foreground">
-                  {isLoading ? (
-                    <span className="inline-block w-12 sm:w-16 h-8 sm:h-10 bg-muted animate-pulse rounded" />
-                  ) : (
-                    totalUsers > 0 ? formatNumber(totalUsers) : "5K+"
-                  )}
-                </div>
-                <div className="text-xs sm:text-sm text-muted-foreground mt-1">Students Trained</div>
+          {/* Stats */}
+          <motion.div 
+            className="grid grid-cols-3 gap-8 mt-20 pt-10 border-t border-border"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5, delay: 0.5 }}
+          >
+            {[
+              { value: isLoading ? "—" : formatNumber(totalUsers) || "5K+", label: "Students" },
+              { value: isLoading ? "—" : formatNumber(totalInterviews) || "50+", label: "Interviews" },
+              { value: isLoading ? "—" : successRate > 0 ? `${successRate}%` : "92%", label: "Success Rate" },
+            ].map((stat, i) => (
+              <div key={i} className="text-center">
+                <div className="text-3xl sm:text-4xl font-semibold text-foreground">{stat.value}</div>
+                <div className="text-sm text-muted-foreground mt-1">{stat.label}</div>
               </div>
-              <div>
-                <div className="text-2xl sm:text-4xl font-bold text-foreground">
-                  {isLoading ? (
-                    <span className="inline-block w-12 sm:w-16 h-8 sm:h-10 bg-muted animate-pulse rounded" />
-                  ) : (
-                    totalInterviews > 0 ? formatNumber(totalInterviews) : "50+"
-                  )}
-                </div>
-                <div className="text-xs sm:text-sm text-muted-foreground mt-1">Interviews</div>
-              </div>
-              <div>
-                <div className="text-2xl sm:text-4xl font-bold text-accent">
-                  {isLoading ? (
-                    <span className="inline-block w-12 sm:w-16 h-8 sm:h-10 bg-muted animate-pulse rounded" />
-                  ) : (
-                    successRate > 0 ? `${successRate}%` : "92%"
-                  )}
-                </div>
-                <div className="text-xs sm:text-sm text-muted-foreground mt-1">Success Rate</div>
-              </div>
-            </div>
-          </div>
+            ))}
+          </motion.div>
         </div>
       </section>
 
       {/* How It Works */}
-      <section className="py-16 sm:py-24 bg-secondary/30">
-        <div className="container mx-auto px-4 sm:px-6">
-          <div className="text-center mb-10 sm:mb-16">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground mb-3 sm:mb-4">
-              How It Works
+      <section className="py-20 px-4 sm:px-6 bg-muted/30">
+        <div className="container mx-auto max-w-5xl">
+          <motion.div 
+            className="text-center mb-16"
+            {...fadeIn}
+            viewport={{ once: true }}
+          >
+            <h2 className="text-2xl sm:text-3xl font-semibold text-foreground mb-3">
+              How it works
             </h2>
-            <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto">
-              Get interview-ready in four simple steps
+            <p className="text-muted-foreground">
+              Four steps to interview-ready confidence
             </p>
-          </div>
+          </motion.div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8">
+          <motion.div 
+            className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6"
+            variants={stagger}
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true }}
+          >
             {[
-              {
-                step: "01",
-                icon: FileText,
-                title: "Upload Resume",
-                description: "Upload your resume and let our AI analyze your background"
-              },
-              {
-                step: "02",
-                icon: Target,
-                title: "Set Duration",
-                description: "Choose 3 or 5 minute timed interview sessions"
-              },
-              {
-                step: "03",
-                icon: Mic,
-                title: "Live Interview",
-                description: "Engage in real-time voice interview with AI"
-              },
-              {
-                step: "04",
-                icon: Award,
-                title: "Get Feedback",
-                description: "Receive detailed scores and improvements"
-              }
+              { step: "1", icon: FileText, title: "Upload resume", description: "We analyze your background to personalize questions" },
+              { step: "2", icon: Target, title: "Choose duration", description: "3 or 5 minute timed sessions to build stamina" },
+              { step: "3", icon: Mic, title: "Live interview", description: "Voice conversation with adaptive AI interviewer" },
+              { step: "4", icon: BarChart3, title: "Get scores", description: "Detailed feedback on communication and technical skills" },
             ].map((item, index) => (
-              <div 
+              <motion.div 
                 key={index}
-                className="relative group"
+                className="bg-card rounded-xl p-6 border border-border/50 card-hover"
+                variants={fadeIn}
               >
-                <div className="bg-card rounded-xl sm:rounded-2xl p-4 sm:p-8 shadow-md hover:shadow-lg transition-all duration-300 h-full border border-border/50">
-                  <div className="text-3xl sm:text-6xl font-bold text-accent/20 absolute top-2 right-2 sm:top-4 sm:right-4">
-                    {item.step}
-                  </div>
-                  <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-lg sm:rounded-xl bg-accent/10 flex items-center justify-center mb-4 sm:mb-6 group-hover:bg-accent/20 transition-colors">
-                    <item.icon className="w-5 h-5 sm:w-7 sm:h-7 text-accent" />
-                  </div>
-                  <h3 className="text-base sm:text-xl font-semibold text-foreground mb-1 sm:mb-3">
-                    {item.title}
-                  </h3>
-                  <p className="text-xs sm:text-base text-muted-foreground">
-                    {item.description}
-                  </p>
+                <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center mb-4">
+                  <item.icon className="w-5 h-5 text-muted-foreground" />
                 </div>
-              </div>
+                <div className="text-sm text-accent font-medium mb-1">Step {item.step}</div>
+                <h3 className="text-base font-medium text-foreground mb-2">{item.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{item.description}</p>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
       {/* Features */}
-      <section className="py-24">
-        <div className="container mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-              Powerful Features
+      <section className="py-20 px-4 sm:px-6">
+        <div className="container mx-auto max-w-5xl">
+          <motion.div 
+            className="text-center mb-16"
+            {...fadeIn}
+            viewport={{ once: true }}
+          >
+            <h2 className="text-2xl sm:text-3xl font-semibold text-foreground mb-3">
+              Built for real results
             </h2>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Everything you need to ace your next interview
+            <p className="text-muted-foreground">
+              Everything you need to prepare effectively
             </p>
-          </div>
+          </motion.div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <motion.div 
+            className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
+            variants={stagger}
+            initial="initial"
+            whileInView="animate"
+            viewport={{ once: true }}
+          >
             {[
-              {
-                icon: Brain,
-                title: "AI Voice Interviewer",
-                description: "Natural conversation powered by advanced AI that adapts to your responses and resume"
-              },
-              {
-                icon: FileText,
-                title: "Resume Analysis",
-                description: "Smart parsing extracts your skills, experience, and projects for personalized questions"
-              },
-              {
-                icon: Clock,
-                title: "Timed Sessions",
-                description: "Practice under real interview pressure with 3 or 5 minute timed sessions"
-              },
-              {
-                icon: Video,
-                title: "Video Recording",
-                description: "Enable camera to practice body language and facial expressions"
-              },
-              {
-                icon: Award,
-                title: "Detailed Scoring",
-                description: "Get scores on communication, technical skills, and confidence levels"
-              },
-              {
-                icon: Shield,
-                title: "University Verified",
-                description: "Exclusive access for students with valid university codes"
-              }
+              { icon: Brain, title: "Adaptive AI", description: "Questions adapt based on your resume and responses in real-time" },
+              { icon: Sparkles, title: "Smart parsing", description: "AI extracts skills and projects for personalized interviewing" },
+              { icon: Clock, title: "Timed pressure", description: "Build interview stamina with realistic time constraints" },
+              { icon: Video, title: "Video practice", description: "Record yourself to review body language and expressions" },
+              { icon: MessageSquare, title: "Voice feedback", description: "Natural conversation scoring for communication skills" },
+              { icon: Shield, title: "University verified", description: "Exclusive access with valid institutional codes" },
             ].map((feature, index) => (
-              <div 
+              <motion.div 
                 key={index}
-                className="group bg-card rounded-2xl p-8 shadow-sm hover:shadow-md border border-border/50 transition-all duration-300 hover:-translate-y-1"
+                className="group p-6 rounded-xl border border-border/50 bg-card card-hover"
+                variants={fadeIn}
               >
-                <div className="w-12 h-12 rounded-xl gradient-hero flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                  <feature.icon className="w-6 h-6 text-primary-foreground" />
+                <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center mb-4 group-hover:bg-accent/20 transition-colors">
+                  <feature.icon className="w-5 h-5 text-accent" />
                 </div>
-                <h3 className="text-xl font-semibold text-foreground mb-3">
-                  {feature.title}
-                </h3>
-                <p className="text-muted-foreground leading-relaxed">
-                  {feature.description}
-                </p>
-              </div>
+                <h3 className="text-base font-medium text-foreground mb-2">{feature.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 relative overflow-hidden">
-        <div className="absolute inset-0 gradient-hero" />
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2260%22%20height%3D%2260%22%20viewBox%3D%220%200%2060%2060%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22none%22%20fill-rule%3D%22evenodd%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.05%22%3E%3Cpath%20d%3D%22M36%2034v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6%2034v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6%204V0H4v4H0v2h4v4h2V6h4V4H6z%22%2F%3E%3C%2Fg%3E%3C%2Fg%3E%3C%2Fsvg%3E')] opacity-30" />
-        
-        <div className="container mx-auto px-6 relative">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-3xl md:text-5xl font-bold text-primary-foreground mb-6">
-              Ready to Ace Your Interview?
+      <section className="py-20 px-4 sm:px-6">
+        <motion.div 
+          className="container mx-auto max-w-2xl"
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+        >
+          <div className="text-center p-10 rounded-2xl bg-foreground text-background">
+            <h2 className="text-2xl sm:text-3xl font-semibold mb-4">
+              Ready to practice?
             </h2>
-            <p className="text-xl text-primary-foreground/80 mb-10">
-              Join thousands of students who have improved their interview skills 
-              and landed their dream jobs.
+            <p className="text-background/70 mb-8 max-w-md mx-auto">
+              Join students who improved their interview performance and landed offers.
             </p>
             <Link to="/signup">
-              <Button 
-                size="xl" 
-                className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-lg hover:shadow-glow"
-              >
-                Get Started Free
-                <ChevronRight className="w-5 h-5" />
+              <Button size="lg" className="bg-background text-foreground hover:bg-background/90 h-12 px-8">
+                Get started free
+                <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
           </div>
-        </div>
+        </motion.div>
       </section>
 
       {/* Footer */}
-      <footer className="py-12 border-t border-border">
-        <div className="container mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+      <footer className="py-10 px-4 sm:px-6 border-t border-border">
+        <div className="container mx-auto max-w-5xl">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center">
-                <Brain className="w-5 h-5 text-primary-foreground" />
+              <div className="w-7 h-7 rounded-md bg-foreground flex items-center justify-center">
+                <Brain className="w-4 h-4 text-background" />
               </div>
-              <span className="font-semibold text-foreground">InterviewSim AI</span>
+              <span className="font-medium text-foreground">InterviewSim</span>
             </div>
-            <div className="flex items-center gap-6 text-sm">
-              <Link to="/help" className="text-muted-foreground hover:text-accent transition-colors">
-                Help & Support
-              </Link>
-              <Link to="/login" className="text-muted-foreground hover:text-accent transition-colors">
-                Login
-              </Link>
-              <Link to="/signup" className="text-muted-foreground hover:text-accent transition-colors">
-                Sign Up
-              </Link>
+            <div className="flex items-center gap-6 text-sm text-muted-foreground">
+              <Link to="/help" className="hover:text-foreground transition-colors">Help</Link>
+              <Link to="/login" className="hover:text-foreground transition-colors">Login</Link>
+              <Link to="/signup" className="hover:text-foreground transition-colors">Sign Up</Link>
             </div>
             <div className="text-sm text-muted-foreground">
-              <span>© {new Date().getFullYear()} InterviewSim AI. All rights reserved.</span>
+              © {new Date().getFullYear()} InterviewSim
             </div>
           </div>
         </div>
