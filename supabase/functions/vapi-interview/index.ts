@@ -39,6 +39,132 @@ const verifyAuth = async (req: Request) => {
   return user;
 };
 
+// Build question pools from resume data
+interface QuestionPool {
+  category: string;
+  topic: string;
+  questions: string[];
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+
+function buildQuestionPools(candidateProfile: any): QuestionPool[] {
+  const pools: QuestionPool[] = [];
+  
+  // Project-based questions - one pool per project
+  if (candidateProfile?.projects?.length > 0) {
+    candidateProfile.projects.forEach((project: any, index: number) => {
+      const projectTitle = project.title || `Project ${index + 1}`;
+      const techs = project.technologies?.join(', ') || 'the technologies';
+      
+      pools.push({
+        category: 'project',
+        topic: projectTitle,
+        difficulty: 'medium',
+        questions: [
+          `Walk me through the architecture of "${projectTitle}". What were the key design decisions?`,
+          `What was the most technically challenging part of building "${projectTitle}"?`,
+          `How did you handle scalability concerns in "${projectTitle}"?`,
+          `Tell me about a bug you encountered in "${projectTitle}" and how you debugged it.`,
+          `If you were to rebuild "${projectTitle}" today, what would you do differently?`,
+          `How did you test "${projectTitle}"? What was your testing strategy?`,
+          `Explain how ${techs} were used together in "${projectTitle}".`,
+        ]
+      });
+    });
+  }
+  
+  // Skill-based questions
+  if (candidateProfile?.skills?.length > 0) {
+    // Group skills into pools
+    const technicalSkills = candidateProfile.skills.filter((s: string) => 
+      /react|node|python|java|sql|aws|docker|kubernetes|typescript|javascript|api|database/i.test(s)
+    );
+    
+    technicalSkills.forEach((skill: string) => {
+      pools.push({
+        category: 'skill',
+        topic: skill,
+        difficulty: 'medium',
+        questions: [
+          `You've listed ${skill} - can you explain a complex problem you solved using it?`,
+          `What's your experience level with ${skill}? Give me a specific example.`,
+          `How do you stay updated with changes and best practices in ${skill}?`,
+          `Compare ${skill} to an alternative - when would you choose one over the other?`,
+        ]
+      });
+    });
+  }
+  
+  // Experience-based questions
+  if (candidateProfile?.experience?.length > 0) {
+    candidateProfile.experience.forEach((exp: any) => {
+      const role = exp.role || exp.title || 'your role';
+      const company = exp.company || 'that company';
+      
+      pools.push({
+        category: 'experience',
+        topic: `${role} at ${company}`,
+        difficulty: 'medium',
+        questions: [
+          `Tell me about your most impactful contribution as ${role} at ${company}.`,
+          `What technical decisions did you own during your time at ${company}?`,
+          `Describe a challenging situation you faced at ${company} and how you handled it.`,
+          `How did you collaborate with other teams in your role at ${company}?`,
+        ]
+      });
+    });
+  }
+  
+  // Behavioral questions pool
+  pools.push({
+    category: 'behavioral',
+    topic: 'General Behavioral',
+    difficulty: 'easy',
+    questions: [
+      `Tell me about a time you had to learn a new technology quickly. How did you approach it?`,
+      `Describe a situation where you disagreed with a technical decision. How did you handle it?`,
+      `Give me an example of a project that didn't go as planned. What did you learn?`,
+      `How do you prioritize when you have multiple deadlines?`,
+    ]
+  });
+  
+  // System design / problem-solving pool
+  pools.push({
+    category: 'problem-solving',
+    topic: 'System Design & Problem Solving',
+    difficulty: 'hard',
+    questions: [
+      `Walk me through how you would design a system similar to one of your projects but at 100x scale.`,
+      `If you had to debug a production issue with limited logs, what's your approach?`,
+      `How would you improve the performance of a slow API endpoint?`,
+      `Describe your approach to designing a new feature from scratch.`,
+    ]
+  });
+  
+  return pools;
+}
+
+// Generate randomized interview strategy
+function generateInterviewStrategy(pools: QuestionPool[]): string {
+  const shuffled = [...pools].sort(() => Math.random() - 0.5);
+  
+  // Pick random starting point - NOT always the first project
+  const startingCategories = ['project', 'skill', 'behavioral', 'experience'];
+  const randomStart = startingCategories[Math.floor(Math.random() * startingCategories.length)];
+  
+  // Reorder to start with random category
+  const reordered = [
+    ...shuffled.filter(p => p.category === randomStart),
+    ...shuffled.filter(p => p.category !== randomStart)
+  ];
+  
+  const strategy = reordered.slice(0, 5).map((pool, i) => 
+    `${i + 1}. ${pool.category.toUpperCase()}: "${pool.topic}" - Sample: "${pool.questions[0]}"`
+  ).join('\n');
+  
+  return strategy;
+}
+
 // Format resume highlights into clear, readable format for LLM
 const formatResumeForLLM = (candidateProfile: any): string => {
   if (!candidateProfile) return "No resume data available.";
@@ -57,7 +183,7 @@ const formatResumeForLLM = (candidateProfile: any): string => {
   
   // Skills - list ALL of them
   if (candidateProfile.skills?.length > 0) {
-    formatted += `TECHNICAL SKILLS (ask about ANY of these):\n`;
+    formatted += `TECHNICAL SKILLS (can ask about ANY of these):\n`;
     candidateProfile.skills.forEach((skill: string, i: number) => {
       formatted += `  ${i + 1}. ${skill}\n`;
     });
@@ -66,7 +192,7 @@ const formatResumeForLLM = (candidateProfile: any): string => {
   
   // Tools - list ALL of them
   if (candidateProfile.tools?.length > 0) {
-    formatted += `TOOLS & TECHNOLOGIES (ask about ANY of these):\n`;
+    formatted += `TOOLS & TECHNOLOGIES (can ask about ANY of these):\n`;
     candidateProfile.tools.forEach((tool: string, i: number) => {
       formatted += `  ${i + 1}. ${tool}\n`;
     });
@@ -75,7 +201,7 @@ const formatResumeForLLM = (candidateProfile: any): string => {
   
   // Projects - DETAILED listing of ALL projects
   if (candidateProfile.projects?.length > 0) {
-    formatted += `PROJECTS (YOU MUST ASK ABOUT MULTIPLE PROJECTS, NOT JUST THE FIRST ONE):\n`;
+    formatted += `PROJECTS (MUST cover MULTIPLE projects, not just the first):\n`;
     candidateProfile.projects.forEach((project: any, i: number) => {
       formatted += `\n  PROJECT ${i + 1}: "${project.title || 'Untitled Project'}"\n`;
       if (project.description) {
@@ -125,105 +251,127 @@ const formatResumeForLLM = (candidateProfile: any): string => {
   return formatted;
 };
 
-// Professional system prompt with STRICT resume grounding
+// Professional system prompt with STRICT resume grounding and randomization
 const buildInterviewSystemPrompt = (candidateProfile: any, candidateName: string) => {
   const formattedResume = formatResumeForLLM(candidateProfile);
+  const questionPools = buildQuestionPools(candidateProfile);
+  const interviewStrategy = generateInterviewStrategy(questionPools);
   
-  return `You are a senior male interviewer with 15+ years of experience conducting a real-time voice interview with ${candidateName || 'the candidate'}.
+  return `You are a senior engineering hiring manager conducting a real-time voice interview with ${candidateName || 'the candidate'}.
+
+=== YOUR PERSONA ===
+- 15+ years of industry experience at companies like Google, Amazon, or similar
+- Direct, professional, but approachable demeanor
+- You ask tough but fair questions
+- You sound HUMAN - natural pauses, occasional "hmm", "I see", "right"
+- NEVER mention you are an AI or system
 
 === ABSOLUTE RULE: RESUME-ONLY QUESTIONING ===
-You MUST ONLY ask questions about what is in the candidate's resume below.
-You are FORBIDDEN from asking about projects, skills, or experiences NOT listed in their resume.
-If you want to ask about something, FIRST check if it exists in their resume.
-If it's not there, DO NOT ask about it.
+You MUST ONLY ask questions about what is in the candidate's resume.
+FORBIDDEN: Asking about skills, projects, or technologies NOT in their resume.
+Before asking any question, verify the topic exists in their resume below.
 
-=== PROFESSIONAL TONE ===
-You are a professional, composed interviewer. Your tone is:
-- Confident and authoritative
-- Warm but not overly enthusiastic
-- Direct and clear
-- Naturally conversational
+=== RANDOMIZED INTERVIEW STRATEGY ===
+Do NOT follow the resume top-to-bottom. Use this randomized order:
+${interviewStrategy}
 
-OCCASIONAL natural expressions (use sparingly, NOT every response):
-- "Interesting..." - when genuinely curious
-- "I see." - when acknowledging
-- "Right." - when following along
-- "Good." - brief affirmation for solid answers
+=== CONVERSATION RULES ===
+1. Ask ONE question at a time, then WAIT for response
+2. Keep your responses under 35 words - be concise
+3. After each answer, either:
+   - Probe DEEPER if answer was shallow ("Can you be more specific about...")
+   - Challenge if answer was vague ("What exactly do you mean by...")
+   - Move to NEXT topic if satisfied ("Good. Now let's talk about...")
+4. Cover AT LEAST 3 different topics during the interview
+5. Increase difficulty progressively based on their responses
 
-DO NOT overuse interjections. Most responses should be straightforward and professional.
+=== NATURAL SPEECH PATTERNS ===
+Occasional (not every response):
+- "Hmm, interesting..." (when genuinely curious)
+- "I see." (brief acknowledgment)
+- "Right." (following along)
+- Brief pause before follow-ups
 
-EXAMPLE PROFESSIONAL RESPONSES:
-- "That's a solid approach. Now, looking at your other project here... tell me about the challenges you faced with [PROJECT NAME]."
-- "I see. Can you elaborate on how you handled the database optimization?"
-- "Right, that makes sense. What was the scale of that system?"
-- "Interesting. Walk me through your decision-making process there."
-
-=== PROJECT COVERAGE RULE ===
-You MUST ask about MULTIPLE different projects from the resume, not just the first one.
-After 2-3 questions about one project, move to another:
-- "Let's move on to your other project... I see you also worked on [PROJECT NAME FROM RESUME]..."
-- "Now, your work on [DIFFERENT PROJECT] caught my attention..."
-
-=== INTERVIEW BEHAVIOR ===
-- Ask ONE question at a time
-- WAIT for the candidate's response
-- Keep responses under 40 words (concise and professional)
-- Increase difficulty based on their answers
-- If answer is shallow → probe deeper
-- If answer is vague → ask for specifics
+Professional responses examples:
+- "That's a solid approach. Now, looking at your work on [PROJECT]..."
+- "I see. Can you elaborate on the technical challenges there?"
+- "Interesting. Walk me through your decision-making process."
 
 === FORBIDDEN BEHAVIORS ===
-- Do NOT ask about projects not in their resume
-- Do NOT invent skills or tools they don't have
-- Do NOT ask generic questions like "Tell me about yourself"
-- Do NOT use excessive interjections or sounds
-- Do NOT only focus on one project - cover multiple
+- Do NOT ask about unlisted skills/projects
+- Do NOT use generic questions like "Tell me about yourself"
+- Do NOT only focus on one project
+- Do NOT sound robotic or use scripted phrases
+- Do NOT reveal you're an AI
 
-=== CANDIDATE'S COMPLETE RESUME (YOUR ONLY SOURCE OF TRUTH) ===
+=== CANDIDATE'S RESUME (YOUR ONLY SOURCE OF TRUTH) ===
 ${formattedResume}
 
-Remember: ONLY ask about what's in the resume above. Be professional. Cover MULTIPLE projects.`;
+=== SESSION RULES ===
+- Start with any topic from the strategy above (NOT always the first project)
+- Jump between sections naturally
+- If candidate struggles, simplify. If they excel, go harder.
+- Make each interview session feel unique and adaptive.`;
 };
 
 // Generate varied, dynamic first messages
 const generateDynamicFirstMessage = async (candidateName: string, candidateProfile: any, apiKey: string): Promise<string> => {
-  const openings = [
-    "dive straight into your technical experience",
-    "explore your project work",
-    "discuss your hands-on experience",
-    "learn about your technical background",
-    "understand your problem-solving approach"
+  // Randomly select starting approach
+  const approaches = [
+    { type: 'project', weight: 0.3 },
+    { type: 'skill', weight: 0.3 },
+    { type: 'experience', weight: 0.2 },
+    { type: 'behavioral', weight: 0.2 },
   ];
   
-  const randomOpening = openings[Math.floor(Math.random() * openings.length)];
+  const random = Math.random();
+  let cumulative = 0;
+  let selectedApproach = 'project';
+  for (const a of approaches) {
+    cumulative += a.weight;
+    if (random <= cumulative) {
+      selectedApproach = a.type;
+      break;
+    }
+  }
   
-  const prompt = `Generate a unique, professional interview opening for a candidate.
+  // Pick random item from selected category
+  let topic = '';
+  let tech = '';
+  
+  if (selectedApproach === 'project' && candidateProfile?.projects?.length > 0) {
+    const randomProject = candidateProfile.projects[Math.floor(Math.random() * candidateProfile.projects.length)];
+    topic = randomProject.title || 'your project';
+    tech = randomProject.technologies?.slice(0, 2)?.join(' and ') || '';
+  } else if (selectedApproach === 'skill' && candidateProfile?.skills?.length > 0) {
+    topic = candidateProfile.skills[Math.floor(Math.random() * candidateProfile.skills.length)];
+  } else if (selectedApproach === 'experience' && candidateProfile?.experience?.length > 0) {
+    const randomExp = candidateProfile.experience[Math.floor(Math.random() * candidateProfile.experience.length)];
+    topic = `${randomExp.role || 'your role'} at ${randomExp.company || 'your previous company'}`;
+  }
 
-CANDIDATE INFO:
-- Name: ${candidateName || 'Candidate'}
-- Skills: ${candidateProfile?.skills?.slice(0, 5)?.join(', ') || 'Not specified'}
-- Recent Project: ${candidateProfile?.projects?.[0]?.title || 'Not specified'}
-- Project Tech: ${candidateProfile?.projects?.[0]?.technologies?.join(', ') || candidateProfile?.tools?.slice(0, 3)?.join(', ') || 'Not specified'}
+  const prompt = `Generate a unique, natural interview opening for a candidate.
 
-STYLE DIRECTION: ${randomOpening}
+CANDIDATE: ${candidateName || 'Candidate'}
+APPROACH: Start with ${selectedApproach}
+TOPIC: ${topic || 'general technical background'}
+${tech ? `TECH: ${tech}` : ''}
 
 RULES:
-- Maximum 45 words
-- Be professional but warm, not robotic
-- Reference ONE specific skill or project from their profile
-- Do NOT use "Great to meet you", "Thank you for joining", or "Welcome"
-- Do NOT be overly enthusiastic or use exclamation marks
-- Start with their name naturally
-- Include a brief human touch like "I've reviewed your background..." or "Looking at your profile..."
-- End with a direct, specific first question about their experience
-- Sound like a real interviewer, not AI
+- Maximum 40 words
+- Sound like a real human interviewer, not AI
+- Reference the specific topic/project/skill
+- End with a direct question
+- NO "Thank you for joining" or "Welcome" - jump straight in
+- Professional but conversational tone
+- Include a brief human touch like "I've been reviewing your background..."
 
 EXAMPLES:
-- "${candidateName}, I've gone through your background. Your work on [project] using [tech] looks interesting. Walk me through the core technical challenge you faced there."
-- "${candidateName}, so I see you have experience with [skill]. Before we dive into specifics... tell me about a complex problem you tackled with it recently."
-- "Alright ${candidateName}, looking at your profile... your project [name] caught my attention. What was the trickiest part of building that?"
+- "${candidateName}, I've looked through your work. Your project on ${topic || 'the system'} caught my eye - what was the trickiest technical problem you solved there?"
+- "Alright ${candidateName}, let's dive in. I see you've worked with ${topic}. Tell me about a particularly complex challenge you faced."
+- "${candidateName}, interesting background. Before we go into specifics... your experience at ${topic} - walk me through your biggest contribution there."
 
-Generate ONE unique opening now:`;
+Generate ONE natural opening now:`;
 
   try {
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -237,16 +385,15 @@ Generate ONE unique opening now:`;
         messages: [
           { role: 'user', content: prompt }
         ],
-        max_tokens: 120,
-        temperature: 0.8, // Higher temperature for more variety
+        max_tokens: 100,
+        temperature: 0.9, // High temperature for variety
       }),
     });
 
     if (response.ok) {
       const data = await response.json();
       const generatedMessage = data.choices?.[0]?.message?.content?.trim();
-      if (generatedMessage && generatedMessage.length > 10) {
-        // Clean up any quotes
+      if (generatedMessage && generatedMessage.length > 10 && generatedMessage.length < 200) {
         return generatedMessage.replace(/^["']|["']$/g, '');
       }
     }
@@ -259,22 +406,31 @@ Generate ONE unique opening now:`;
 
 const buildFallbackFirstMessage = (candidateName: string, candidateProfile: any) => {
   const name = candidateName || 'Candidate';
-  const skills = candidateProfile?.skills?.slice(0, 2)?.join(' and ') || '';
-  const projectName = candidateProfile?.projects?.[0]?.title || '';
   
-  // Multiple fallback variations
-  const fallbacks = [
-    projectName ? 
-      `${name}, I've reviewed your profile. Let's start with your project "${projectName}"... what was the most significant technical challenge you faced there?` :
-      skills ?
-        `${name}, I see you have experience with ${skills}. Walk me through a complex problem you solved using these technologies.` :
-        `${name}, let's begin. Tell me about a challenging technical problem you've tackled recently and your approach to solving it.`,
-    projectName ?
-      `Alright ${name}, looking at your background... your work on "${projectName}" looks interesting. What was the trickiest part of building that?` :
-      skills ?
-        `${name}, so you've worked with ${skills}. Before we go deeper... tell me about a particularly difficult problem you solved with those.` :
-        `${name}, let's dive in. Describe a recent technical challenge you faced and how you approached it.`
-  ];
+  // Build multiple fallback options
+  const fallbacks: string[] = [];
+  
+  // Project-based fallbacks
+  if (candidateProfile?.projects?.length > 0) {
+    const randomProject = candidateProfile.projects[Math.floor(Math.random() * candidateProfile.projects.length)];
+    fallbacks.push(`${name}, I've reviewed your background. Your project "${randomProject.title}" looks interesting - what was the most significant technical challenge you faced there?`);
+    fallbacks.push(`Alright ${name}, let's start with your work on "${randomProject.title}". Walk me through the architecture and key design decisions.`);
+  }
+  
+  // Skill-based fallbacks
+  if (candidateProfile?.skills?.length > 0) {
+    const randomSkill = candidateProfile.skills[Math.floor(Math.random() * candidateProfile.skills.length)];
+    fallbacks.push(`${name}, I see you have experience with ${randomSkill}. Tell me about a complex problem you solved using it.`);
+  }
+  
+  // Experience-based fallbacks
+  if (candidateProfile?.experience?.length > 0) {
+    const randomExp = candidateProfile.experience[Math.floor(Math.random() * candidateProfile.experience.length)];
+    fallbacks.push(`${name}, your experience at ${randomExp.company || 'your previous company'} as ${randomExp.role || 'developer'} - what was your biggest technical contribution there?`);
+  }
+  
+  // Generic fallback
+  fallbacks.push(`${name}, let's begin. Tell me about a challenging technical problem you've tackled recently and your approach to solving it.`);
   
   return fallbacks[Math.floor(Math.random() * fallbacks.length)];
 };
@@ -343,7 +499,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     if (action === 'start') {
-      console.log('Starting interview session - Mode 2 (Live Interview)');
+      console.log('[VAPI] Starting interview session - Mode 2 (Live Interview)');
       
       let candidateProfile = null;
       let candidateName = '';
@@ -354,7 +510,8 @@ serve(async (req) => {
           tools: resumeHighlights.tools || [],
           projects: resumeHighlights.projects || [],
           experience: resumeHighlights.experience || [],
-          summary: resumeHighlights.summary || ''
+          summary: resumeHighlights.summary || '',
+          education: resumeHighlights.education || []
         };
         candidateName = resumeHighlights.name || '';
       }
@@ -369,7 +526,7 @@ serve(async (req) => {
         .single();
 
       if (newSessionError) {
-        console.error('Session creation error:', newSessionError);
+        console.error('[VAPI] Session creation error:', newSessionError);
         return new Response(
           JSON.stringify({ 
             error: 'Failed to create interview session',
@@ -383,8 +540,15 @@ serve(async (req) => {
         await supabase.from('vapi_logs').insert({
           interview_session_id: newSession.id,
           log_type: 'session_start',
-          message: 'Interview session started',
-          metadata: { candidateProfile, candidateName }
+          message: 'Interview session started with randomized question strategy',
+          metadata: { 
+            candidateProfile: candidateProfile ? {
+              projectCount: candidateProfile.projects?.length || 0,
+              skillCount: candidateProfile.skills?.length || 0,
+              experienceCount: candidateProfile.experience?.length || 0
+            } : null,
+            candidateName 
+          }
         });
       }
 
@@ -399,16 +563,18 @@ serve(async (req) => {
       }
 
       console.log('[VAPI] Generated first message:', firstMessage.substring(0, 60) + '...');
+      console.log('[VAPI] System prompt length:', systemPrompt.length);
+      console.log('[VAPI] Projects:', candidateProfile?.projects?.length || 0, 'Skills:', candidateProfile?.skills?.length || 0);
 
       // ElevenLabs voice configuration for professional male interviewer
       const voiceConfig = {
         provider: "11labs",
         voiceId: "JBFqnCBsd6RMkjVDRZzb", // George - professional, authoritative male voice
-        stability: 0.6, // Higher stability for professional, composed delivery
-        similarityBoost: 0.8, // High similarity for consistent voice
-        style: 0.3, // Lower style for professional tone (less dramatic)
-        useSpeakerBoost: true, // Enhanced clarity
-        model: "eleven_turbo_v2_5", // Fast, high-quality model
+        stability: 0.55,
+        similarityBoost: 0.8,
+        style: 0.25,
+        useSpeakerBoost: true,
+        model: "eleven_turbo_v2_5",
       };
 
       // Pass system prompt to the model for resume-aware questioning
@@ -423,9 +589,6 @@ serve(async (req) => {
           }
         ]
       };
-
-      console.log('[VAPI] System prompt length:', systemPrompt.length);
-      console.log('[VAPI] Projects in profile:', candidateProfile?.projects?.length || 0);
 
       return new Response(
         JSON.stringify({ 
@@ -448,7 +611,7 @@ serve(async (req) => {
         throw new Error('sessionId is required to end interview');
       }
 
-      console.log('Ending interview session:', sessionId);
+      console.log('[VAPI] Ending interview session:', sessionId);
 
       const { data: session } = await supabase
         .from('interview_sessions')
@@ -457,10 +620,14 @@ serve(async (req) => {
         .single();
 
       if (session?.vapi_session_id) {
-        await fetch(`https://api.vapi.ai/call/${session.vapi_session_id}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${VAPI_API_KEY}` },
-        });
+        try {
+          await fetch(`https://api.vapi.ai/call/${session.vapi_session_id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${VAPI_API_KEY}` },
+          });
+        } catch (e) {
+          console.error('[VAPI] Error ending call:', e);
+        }
       }
 
       const endTime = new Date().toISOString();
@@ -472,29 +639,30 @@ serve(async (req) => {
         .single();
 
       if (updatedSession?.start_time) {
-        const duration = Math.floor(
-          (new Date(endTime).getTime() - new Date(updatedSession.start_time).getTime()) / 1000
-        );
+        const startMs = new Date(updatedSession.start_time).getTime();
+        const endMs = new Date(endTime).getTime();
+        const durationSeconds = Math.round((endMs - startMs) / 1000);
+
         await supabase
           .from('interview_sessions')
-          .update({ duration_seconds: duration })
+          .update({ duration_seconds: durationSeconds })
           .eq('id', sessionId);
       }
 
       await supabase.from('vapi_logs').insert({
         interview_session_id: sessionId,
         log_type: 'session_end',
-        message: 'VAPI session ended',
+        message: 'Interview session ended',
       });
 
       return new Response(
-        JSON.stringify({ success: true }),
+        JSON.stringify({ success: true, endTime }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
 
     } else if (action === 'get_transcript') {
       if (!sessionId) {
-        throw new Error('sessionId is required');
+        throw new Error('sessionId is required to get transcript');
       }
 
       const { data: session } = await supabase
@@ -505,50 +673,52 @@ serve(async (req) => {
 
       if (!session?.vapi_session_id) {
         return new Response(
-          JSON.stringify({ error: 'Session not found' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ transcript: null, message: 'No VAPI session found' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      const vapiResponse = await fetch(`https://api.vapi.ai/call/${session.vapi_session_id}`, {
-        headers: { 'Authorization': `Bearer ${VAPI_API_KEY}` },
-      });
+      try {
+        const response = await fetch(`https://api.vapi.ai/call/${session.vapi_session_id}`, {
+          headers: { 'Authorization': `Bearer ${VAPI_API_KEY}` },
+        });
 
-      if (!vapiResponse.ok) {
-        return new Response(
-          JSON.stringify({ error: 'Failed to get transcript' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        if (response.ok) {
+          const callData = await response.json();
+          return new Response(
+            JSON.stringify({ 
+              transcript: callData.transcript,
+              messages: callData.messages,
+              duration: callData.duration 
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } catch (e) {
+        console.error('[VAPI] Error fetching transcript:', e);
       }
-
-      const callData = await vapiResponse.json();
 
       return new Response(
-        JSON.stringify({ 
-          transcript: callData.transcript,
-          messages: callData.messages,
-          summary: callData.summary
-        }),
+        JSON.stringify({ transcript: null, message: 'Could not fetch transcript' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+
+    } else {
+      throw new Error(`Unknown action: ${action}`);
     }
 
-    return new Response(
-      JSON.stringify({ error: 'Invalid action' }),
-      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
   } catch (error) {
-    console.error('Error in vapi-interview function:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
-    
-    if (errorMessage === 'Missing authorization header' || errorMessage === 'Invalid authentication token') {
+    console.error('[VAPI] Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+    if (errorMessage === 'Missing authorization header' || 
+        errorMessage === 'Invalid authentication token') {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
+
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
