@@ -137,24 +137,36 @@ export const useVapi = (options: UseVapiOptions) => {
       }
       
       // Also capture conversation-update messages which contain full conversation
+      // This is the MOST RELIABLE source as it comes directly from VAPI's internal state
       if (message.type === 'conversation-update' && message.conversation) {
         console.log('[VAPI] Conversation update received with', message.conversation.length, 'messages');
         
-        // Use this as a backup/verification of transcript
-        const conversationLines: string[] = [];
+        // Sync our transcript entries with the authoritative conversation state
+        const newEntries: TranscriptEntry[] = [];
         message.conversation.forEach((msg: any) => {
-          if (msg.content && typeof msg.content === 'string') {
-            const role = msg.role === 'assistant' ? 'Interviewer' : 'Candidate';
-            conversationLines.push(`${role}: ${msg.content}`);
+          const content = msg.content || msg.text;
+          if (content && typeof content === 'string' && content.trim().length > 0 && msg.role !== 'system') {
+            const role = msg.role === 'assistant' ? 'assistant' : 'user';
+            newEntries.push({
+              role,
+              content: content.trim(),
+              timestamp: Date.now(),
+              isFinal: true
+            });
           }
         });
         
-        // If our tracked transcript is significantly shorter, log a warning
-        if (conversationLines.length > transcriptEntriesRef.current.length + 2) {
-          console.warn('[VAPI] Conversation-update has more messages than tracked transcript!', {
-            conversationLength: conversationLines.length,
-            trackedLength: transcriptEntriesRef.current.length
+        // If conversation-update has more messages, use it as the source of truth
+        if (newEntries.length > transcriptEntriesRef.current.length) {
+          console.log('[VAPI] Syncing transcript from conversation-update:', newEntries.length, 'entries');
+          transcriptEntriesRef.current = newEntries;
+          
+          // Also update the state transcript
+          const lines = newEntries.map(entry => {
+            const role = entry.role === 'assistant' ? 'Interviewer' : 'Candidate';
+            return `${role}: ${entry.content}`;
           });
+          setTranscript(lines);
         }
       }
     });
