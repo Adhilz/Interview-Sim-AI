@@ -211,6 +211,45 @@ const Resume = () => {
     });
   };
 
+  // Download file from Supabase storage using authenticated method
+  const downloadResumeFile = async (fileUrl: string, fileName: string): Promise<File | null> => {
+    try {
+      // Extract the storage path from the URL
+      // URL format: https://xxx.supabase.co/storage/v1/object/public/resumes/{user_id}/{filename}
+      const urlParts = fileUrl.split('/storage/v1/object/public/resumes/');
+      if (urlParts.length < 2) {
+        console.error('[Resume] Invalid file URL format:', fileUrl);
+        return null;
+      }
+      const storagePath = urlParts[1];
+      
+      console.log('[Resume] Downloading file from storage path:', storagePath);
+      
+      // Use authenticated download
+      const { data, error } = await supabase.storage
+        .from('resumes')
+        .download(storagePath);
+      
+      if (error) {
+        console.error('[Resume] Storage download error:', error);
+        return null;
+      }
+      
+      if (!data) {
+        console.error('[Resume] No data returned from storage');
+        return null;
+      }
+      
+      // Convert Blob to File
+      const file = new File([data], fileName, { type: 'application/pdf' });
+      console.log('[Resume] File downloaded successfully, size:', file.size);
+      return file;
+    } catch (error) {
+      console.error('[Resume] Error downloading file:', error);
+      return null;
+    }
+  };
+
   const extractTextFromPDF = async (file: File): Promise<{ text: string; usedOCR: boolean; fileBase64?: string; mimeType?: string }> => {
     let extractedText = '';
     
@@ -349,11 +388,12 @@ const Resume = () => {
           extractionResult = { text: await file.text(), usedOCR: false };
         }
       } else if (resume?.file_url) {
-        // Fetch the file from storage URL and extract text
+        // Fetch the file from storage using authenticated download
         try {
-          const response = await fetch(resume.file_url);
-          const blob = await response.blob();
-          const fetchedFile = new File([blob], resume.file_name, { type: 'application/pdf' });
+          const fetchedFile = await downloadResumeFile(resume.file_url, resume.file_name);
+          if (!fetchedFile) {
+            throw new Error('Could not download resume file from storage');
+          }
           extractionResult = await extractTextFromPDF(fetchedFile);
         } catch (fetchError) {
           console.error('Error fetching resume file:', fetchError);
@@ -443,13 +483,13 @@ const Resume = () => {
           description: "Preparing your resume for analysis. This may take a moment.",
         });
         
-        const response = await fetch(resume.file_url);
-        const blob = await response.blob();
-        const fetchedFile = new File([blob], resume.file_name, { type: 'application/pdf' });
-        extractionResult = await extractTextFromPDF(fetchedFile);
-        
-        if (isValidResumeText(extractionResult.text)) {
-          setResumeTextCache(extractionResult.text);
+        const fetchedFile = await downloadResumeFile(resume.file_url, resume.file_name);
+        if (fetchedFile) {
+          extractionResult = await extractTextFromPDF(fetchedFile);
+          
+          if (isValidResumeText(extractionResult.text)) {
+            setResumeTextCache(extractionResult.text);
+          }
         }
       }
 
@@ -458,12 +498,12 @@ const Resume = () => {
       let mimeType = extractionResult.mimeType;
       
       if (!fileBase64 && resume?.file_url) {
-        // Get file data for OCR fallback
-        const response = await fetch(resume.file_url);
-        const blob = await response.blob();
-        const file = new File([blob], resume.file_name, { type: 'application/pdf' });
-        fileBase64 = await fileToBase64(file);
-        mimeType = file.type || 'application/pdf';
+        // Get file data for OCR fallback using authenticated download
+        const file = await downloadResumeFile(resume.file_url, resume.file_name);
+        if (file) {
+          fileBase64 = await fileToBase64(file);
+          mimeType = file.type || 'application/pdf';
+        }
       }
 
       const { data, error } = await supabase.functions.invoke('ats-score', {
