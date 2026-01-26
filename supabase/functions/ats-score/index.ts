@@ -93,6 +93,103 @@ RULES:
 - Consider both ATS algorithms and human reviewers
 - Return ONLY valid JSON, no explanations outside JSON`;
 
+// OCR extraction prompt for scanned PDFs
+const OCR_EXTRACTION_PROMPT = `You are an expert OCR system specialized in reading resume images.
+
+TASK:
+Carefully extract ALL text from this resume image/PDF scan.
+The resume may be:
+- Scanned/photographed document
+- Multi-column layout
+- Contains graphics, icons, or charts
+- Has unusual fonts or styling
+
+EXTRACTION RULES:
+1. Read ALL text visible in the image
+2. Preserve section structure (Education, Experience, Skills, Projects)
+3. Handle multi-column layouts - read left column fully, then right
+4. Extract text from within graphics/charts if present
+5. Clean up any obvious OCR errors
+6. Preserve bullet points and list structures
+7. Include contact information (email, phone, LinkedIn)
+
+OUTPUT:
+Return the extracted text as clean, structured plain text preserving the resume's organization.
+Do NOT add any commentary - just the extracted text.`;
+
+// Vision-based OCR using Lovable AI
+async function performOCR(base64Image: string, mimeType: string, apiKey: string): Promise<string> {
+  console.log('[ATS OCR] Starting Gemini Vision OCR extraction...');
+  
+  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'google/gemini-2.5-flash',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: OCR_EXTRACTION_PROMPT
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:${mimeType};base64,${base64Image}`
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 4000,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[ATS OCR] Gemini Vision error:', response.status, errorText);
+    throw new Error(`OCR extraction failed: ${response.status}`);
+  }
+
+  const data = await response.json();
+  const extractedText = data.choices?.[0]?.message?.content?.trim();
+  
+  if (!extractedText) {
+    throw new Error('OCR returned empty result');
+  }
+
+  console.log('[ATS OCR] Extracted', extractedText.length, 'characters via Vision AI');
+  return extractedText;
+}
+
+// Detect if text extraction likely failed (scanned PDF)
+function isTextExtractionLikelyFailed(text: string | null | undefined): boolean {
+  if (!text) return true;
+  
+  const trimmed = text.trim();
+  
+  // Empty or nearly empty
+  if (trimmed.length < 100) return true;
+  
+  // Check for gibberish (high ratio of special characters)
+  const alphanumeric = trimmed.replace(/[^a-zA-Z0-9\s]/g, '').length;
+  const ratio = alphanumeric / trimmed.length;
+  if (ratio < 0.5) return true;
+  
+  // Check for common resume keywords - if none present, likely failed
+  const resumeKeywords = ['experience', 'education', 'skills', 'project', 'work', 'university', 'degree', 'developer', 'engineer'];
+  const lowerText = trimmed.toLowerCase();
+  const foundKeywords = resumeKeywords.filter(kw => lowerText.includes(kw));
+  if (foundKeywords.length < 2) return true;
+  
+  return false;
+}
+
 serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
@@ -105,10 +202,10 @@ serve(async (req) => {
     const user = await verifyAuth(req);
     console.log(`[ATS Score] Authenticated user: ${user.id}`);
 
-    const { resumeText, resumeId, userId, jobRole } = await req.json();
+    const { resumeText, resumeId, userId, jobRole, fileBase64, mimeType } = await req.json();
 
-    if (!resumeText || !resumeId || !userId) {
-      throw new Error('Missing required fields: resumeText, resumeId, userId');
+    if (!resumeId || !userId) {
+      throw new Error('Missing required fields: resumeId, userId');
     }
 
     if (user.id !== userId) {
@@ -122,7 +219,39 @@ serve(async (req) => {
 
     const targetRole = jobRole || 'Software Engineer';
     console.log(`[ATS Score] Analyzing resume for role: ${targetRole}`);
-    console.log(`[ATS Score] Resume text length: ${resumeText.length}`);
+    
+    let finalResumeText = resumeText;
+    let ocrUsed = false;
+
+    // Check if we need OCR
+    if (isTextExtractionLikelyFailed(resumeText)) {
+      console.log('[ATS Score] Text extraction appears failed, attempting OCR...');
+      
+      if (fileBase64 && mimeType) {
+        try {
+          finalResumeText = await performOCR(fileBase64, mimeType, LOVABLE_API_KEY);
+          ocrUsed = true;
+          console.log('[ATS Score] OCR successful, extracted text length:', finalResumeText.length);
+        } catch (ocrError) {
+          console.error('[ATS Score] OCR failed:', ocrError);
+          // If we have some text, use it even if it's not great
+          if (resumeText && resumeText.trim().length > 0) {
+            finalResumeText = resumeText;
+            console.log('[ATS Score] Using original text as OCR fallback failed');
+          } else {
+            throw new Error('Could not extract text from resume. Please try uploading a PDF with selectable text.');
+          }
+        }
+      } else if (!resumeText || resumeText.trim().length < 50) {
+        throw new Error('Could not extract text from resume. Please provide the resume file for OCR processing.');
+      }
+    }
+
+    if (!finalResumeText || finalResumeText.trim().length < 50) {
+      throw new Error('Could not extract meaningful text from resume for ATS analysis.');
+    }
+
+    console.log(`[ATS Score] Resume text length: ${finalResumeText.length}, OCR used: ${ocrUsed}`);
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -139,7 +268,7 @@ serve(async (req) => {
           },
           {
             role: 'user',
-            content: `TARGET JOB ROLE: ${targetRole}\n\nRESUME TEXT:\n<<<\n${resumeText}\n>>>\n\nProvide comprehensive ATS analysis.`
+            content: `TARGET JOB ROLE: ${targetRole}\n\nRESUME TEXT:\n<<<\n${finalResumeText}\n>>>\n\nProvide comprehensive ATS analysis.`
           }
         ],
       }),
@@ -242,7 +371,8 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         atsScore: result.data,
-        recommendedKeywords: parsedData.recommended_keywords || []
+        recommendedKeywords: parsedData.recommended_keywords || [],
+        ocrUsed
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
