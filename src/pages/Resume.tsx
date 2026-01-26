@@ -176,7 +176,44 @@ const Resume = () => {
     }
   };
 
-  const extractTextFromPDF = async (file: File): Promise<string> => {
+  // Check if extracted text is likely valid resume content
+  const isValidResumeText = (text: string | null | undefined): boolean => {
+    if (!text) return false;
+    const trimmed = text.trim();
+    if (trimmed.length < 100) return false;
+    
+    // Check for gibberish (high ratio of special characters)
+    const alphanumeric = trimmed.replace(/[^a-zA-Z0-9\s]/g, '').length;
+    const ratio = alphanumeric / trimmed.length;
+    if (ratio < 0.5) return false;
+    
+    // Check for common resume keywords
+    const resumeKeywords = ['experience', 'education', 'skills', 'project', 'work', 'university', 'degree', 'developer', 'engineer'];
+    const lowerText = trimmed.toLowerCase();
+    const foundKeywords = resumeKeywords.filter(kw => lowerText.includes(kw));
+    if (foundKeywords.length < 2) return false;
+    
+    return true;
+  };
+
+  // Convert file to base64 for OCR
+  const fileToBase64 = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const result = reader.result as string;
+        // Remove the data URL prefix to get just the base64
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  const extractTextFromPDF = async (file: File): Promise<{ text: string; usedOCR: boolean; fileBase64?: string; mimeType?: string }> => {
+    let extractedText = '';
+    
     try {
       const pdfjsLib = await import('pdfjs-dist');
       
@@ -196,15 +233,29 @@ const Resume = () => {
         fullText += pageText + '\n';
       }
       
-      const trimmedText = fullText.trim();
-      if (!trimmedText) {
-        throw new Error('No text content extracted from PDF');
-      }
-      return trimmedText;
+      extractedText = fullText.trim();
     } catch (error) {
-      console.error('PDF extraction error:', error);
-      throw new Error('Could not extract text from PDF. Please ensure the PDF contains selectable text.');
+      console.warn('PDF text extraction failed, will try OCR:', error);
     }
+    
+    // Check if extracted text is valid
+    if (isValidResumeText(extractedText)) {
+      console.log('[Resume] Standard PDF extraction successful, text length:', extractedText.length);
+      return { text: extractedText, usedOCR: false };
+    }
+    
+    // Text extraction failed or returned gibberish - prepare for OCR fallback
+    console.log('[Resume] Text extraction insufficient, preparing for OCR fallback');
+    const fileBase64 = await fileToBase64(file);
+    const mimeType = file.type || 'application/pdf';
+    
+    // Return with OCR flag - the backend will handle OCR
+    return { 
+      text: extractedText || '', 
+      usedOCR: true, 
+      fileBase64, 
+      mimeType 
+    };
   };
 
   const handleFileUpload = async (file: File) => {
@@ -285,14 +336,17 @@ const Resume = () => {
 
     setIsParsing(true);
     try {
-      let resumeText = '';
+      let extractionResult: { text: string; usedOCR: boolean; fileBase64?: string; mimeType?: string } = { 
+        text: '', 
+        usedOCR: false 
+      };
       
       if (file) {
         // Use the provided file directly
         if (file.type === 'application/pdf') {
-          resumeText = await extractTextFromPDF(file);
+          extractionResult = await extractTextFromPDF(file);
         } else {
-          resumeText = await file.text();
+          extractionResult = { text: await file.text(), usedOCR: false };
         }
       } else if (resume?.file_url) {
         // Fetch the file from storage URL and extract text
@@ -300,25 +354,32 @@ const Resume = () => {
           const response = await fetch(resume.file_url);
           const blob = await response.blob();
           const fetchedFile = new File([blob], resume.file_name, { type: 'application/pdf' });
-          resumeText = await extractTextFromPDF(fetchedFile);
+          extractionResult = await extractTextFromPDF(fetchedFile);
         } catch (fetchError) {
           console.error('Error fetching resume file:', fetchError);
           throw new Error('Could not fetch resume file for parsing');
         }
       }
       
-      if (!resumeText || resumeText.trim() === '') {
-        throw new Error('Could not extract text from resume. Please ensure the PDF contains selectable text.');
+      // Show appropriate toast based on extraction mode
+      if (extractionResult.usedOCR) {
+        toast({
+          title: "Scanning resume with OCR...",
+          description: "Using AI vision to read your resume. This may take a moment.",
+        });
       }
 
-      // Cache the resume text for ATS analysis
-      setResumeTextCache(resumeText);
+      // Cache the resume text for ATS analysis (will be updated by backend if OCR is used)
+      setResumeTextCache(extractionResult.text);
 
       const { data, error } = await supabase.functions.invoke('parse-resume', {
         body: {
-          resumeText,
+          resumeText: extractionResult.text,
           resumeId,
           userId: user.id,
+          fileBase64: extractionResult.fileBase64,
+          mimeType: extractionResult.mimeType,
+          useOCR: extractionResult.usedOCR,
         },
       });
 
@@ -337,9 +398,16 @@ const Resume = () => {
         setHighlights(parsed);
       }
 
+      // Update cache with extracted text from backend if OCR was used
+      if (data?.extractedTextLength) {
+        console.log('[Resume] Backend extracted text length:', data.extractedTextLength);
+      }
+
       toast({
         title: "Resume parsed!",
-        description: "Your resume has been analyzed successfully.",
+        description: data?.ocrUsed 
+          ? "Your resume was scanned with OCR and analyzed successfully." 
+          : "Your resume has been analyzed successfully.",
       });
 
       // Refresh resume data
@@ -363,27 +431,49 @@ const Resume = () => {
 
     setIsAnalyzingATS(true);
     try {
-      let resumeText = resumeTextCache;
+      let extractionResult: { text: string; usedOCR: boolean; fileBase64?: string; mimeType?: string } = { 
+        text: resumeTextCache, 
+        usedOCR: false 
+      };
       
-      // If no cached text, fetch and extract
-      if (!resumeText && resume?.file_url) {
+      // If no cached text or cached text is invalid, fetch and extract
+      if (!isValidResumeText(resumeTextCache) && resume?.file_url) {
+        toast({
+          title: "Scanning resume for ATS analysis...",
+          description: "Preparing your resume for analysis. This may take a moment.",
+        });
+        
         const response = await fetch(resume.file_url);
         const blob = await response.blob();
         const fetchedFile = new File([blob], resume.file_name, { type: 'application/pdf' });
-        resumeText = await extractTextFromPDF(fetchedFile);
-        setResumeTextCache(resumeText);
+        extractionResult = await extractTextFromPDF(fetchedFile);
+        
+        if (isValidResumeText(extractionResult.text)) {
+          setResumeTextCache(extractionResult.text);
+        }
       }
 
-      if (!resumeText) {
-        throw new Error('Could not extract text from resume');
+      // Always pass file data so backend can OCR if needed
+      let fileBase64 = extractionResult.fileBase64;
+      let mimeType = extractionResult.mimeType;
+      
+      if (!fileBase64 && resume?.file_url) {
+        // Get file data for OCR fallback
+        const response = await fetch(resume.file_url);
+        const blob = await response.blob();
+        const file = new File([blob], resume.file_name, { type: 'application/pdf' });
+        fileBase64 = await fileToBase64(file);
+        mimeType = file.type || 'application/pdf';
       }
 
       const { data, error } = await supabase.functions.invoke('ats-score', {
         body: {
-          resumeText,
+          resumeText: extractionResult.text,
           resumeId: resume.id,
           userId: user.id,
           jobRole,
+          fileBase64,
+          mimeType,
         },
       });
 
@@ -393,7 +483,7 @@ const Resume = () => {
         setAtsScore(data.atsScore as ATSScore);
         toast({
           title: "ATS Analysis Complete!",
-          description: `Your resume scored ${data.atsScore.overall_score}/100 for ${jobRole}`,
+          description: `Your resume scored ${data.atsScore.overall_score}/100 for ${jobRole}${data.ocrUsed ? ' (scanned with OCR)' : ''}`,
         });
       }
     } catch (error: any) {

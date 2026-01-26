@@ -13,6 +13,13 @@ interface UseVapiOptions {
   onMessage?: (message: any) => void;
 }
 
+interface TranscriptEntry {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  isFinal: boolean;
+}
+
 export const useVapi = (options: UseVapiOptions) => {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -22,6 +29,12 @@ export const useVapi = (options: UseVapiOptions) => {
   const [transcript, setTranscript] = useState<string[]>([]);
   const vapiRef = useRef<Vapi | null>(null);
   const callIdRef = useRef<string | null>(null);
+  
+  // Enhanced transcript accumulation with deduplication
+  const transcriptEntriesRef = useRef<TranscriptEntry[]>([]);
+  const lastUserTranscriptRef = useRef<string>('');
+  const lastAssistantTranscriptRef = useRef<string>('');
+  const pendingUserTranscriptRef = useRef<string>('');
 
   useEffect(() => {
     if (!options.publicKey) {
@@ -36,6 +49,12 @@ export const useVapi = (options: UseVapiOptions) => {
       console.log('[VAPI] Call started');
       setIsConnected(true);
       setIsLoading(false);
+      
+      // Reset transcript tracking on new call
+      transcriptEntriesRef.current = [];
+      lastUserTranscriptRef.current = '';
+      lastAssistantTranscriptRef.current = '';
+      pendingUserTranscriptRef.current = '';
       
       // Try multiple ways to get the call ID
       setTimeout(() => {
@@ -53,6 +72,7 @@ export const useVapi = (options: UseVapiOptions) => {
 
     vapi.on('call-end', () => {
       console.log('[VAPI] Call ended');
+      console.log('[VAPI] Final transcript entries:', transcriptEntriesRef.current.length);
       setIsConnected(false);
       setIsSpeaking(false);
       options.onCallEnd?.();
@@ -72,16 +92,70 @@ export const useVapi = (options: UseVapiOptions) => {
       console.log('[VAPI] Message received:', message.type, message);
       options.onMessage?.(message);
       
-      // Capture final transcripts for both user and assistant
-      if (message.type === 'transcript' && message.transcriptType === 'final' && message.transcript) {
-        const role = message.role === 'assistant' ? 'Interviewer' : 'Candidate';
-        setTranscript(prev => [...prev, `${role}: ${message.transcript}`]);
-        console.log('[VAPI] Final transcript captured:', `${role}: ${message.transcript}`);
+      // Handle transcript messages with improved logic
+      if (message.type === 'transcript' && message.transcript) {
+        const transcriptText = message.transcript.trim();
+        const isFinal = message.transcriptType === 'final';
+        const isUser = message.role === 'user';
+        const isAssistant = message.role === 'assistant';
+        
+        if (isFinal && transcriptText.length > 0) {
+          // Check for duplicates - avoid adding same content twice
+          if (isUser && transcriptText !== lastUserTranscriptRef.current) {
+            lastUserTranscriptRef.current = transcriptText;
+            
+            const entry: TranscriptEntry = {
+              role: 'user',
+              content: transcriptText,
+              timestamp: Date.now(),
+              isFinal: true
+            };
+            transcriptEntriesRef.current.push(entry);
+            
+            const line = `Candidate: ${transcriptText}`;
+            setTranscript(prev => [...prev, line]);
+            console.log('[VAPI] User transcript captured:', line);
+          } else if (isAssistant && transcriptText !== lastAssistantTranscriptRef.current) {
+            lastAssistantTranscriptRef.current = transcriptText;
+            
+            const entry: TranscriptEntry = {
+              role: 'assistant',
+              content: transcriptText,
+              timestamp: Date.now(),
+              isFinal: true
+            };
+            transcriptEntriesRef.current.push(entry);
+            
+            const line = `Interviewer: ${transcriptText}`;
+            setTranscript(prev => [...prev, line]);
+            console.log('[VAPI] Assistant transcript captured:', line);
+          }
+        } else if (!isFinal && isUser) {
+          // Track partial user transcript for debugging
+          pendingUserTranscriptRef.current = transcriptText;
+        }
       }
       
       // Also capture conversation-update messages which contain full conversation
       if (message.type === 'conversation-update' && message.conversation) {
         console.log('[VAPI] Conversation update received with', message.conversation.length, 'messages');
+        
+        // Use this as a backup/verification of transcript
+        const conversationLines: string[] = [];
+        message.conversation.forEach((msg: any) => {
+          if (msg.content && typeof msg.content === 'string') {
+            const role = msg.role === 'assistant' ? 'Interviewer' : 'Candidate';
+            conversationLines.push(`${role}: ${msg.content}`);
+          }
+        });
+        
+        // If our tracked transcript is significantly shorter, log a warning
+        if (conversationLines.length > transcriptEntriesRef.current.length + 2) {
+          console.warn('[VAPI] Conversation-update has more messages than tracked transcript!', {
+            conversationLength: conversationLines.length,
+            trackedLength: transcriptEntriesRef.current.length
+          });
+        }
       }
     });
 
@@ -151,9 +225,21 @@ export const useVapi = (options: UseVapiOptions) => {
   }, []);
 
   const getTranscript = useCallback(() => {
-    const fullTranscript = transcript.join('\n');
-    console.log('[VAPI] getTranscript called, lines:', transcript.length);
-    return fullTranscript;
+    // Build transcript from accumulated entries for better ordering
+    const entriesTranscript = transcriptEntriesRef.current
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .map(entry => {
+        const role = entry.role === 'assistant' ? 'Interviewer' : 'Candidate';
+        return `${role}: ${entry.content}`;
+      })
+      .join('\n');
+    
+    // Fallback to state transcript if entries are empty
+    const stateTranscript = transcript.join('\n');
+    const finalTranscript = entriesTranscript || stateTranscript;
+    
+    console.log('[VAPI] getTranscript called, entries:', transcriptEntriesRef.current.length, 'state lines:', transcript.length);
+    return finalTranscript;
   }, [transcript]);
 
   // Send a system message to inject into the conversation

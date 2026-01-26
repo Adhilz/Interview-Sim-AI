@@ -167,13 +167,17 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('Evaluating interview - Mode 3 (STRICT Evaluation)');
+    console.log('[Evaluate] Evaluating interview - Mode 3 (STRICT Evaluation)');
+    console.log('[Evaluate] Transcript provided:', transcript ? 'yes' : 'no', 'Length:', transcript?.length || 0);
 
     let interviewTranscript = transcript;
     let profile = candidateProfile;
+    let transcriptSource = 'provided';
 
-    // Fetch transcript from VAPI if not provided
-    if (!interviewTranscript) {
+    // Fetch transcript from VAPI if not provided or too short
+    if (!interviewTranscript || interviewTranscript.trim().length < 50) {
+      console.log('[Evaluate] Transcript missing or too short, fetching from VAPI...');
+      
       const { data: session } = await supabase
         .from('interview_sessions')
         .select('vapi_session_id')
@@ -183,18 +187,60 @@ serve(async (req) => {
         .single();
 
       if (session?.vapi_session_id) {
+        console.log('[Evaluate] Found VAPI session ID:', session.vapi_session_id);
         const VAPI_API_KEY = Deno.env.get('VAPI_API_KEY');
         if (VAPI_API_KEY) {
-          const vapiResponse = await fetch(`https://api.vapi.ai/call/${session.vapi_session_id}`, {
-            headers: { 'Authorization': `Bearer ${VAPI_API_KEY}` },
-          });
-          if (vapiResponse.ok) {
-            const callData = await vapiResponse.json();
-            interviewTranscript = callData.transcript || callData.messages?.map((m: any) => 
-              `${m.role}: ${m.content}`
-            ).join('\n');
+          try {
+            const vapiResponse = await fetch(`https://api.vapi.ai/call/${session.vapi_session_id}`, {
+              headers: { 'Authorization': `Bearer ${VAPI_API_KEY}` },
+            });
+            
+            if (vapiResponse.ok) {
+              const callData = await vapiResponse.json();
+              console.log('[Evaluate] VAPI call data received, messages:', callData.messages?.length || 0);
+              
+              // Build transcript from messages with proper role labels
+              if (callData.messages && Array.isArray(callData.messages)) {
+                const transcriptLines: string[] = [];
+                
+                for (const msg of callData.messages) {
+                  if (msg.content && typeof msg.content === 'string' && msg.content.trim().length > 0) {
+                    // Map roles correctly
+                    let role = 'Unknown';
+                    if (msg.role === 'assistant' || msg.role === 'bot') {
+                      role = 'Interviewer';
+                    } else if (msg.role === 'user') {
+                      role = 'Candidate';
+                    } else if (msg.role === 'system') {
+                      continue; // Skip system messages
+                    }
+                    
+                    transcriptLines.push(`${role}: ${msg.content.trim()}`);
+                  }
+                }
+                
+                if (transcriptLines.length > 0) {
+                  interviewTranscript = transcriptLines.join('\n');
+                  transcriptSource = 'vapi_messages';
+                  console.log('[Evaluate] Built transcript from VAPI messages:', transcriptLines.length, 'lines');
+                }
+              }
+              
+              // Fallback to transcript field if messages parsing failed
+              if (!interviewTranscript && callData.transcript) {
+                interviewTranscript = callData.transcript;
+                transcriptSource = 'vapi_transcript';
+                console.log('[Evaluate] Using VAPI transcript field, length:', interviewTranscript.length);
+              }
+            } else {
+              console.error('[Evaluate] VAPI API error:', vapiResponse.status);
+            }
+          } catch (vapiError) {
+            console.error('[Evaluate] Error fetching VAPI transcript:', vapiError);
           }
         }
+      } else {
+        console.warn('[Evaluate] No VAPI session found for interview');
       }
     }
 
@@ -225,6 +271,26 @@ serve(async (req) => {
       }
     }
 
+    // Analyze transcript quality
+    const hasUserResponses = interviewTranscript && 
+      (interviewTranscript.includes('Candidate:') || interviewTranscript.includes('user:'));
+    const transcriptWordCount = interviewTranscript ? interviewTranscript.split(/\s+/).length : 0;
+    
+    console.log('[Evaluate] Transcript analysis:', {
+      source: transcriptSource,
+      hasUserResponses,
+      wordCount: transcriptWordCount,
+      length: interviewTranscript?.length || 0
+    });
+
+    // Build evaluation prompt with quality checks
+    let evaluationNote = '';
+    if (!hasUserResponses) {
+      evaluationNote = '\n\nNOTE: The transcript appears to contain NO candidate responses. This may indicate a silent session or audio issues. Assign failing scores accordingly.';
+    } else if (transcriptWordCount < 100) {
+      evaluationNote = '\n\nNOTE: The transcript is very short. The candidate may not have provided substantial responses. Consider this when scoring.';
+    }
+
     const userPrompt = `CANDIDATE PROFILE:
 <<<
 ${profile ? JSON.stringify(profile, null, 2) : 'No profile available'}
@@ -234,6 +300,11 @@ INTERVIEW TRANSCRIPT:
 <<<
 ${interviewTranscript || 'No transcript available. Assign minimum scores across all categories.'}
 >>>
+
+TRANSCRIPT SOURCE: ${transcriptSource}
+CANDIDATE RESPONSES DETECTED: ${hasUserResponses ? 'Yes' : 'No'}
+WORD COUNT: ${transcriptWordCount}
+${evaluationNote}
 
 Evaluate this interview STRICTLY. No soft feedback. Identify every weakness.`;
 
