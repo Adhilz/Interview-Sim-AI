@@ -277,20 +277,23 @@ serve(async (req) => {
 
         const streamData = await createResponse.json();
         
-        // D-ID returns session_id in cookies - extract from Set-Cookie header
-        // The cookies contain the actual session identifier needed for subsequent calls
-        const setCookieHeader = createResponse.headers.get("set-cookie");
+        console.log("[D-ID Stream] Raw create response keys:", Object.keys(streamData));
+        console.log("[D-ID Stream] Raw session_id from response:", streamData.session_id);
+        
+        // D-ID returns session_id directly in the JSON response
+        // The session_id is required for all subsequent API calls
         let sessionIdValue = streamData.session_id;
+        
+        // Also capture any cookies for session continuity
+        const setCookieHeader = createResponse.headers.get("set-cookie");
         let cookieString = "";
         
-        // Extract session cookies from Set-Cookie header for use in subsequent requests
         if (setCookieHeader) {
           // Parse all cookies from the header
-          const cookies = setCookieHeader.split(/,(?=[^;]+=[^;]+)/).map(c => c.trim());
+          const cookieParts = setCookieHeader.split(/,(?=[^;]+=[^;]+)/).map(c => c.trim());
           const sessionCookies: string[] = [];
           
-          for (const cookie of cookies) {
-            // Extract just the cookie name=value part (before any attributes like Path, Secure, etc.)
+          for (const cookie of cookieParts) {
             const cookiePart = cookie.split(";")[0].trim();
             if (cookiePart) {
               sessionCookies.push(cookiePart);
@@ -298,22 +301,16 @@ serve(async (req) => {
           }
           
           cookieString = sessionCookies.join("; ");
-          console.log("[D-ID Stream] Captured session cookies:", cookieString.substring(0, 100) + "...");
+          console.log("[D-ID Stream] Captured cookies:", cookieString ? cookieString.substring(0, 80) + "..." : "none");
         }
         
-        // If session_id from JSON is invalid, use stream ID as fallback
-        if (!sessionIdValue || typeof sessionIdValue !== 'string' || sessionIdValue.includes('AWSALB')) {
-          sessionIdValue = streamData.id;
-          console.log("[D-ID Stream] Using stream ID as session:", sessionIdValue);
+        // Validate session_id - it should be a valid string from D-ID
+        if (!sessionIdValue || typeof sessionIdValue !== 'string') {
+          console.error("[D-ID Stream] No valid session_id in response, full response:", JSON.stringify(streamData));
+          throw new Error("D-ID API did not return a valid session_id");
         }
         
-        console.log("[D-ID Stream] Create response:", JSON.stringify({
-          id: streamData.id,
-          session_id: sessionIdValue,
-          has_offer: !!streamData.offer,
-          has_ice_servers: !!streamData.ice_servers,
-          has_cookies: !!cookieString,
-        }));
+        console.log("[D-ID Stream] Create success - streamId:", streamData.id, "sessionId:", sessionIdValue);
 
         return new Response(
           JSON.stringify({
@@ -321,7 +318,7 @@ serve(async (req) => {
             sdpOffer: streamData.offer,
             iceServers: streamData.ice_servers,
             sessionId: sessionIdValue,
-            cookies: cookieString, // Pass cookies to client for subsequent requests
+            cookies: cookieString,
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
