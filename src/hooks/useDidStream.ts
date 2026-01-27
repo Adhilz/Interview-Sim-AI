@@ -48,9 +48,9 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
 
       const { streamId, sdpOffer, iceServers, sessionId, cookies } = data;
       
-      // Validate sessionId is a proper value (not an AWS cookie)
-      if (!sessionId || typeof sessionId !== 'string' || sessionId.includes('AWSALB')) {
-        console.error("[D-ID] Invalid sessionId received:", sessionId);
+      // Validate sessionId is present
+      if (!sessionId || typeof sessionId !== 'string') {
+        console.error("[D-ID] Invalid sessionId received:", sessionId, "Full response:", data);
         throw new Error("Invalid session ID from D-ID API");
       }
       
@@ -58,7 +58,7 @@ export const useDidStream = (options: UseDidStreamOptions = {}) => {
       sessionIdRef.current = sessionId;
       cookiesRef.current = cookies || null;
 
-      console.log("[D-ID] Stream created:", streamId, "Session:", sessionId, "HasCookies:", !!cookies);
+      console.log("[D-ID] Stream created - streamId:", streamId, "sessionId:", sessionId);
 
       // Set up WebRTC peer connection
       const pc = new RTCPeerConnection({
