@@ -65,6 +65,7 @@ const Interview = () => {
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [interviewTranscript, setInterviewTranscript] = useState<string>('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [interviewPreferences, setInterviewPreferences] = useState<string>('');
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -268,7 +269,8 @@ const Interview = () => {
           resumeHighlights: resumeHighlights ? {
             ...resumeHighlights,
             name: resumeHighlights.name || user.user_metadata?.full_name || ''
-          } : null
+          } : null,
+          interviewerPreferences: interviewPreferences || undefined
         },
       });
 
@@ -372,13 +374,16 @@ const Interview = () => {
   };
 
   // Handler when PreInterviewSetup completes all device tests
-  const handlePreInterviewReady = (mediaStream: MediaStream) => {
+  const handlePreInterviewReady = (mediaStream: MediaStream, preferences?: string) => {
     streamRef.current = mediaStream;
     if (videoRef.current) {
       videoRef.current.srcObject = mediaStream;
     }
     setIsMicOn(true);
     setIsVideoOn(true);
+    if (preferences) {
+      setInterviewPreferences(preferences);
+    }
     setStatus("ready");
     toast({
       title: "All systems ready",

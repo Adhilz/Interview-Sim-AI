@@ -18,13 +18,7 @@ import {
 } from "lucide-react";
 import { ATSScoreGauge } from "./ATSScoreGauge";
 import { ATSSectionScore } from "./ATSSectionScore";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { JobRoleCombobox } from "./JobRoleCombobox";
 
 interface ImprovementSuggestion {
   category: string;
@@ -71,26 +65,6 @@ interface ATSAnalysisPanelProps {
   hasResume: boolean;
 }
 
-const JOB_ROLES = [
-  "Software Engineer",
-  "Frontend Developer",
-  "Backend Developer",
-  "Full Stack Developer",
-  "Data Scientist",
-  "Data Analyst",
-  "Machine Learning Engineer",
-  "DevOps Engineer",
-  "Cloud Engineer",
-  "Product Manager",
-  "UX Designer",
-  "UI Developer",
-  "Mobile Developer",
-  "QA Engineer",
-  "Security Engineer",
-  "Business Analyst",
-  "Technical Writer",
-];
-
 export const ATSAnalysisPanel = ({ 
   atsScore, 
   isAnalyzing, 
@@ -130,25 +104,14 @@ export const ATSAnalysisPanel = ({
               ATS Resume Score & Optimization
             </CardTitle>
             <CardDescription>
-              Get your resume analyzed by our AI-powered ATS system
+              Analyze your resume for any job role - select from common roles or type your own
             </CardDescription>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
-            <Select value={selectedRole} onValueChange={setSelectedRole}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Select job role" />
-              </SelectTrigger>
-              <SelectContent>
-                {JOB_ROLES.map((role) => (
-                  <SelectItem key={role} value={role}>
-                    {role}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <JobRoleCombobox value={selectedRole} onChange={setSelectedRole} />
             <Button 
               onClick={handleAnalyze} 
-              disabled={isAnalyzing}
+              disabled={isAnalyzing || !selectedRole.trim()}
               className="gradient-hero text-primary-foreground"
             >
               {isAnalyzing ? (
