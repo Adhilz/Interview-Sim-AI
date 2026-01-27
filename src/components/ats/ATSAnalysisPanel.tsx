@@ -107,12 +107,12 @@ export const ATSAnalysisPanel = ({
               Analyze your resume for any job role - select from common roles or type your own
             </CardDescription>
           </div>
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col gap-3">
             <JobRoleCombobox value={selectedRole} onChange={setSelectedRole} />
             <Button 
               onClick={handleAnalyze} 
               disabled={isAnalyzing || !selectedRole.trim()}
-              className="gradient-hero text-primary-foreground"
+              className="gradient-hero text-primary-foreground w-full sm:w-auto"
             >
               {isAnalyzing ? (
                 <>
@@ -138,12 +138,14 @@ export const ATSAnalysisPanel = ({
       {atsScore && (
         <CardContent>
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="grid w-full grid-cols-4 mb-6">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="review">Recruiter Review</TabsTrigger>
-              <TabsTrigger value="improvements">Improvements</TabsTrigger>
-              <TabsTrigger value="keywords">Keywords</TabsTrigger>
-            </TabsList>
+            <div className="overflow-x-auto -mx-2 px-2 pb-2">
+              <TabsList className="inline-flex w-auto min-w-full sm:grid sm:grid-cols-4 mb-6">
+                <TabsTrigger value="overview" className="text-xs sm:text-sm whitespace-nowrap">Overview</TabsTrigger>
+                <TabsTrigger value="review" className="text-xs sm:text-sm whitespace-nowrap">Review</TabsTrigger>
+                <TabsTrigger value="improvements" className="text-xs sm:text-sm whitespace-nowrap">Improve</TabsTrigger>
+                <TabsTrigger value="keywords" className="text-xs sm:text-sm whitespace-nowrap">Keywords</TabsTrigger>
+              </TabsList>
+            </div>
 
             <TabsContent value="overview" className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

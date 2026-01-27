@@ -81,7 +81,7 @@ export function JobRoleCombobox({ value, onChange }: JobRoleComboboxProps) {
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-[280px] justify-between"
+          className="w-full sm:w-[280px] justify-between"
         >
           <span className="truncate">
             {value || "Select or type job role..."}
@@ -89,7 +89,7 @@ export function JobRoleCombobox({ value, onChange }: JobRoleComboboxProps) {
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[280px] p-0" align="start">
+      <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[280px] p-0" align="start">
         <Command>
           <CommandInput placeholder="Search or type custom role..." />
           <CommandList>
