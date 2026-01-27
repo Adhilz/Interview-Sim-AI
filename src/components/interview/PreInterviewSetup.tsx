@@ -1,15 +1,23 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Video, VideoOff, Loader2, Play } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Video, VideoOff, Loader2, Play, Briefcase, Info } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface PreInterviewSetupProps {
-  onReady: (stream: MediaStream) => void;
+  onReady: (stream: MediaStream, preferences?: string) => void;
 }
 
 export const PreInterviewSetup = ({ onReady }: PreInterviewSetupProps) => {
   const [cameraStatus, setCameraStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [interviewerPreferences, setInterviewerPreferences] = useState<string>('');
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -46,7 +54,7 @@ export const PreInterviewSetup = ({ onReady }: PreInterviewSetupProps) => {
 
   const handleStart = () => {
     if (stream) {
-      onReady(stream);
+      onReady(stream, interviewerPreferences.trim() || undefined);
     }
   };
 
@@ -82,6 +90,42 @@ export const PreInterviewSetup = ({ onReady }: PreInterviewSetupProps) => {
                 </div>
               </div>
             )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Interview Preferences */}
+      <Card className="border-border/50">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-accent" />
+            Interview Context
+            <Tooltip>
+              <TooltipTrigger>
+                <Info className="w-4 h-4 text-muted-foreground" />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p>Provide context about the role you're interviewing for. The AI interviewer will tailor questions based on this information.</p>
+              </TooltipContent>
+            </Tooltip>
+          </CardTitle>
+          <CardDescription>
+            Optional: Add a job description or specific focus areas for this interview
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="space-y-2">
+            <Textarea
+              id="preferences"
+              placeholder="e.g., 'I'm interviewing for a Senior React Developer position at a fintech startup. Focus on state management, performance optimization, and system design...' or paste a job description here"
+              value={interviewerPreferences}
+              onChange={(e) => setInterviewerPreferences(e.target.value)}
+              className="min-h-[100px] resize-none"
+              maxLength={1500}
+            />
+            <p className="text-xs text-muted-foreground text-right">
+              {interviewerPreferences.length}/1500 characters
+            </p>
           </div>
         </CardContent>
       </Card>

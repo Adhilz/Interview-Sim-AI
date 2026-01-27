@@ -252,10 +252,29 @@ const formatResumeForLLM = (candidateProfile: any): string => {
 };
 
 // Professional system prompt with STRICT resume grounding and randomization
-const buildInterviewSystemPrompt = (candidateProfile: any, candidateName: string) => {
+const buildInterviewSystemPrompt = (candidateProfile: any, candidateName: string, interviewerPreferences?: string) => {
   const formattedResume = formatResumeForLLM(candidateProfile);
   const questionPools = buildQuestionPools(candidateProfile);
   const interviewStrategy = generateInterviewStrategy(questionPools);
+  
+  // Build preferences context if provided
+  let preferencesSection = '';
+  if (interviewerPreferences && interviewerPreferences.trim().length > 0) {
+    preferencesSection = `
+=== USER-PROVIDED INTERVIEW CONTEXT ===
+The candidate has provided the following context about the role or interview preferences:
+"""
+${interviewerPreferences.trim()}
+"""
+
+IMPORTANT: Use this context to:
+- Tailor your questions toward the specific role/company mentioned
+- Focus on relevant technologies or skills mentioned in the job description
+- Adjust your questioning style if specific focus areas are mentioned
+- Ask questions that would help assess fit for this specific role
+However, you must STILL only ask about skills/projects that exist in the candidate's resume.
+`;
+  }
   
   return `You are a senior engineering hiring manager conducting a real-time voice interview with ${candidateName || 'the candidate'}.
 
@@ -265,7 +284,7 @@ const buildInterviewSystemPrompt = (candidateProfile: any, candidateName: string
 - You ask tough but fair questions
 - You sound HUMAN - natural pauses, occasional "hmm", "I see", "right"
 - NEVER mention you are an AI or system
-
+${preferencesSection}
 === ABSOLUTE RULE: RESUME-ONLY QUESTIONING ===
 You MUST ONLY ask questions about what is in the candidate's resume.
 FORBIDDEN: Asking about skills, projects, or technologies NOT in their resume.
@@ -447,7 +466,7 @@ serve(async (req) => {
     const user = await verifyAuth(req);
     console.log(`[VAPI] Authenticated user: ${user.id}`);
 
-    const { action, interviewId, sessionId, resumeHighlights } = await req.json();
+    const { action, interviewId, sessionId, resumeHighlights, interviewerPreferences } = await req.json();
 
     const VAPI_API_KEY = Deno.env.get('VAPI_API_KEY');
     const VAPI_ASSISTANT_ID = Deno.env.get('VAPI_ASSISTANT_ID');
@@ -553,8 +572,8 @@ serve(async (req) => {
       }
 
       const systemPrompt = candidateProfile 
-        ? buildInterviewSystemPrompt(candidateProfile, candidateName)
-        : buildInterviewSystemPrompt({ message: "No resume data available. Conduct a general technical interview." }, '');
+        ? buildInterviewSystemPrompt(candidateProfile, candidateName, interviewerPreferences)
+        : buildInterviewSystemPrompt({ message: "No resume data available. Conduct a general technical interview." }, '', interviewerPreferences);
 
       let firstMessage = buildFallbackFirstMessage(candidateName, candidateProfile);
       

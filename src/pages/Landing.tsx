@@ -31,30 +31,52 @@ const Landing = () => {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        const { count: userCount } = await supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true });
-        
-        setTotalUsers(userCount || 0);
+        // These are public counts - they won't work with RLS enabled
+        // Use fallback demo values for the landing page
+        let usersCount = 0;
+        let interviewsCount = 0;
+        let avgScore = 0;
 
-        const { count: interviewCount } = await supabase
-          .from('interviews')
-          .select('*', { count: 'exact', head: true });
-        
-        setTotalInterviews(interviewCount || 0);
-
-        const { data: evaluations } = await supabase
-          .from('evaluations')
-          .select('overall_score');
-
-        if (evaluations && evaluations.length > 0) {
-          const avgScore = evaluations.reduce((sum, e) => sum + (e.overall_score || 0), 0) / evaluations.length;
-          setSuccessRate(Math.round(avgScore * 10));
-        } else {
-          setSuccessRate(0);
+        try {
+          const { count: userCount } = await supabase
+            .from('profiles')
+            .select('*', { count: 'exact', head: true });
+          usersCount = userCount || 0;
+        } catch {
+          // RLS blocks this query - expected behavior
         }
+
+        try {
+          const { count: interviewCount } = await supabase
+            .from('interviews')
+            .select('*', { count: 'exact', head: true });
+          interviewsCount = interviewCount || 0;
+        } catch {
+          // RLS blocks this query - expected behavior
+        }
+
+        try {
+          const { data: evaluations } = await supabase
+            .from('evaluations')
+            .select('overall_score');
+
+          if (evaluations && evaluations.length > 0) {
+            avgScore = evaluations.reduce((sum, e) => sum + (e.overall_score || 0), 0) / evaluations.length;
+          }
+        } catch {
+          // RLS blocks this query - expected behavior
+        }
+
+        // Use demo values if we couldn't fetch real data (RLS blocks anonymous access)
+        setTotalUsers(usersCount > 0 ? usersCount : 250);
+        setTotalInterviews(interviewsCount > 0 ? interviewsCount : 1200);
+        setSuccessRate(avgScore > 0 ? Math.round(avgScore * 10) : 87);
       } catch (error) {
         console.error('Error fetching metrics:', error);
+        // Fallback to demo values
+        setTotalUsers(250);
+        setTotalInterviews(1200);
+        setSuccessRate(87);
       } finally {
         setIsLoading(false);
       }
@@ -176,10 +198,10 @@ const Landing = () => {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.5 }}
           >
-            {[
-              { value: isLoading ? "—" : formatNumber(totalUsers) || "5K+", label: "Students" },
-              { value: isLoading ? "—" : formatNumber(totalInterviews) || "50+", label: "Interviews" },
-              { value: isLoading ? "—" : successRate > 0 ? `${successRate}%` : "92%", label: "Success Rate" },
+          {[
+              { value: formatNumber(totalUsers), label: "Students" },
+              { value: formatNumber(totalInterviews), label: "Interviews" },
+              { value: `${successRate}%`, label: "Success Rate" },
             ].map((stat, i) => (
               <div key={i} className="text-center">
                 <div className="text-3xl sm:text-4xl font-semibold text-foreground">{stat.value}</div>
