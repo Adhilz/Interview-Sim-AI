@@ -26,6 +26,7 @@ import {
 import type { User } from "@supabase/supabase-js";
 import InterviewRoom from "@/components/interview/InterviewRoom";
 import PreInterviewSetup from "@/components/interview/PreInterviewSetup";
+import EvaluationDisplay from "@/components/interview/EvaluationDisplay";
 
 type InterviewDuration = "3" | "5";
 type InterviewStatus = "setup" | "ready" | "connecting" | "in_progress" | "evaluating" | "completed";
@@ -43,6 +44,22 @@ interface SessionData {
   sessionId: string;
   firstMessage: string;
   assistantOverrides: any;
+}
+
+interface EvaluationData {
+  id: string;
+  overall_score: number | null;
+  communication_score: number | null;
+  technical_score: number | null;
+  confidence_score: number | null;
+  feedback: string | null;
+}
+
+interface ImprovementSuggestion {
+  id: string;
+  suggestion: string;
+  category: string | null;
+  priority: number | null;
 }
 
 const Interview = () => {
@@ -66,6 +83,9 @@ const Interview = () => {
   const [interviewTranscript, setInterviewTranscript] = useState<string>('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [interviewPreferences, setInterviewPreferences] = useState<string>('');
+  const [evaluationData, setEvaluationData] = useState<EvaluationData | null>(null);
+  const [improvementSuggestions, setImprovementSuggestions] = useState<ImprovementSuggestion[]>([]);
+  const [isEvaluating, setIsEvaluating] = useState(false);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -308,6 +328,12 @@ const Interview = () => {
     if (!interviewId) return;
 
     setStatus("evaluating");
+    setIsEvaluating(true);
+
+    // Use provided transcript or fallback to accumulated state
+    const finalTranscript = transcript || interviewTranscript;
+    console.log('[Interview] endInterview called with transcript length:', finalTranscript?.length || 0);
+    console.log('[Interview] Transcript preview:', finalTranscript?.substring(0, 500));
 
     try {
       // Update interview status
@@ -324,7 +350,7 @@ const Interview = () => {
         body: {
           interviewId,
           userId: user?.id,
-          transcript: transcript || interviewTranscript || undefined,
+          transcript: finalTranscript || undefined,
           candidateProfile: resumeHighlights ? {
             skills: resumeHighlights.skills || [],
             tools: resumeHighlights.tools || [],
@@ -338,9 +364,29 @@ const Interview = () => {
 
       if (evalError) {
         console.error('Evaluation error:', evalError);
+        toast({
+          title: "Evaluation issue",
+          description: "There was an issue generating your evaluation.",
+          variant: "destructive",
+        });
+      } else if (evalData?.evaluation) {
+        // Set evaluation data for immediate display
+        setEvaluationData(evalData.evaluation);
+        
+        // Fetch improvement suggestions
+        const { data: improvementsData } = await supabase
+          .from('improvement_suggestions')
+          .select('*')
+          .eq('evaluation_id', evalData.evaluation.id)
+          .order('priority', { ascending: true });
+        
+        if (improvementsData) {
+          setImprovementSuggestions(improvementsData);
+        }
       }
 
       setStatus("completed");
+      setIsEvaluating(false);
 
       toast({
         title: "Interview completed!",
@@ -348,6 +394,7 @@ const Interview = () => {
       });
     } catch (error) {
       console.error("Error ending interview:", error);
+      setIsEvaluating(false);
       setStatus("completed");
     }
   };
@@ -624,47 +671,23 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
             </div>
           )}
 
-          {/* Ready/Completed/Evaluating states - Original two-column layout */}
-          {(status === "ready" || status === "completed" || status === "evaluating") && (
+          {/* Ready state */}
+          {status === "ready" && (
           <div className="grid lg:grid-cols-2 gap-4 sm:gap-8 max-w-5xl">
             {/* Video preview panel */}
             <Card className="border-border/50 overflow-hidden">
               <CardContent className="p-0">
                 <div className="aspect-video bg-secondary/50 relative">
-                  {status === "ready" ? (
-                    <>
-                      <video
-                        ref={videoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        className={`w-full h-full object-cover ${!isVideoOn ? "hidden" : ""}`}
-                      />
-                      {!isVideoOn && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <VideoOff className="w-16 h-16 text-muted-foreground/50" />
-                        </div>
-                      )}
-                    </>
-                  ) : (
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className={`w-full h-full object-cover ${!isVideoOn ? "hidden" : ""}`}
+                  />
+                  {!isVideoOn && (
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center">
-                        {status === "evaluating" ? (
-                          <>
-                            <Loader2 className="w-20 h-20 text-accent mx-auto mb-4 animate-spin" />
-                            <p className="text-foreground text-xl font-medium mb-2">Analyzing...</p>
-                            <p className="text-muted-foreground">Please wait while we evaluate your performance</p>
-                          </>
-                        ) : (
-                          <>
-                            <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-4">
-                              <Clock className="w-10 h-10 text-success" />
-                            </div>
-                            <p className="text-foreground text-xl font-medium mb-2">Interview Complete</p>
-                            <p className="text-muted-foreground">Check your history for results</p>
-                          </>
-                        )}
-                      </div>
+                      <VideoOff className="w-16 h-16 text-muted-foreground/50" />
                     </div>
                   )}
                 </div>
@@ -673,90 +696,90 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
 
             {/* Controls panel */}
             <div className="space-y-6">
-
-              {status === "ready" && (
-                <>
-                  {vapiError && (
-                    <Card className="border-warning/50 bg-warning/5">
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          <AlertCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-sm font-medium text-foreground">VAPI Configuration Issue</p>
-                            <p className="text-xs text-muted-foreground mt-1">{vapiError}</p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  <Card className="border-border/50">
-                    <CardHeader>
-                      <CardTitle className="text-lg">Media Controls</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center justify-center gap-4">
-                        <Button
-                          variant={isMicOn ? "default" : "destructive"}
-                          size="lg"
-                          className="w-16 h-16 rounded-full"
-                          onClick={toggleMic}
-                        >
-                          {isMicOn ? <Mic className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-                        </Button>
-                        <Button
-                          variant={isVideoOn ? "default" : "destructive"}
-                          size="lg"
-                          className="w-16 h-16 rounded-full"
-                          onClick={toggleVideo}
-                        >
-                          {isVideoOn ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
-                        </Button>
+              {vapiError && (
+                <Card className="border-warning/50 bg-warning/5">
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-foreground">VAPI Configuration Issue</p>
+                        <p className="text-xs text-muted-foreground mt-1">{vapiError}</p>
                       </div>
-                    </CardContent>
-                  </Card>
-
-                  <Button variant="hero" size="xl" className="w-full" onClick={startInterview}>
-                    <Play className="w-5 h-5 mr-2" />
-                    Start Interview
-                  </Button>
-                </>
-              )}
-
-              {status === "completed" && (
-                <Card className="border-border/50">
-                  <CardContent className="p-6 text-center">
-                    <p className="text-muted-foreground mb-4">
-                      Your interview has been recorded. View your evaluation in the history section.
-                    </p>
-                    <div className="flex gap-4">
-                      <Button variant="outline" className="flex-1" onClick={() => navigate("/history")}>
-                        View History
-                      </Button>
-                      <Button variant="hero" className="flex-1" onClick={() => {
-                        setStatus("setup");
-                        setInterviewId(null);
-                        setVapiError(null);
-                      }}>
-                        New Interview
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>
               )}
 
-              {status === "evaluating" && (
-                <Card className="border-border/50">
-                  <CardContent className="p-6 text-center">
-                    <Loader2 className="w-8 h-8 mx-auto mb-4 animate-spin text-accent" />
-                    <p className="text-muted-foreground">
-                      Analyzing your interview performance...
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
+              <Card className="border-border/50">
+                <CardHeader>
+                  <CardTitle className="text-lg">Media Controls</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-center gap-4">
+                    <Button
+                      variant={isMicOn ? "default" : "destructive"}
+                      size="lg"
+                      className="w-16 h-16 rounded-full"
+                      onClick={toggleMic}
+                    >
+                      {isMicOn ? <Mic className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+                    </Button>
+                    <Button
+                      variant={isVideoOn ? "default" : "destructive"}
+                      size="lg"
+                      className="w-16 h-16 rounded-full"
+                      onClick={toggleVideo}
+                    >
+                      {isVideoOn ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Button variant="hero" size="xl" className="w-full" onClick={startInterview}>
+                <Play className="w-5 h-5 mr-2" />
+                Start Interview
+              </Button>
             </div>
           </div>
+          )}
+
+          {/* Evaluating state */}
+          {status === "evaluating" && (
+            <div className="max-w-3xl mx-auto">
+              <EvaluationDisplay
+                evaluation={null}
+                improvements={[]}
+                isLoading={true}
+                onStartNewInterview={() => {
+                  setStatus("setup");
+                  setInterviewId(null);
+                  setVapiError(null);
+                  setEvaluationData(null);
+                  setImprovementSuggestions([]);
+                }}
+                onViewHistory={() => navigate("/history")}
+              />
+            </div>
+          )}
+
+          {/* Completed state - Show evaluation inline */}
+          {status === "completed" && (
+            <div className="max-w-4xl mx-auto">
+              <EvaluationDisplay
+                evaluation={evaluationData}
+                improvements={improvementSuggestions}
+                isLoading={isEvaluating}
+                onStartNewInterview={() => {
+                  setStatus("setup");
+                  setInterviewId(null);
+                  setVapiError(null);
+                  setEvaluationData(null);
+                  setImprovementSuggestions([]);
+                }}
+                onViewHistory={() => navigate("/history")}
+              />
+            </div>
           )}
         </div>
       </main>

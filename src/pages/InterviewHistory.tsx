@@ -3,6 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { 
   Brain, 
   FileText, 
@@ -16,7 +18,12 @@ import {
   ChevronRight,
   Calendar,
   Menu,
-  X
+  X,
+  MessageSquare,
+  Zap,
+  AlertTriangle,
+  CheckCircle,
+  XCircle
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
@@ -382,57 +389,70 @@ const InterviewHistory = () => {
                         </div>
                       </div>
 
-                      {/* Scores breakdown */}
+                      {/* Scores breakdown - Enhanced */}
                       {selectedEval && (
                         <div className="space-y-4">
                           <h4 className="font-medium text-foreground">Score Breakdown</h4>
-                          <div className="space-y-3">
+                          <div className="space-y-4">
                             {[
-                              { label: "Communication", score: selectedEval.communication_score },
-                              { label: "Technical", score: selectedEval.technical_score },
-                              { label: "Confidence", score: selectedEval.confidence_score },
+                              { label: "Communication", score: selectedEval.communication_score, icon: <MessageSquare className="w-4 h-4" />, desc: "Clarity and articulation" },
+                              { label: "Technical", score: selectedEval.technical_score, icon: <Brain className="w-4 h-4" />, desc: "Accuracy and depth" },
+                              { label: "Confidence", score: selectedEval.confidence_score, icon: <Zap className="w-4 h-4" />, desc: "Presence and composure" },
                             ].map((item) => (
-                              <div key={item.label}>
-                                <div className="flex justify-between text-sm mb-1">
-                                  <span className="text-muted-foreground">{item.label}</span>
-                                  <span className="text-foreground font-medium">{item.score || 0}%</span>
+                              <div key={item.label} className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded bg-secondary flex items-center justify-center text-accent">
+                                      {item.icon}
+                                    </div>
+                                    <div>
+                                      <span className="text-sm font-medium text-foreground">{item.label}</span>
+                                      <p className="text-xs text-muted-foreground">{item.desc}</p>
+                                    </div>
+                                  </div>
+                                  <span className={`text-lg font-bold ${
+                                    (item.score || 0) >= 70 ? 'text-success' : 
+                                    (item.score || 0) >= 50 ? 'text-warning' : 'text-destructive'
+                                  }`}>
+                                    {item.score || 0}%
+                                  </span>
                                 </div>
-                                <div className="h-2 rounded-full bg-secondary">
-                                  <div 
-                                    className="h-full rounded-full gradient-accent transition-all duration-500"
-                                    style={{ width: `${item.score || 0}%` }}
-                                  />
-                                </div>
+                                <Progress value={item.score || 0} className="h-2" />
                               </div>
                             ))}
                           </div>
                         </div>
                       )}
 
-                      {/* Feedback */}
+                      {/* Feedback - Enhanced with structured parsing */}
                       {selectedEval?.feedback && (
-                        <div>
-                          <h4 className="font-medium text-foreground mb-2">Feedback</h4>
-                          <p className="text-muted-foreground bg-secondary/50 p-4 rounded-xl">
-                            {selectedEval.feedback}
-                          </p>
+                        <div className="space-y-4">
+                          <h4 className="font-medium text-foreground">Detailed Feedback</h4>
+                          <FeedbackDisplay feedback={selectedEval.feedback} overallScore={selectedEval.overall_score || 0} />
                         </div>
                       )}
 
-                      {/* Improvements */}
+                      {/* Improvements - Enhanced */}
                       {selectedImprovements && selectedImprovements.length > 0 && (
                         <div>
                           <h4 className="font-medium text-foreground mb-3">Areas for Improvement</h4>
-                          <div className="space-y-2">
-                            {selectedImprovements.sort((a, b) => (a.priority || 3) - (b.priority || 3)).map((imp) => (
-                              <div key={imp.id} className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50">
-                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                  imp.priority === 1 ? 'bg-destructive/10 text-destructive' :
-                                  imp.priority === 2 ? 'bg-warning/10 text-warning' : 'bg-muted text-muted-foreground'
-                                }`}>
-                                  {imp.category || 'general'}
-                                </span>
-                                <p className="text-sm text-foreground flex-1">{imp.suggestion}</p>
+                          <div className="space-y-3">
+                            {selectedImprovements.sort((a, b) => (a.priority || 3) - (b.priority || 3)).map((imp, idx) => (
+                              <div key={imp.id} className="flex items-start gap-3 p-4 rounded-xl bg-secondary/30 border border-border/50">
+                                <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-accent font-semibold text-sm">{idx + 1}</span>
+                                </div>
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Badge variant="outline" className="text-xs capitalize">
+                                      {imp.category || 'general'}
+                                    </Badge>
+                                    {imp.priority && imp.priority <= 2 && (
+                                      <Badge variant="destructive" className="text-xs">High Priority</Badge>
+                                    )}
+                                  </div>
+                                  <p className="text-foreground text-sm">{imp.suggestion}</p>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -441,6 +461,7 @@ const InterviewHistory = () => {
 
                       {!selectedEval && selectedInterviewData?.status === "completed" && (
                         <div className="text-center py-8">
+                          <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-warning" />
                           <p className="text-muted-foreground">
                             Evaluation not available for this interview
                           </p>
@@ -468,5 +489,100 @@ const InterviewHistory = () => {
     </div>
   );
 };
+
+// Helper component to display structured feedback
+const FeedbackDisplay = ({ feedback, overallScore }: { feedback: string; overallScore: number }) => {
+  const parts = parseFeedback(feedback);
+  
+  return (
+    <div className="space-y-4">
+      {/* Verdict */}
+      {parts.verdict && (
+        <div className={`p-4 rounded-xl ${overallScore >= 60 ? 'bg-success/5 border border-success/20' : 'bg-destructive/5 border border-destructive/20'}`}>
+          <h5 className="font-semibold text-foreground mb-2 flex items-center gap-2 text-sm">
+            {overallScore >= 60 ? <CheckCircle className="w-4 h-4 text-success" /> : <XCircle className="w-4 h-4 text-destructive" />}
+            Verdict
+          </h5>
+          <p className="text-sm text-muted-foreground">{parts.verdict}</p>
+        </div>
+      )}
+
+      {/* Weaknesses */}
+      {parts.weaknesses.length > 0 && (
+        <div className="p-4 rounded-xl bg-warning/5 border border-warning/20">
+          <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-sm">
+            <AlertTriangle className="w-4 h-4 text-warning" />
+            Critical Weaknesses
+          </h5>
+          <ul className="space-y-2">
+            {parts.weaknesses.map((weakness, idx) => (
+              <li key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
+                <span className="text-warning mt-0.5">•</span>
+                <span>{weakness}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Detailed Scores */}
+      {parts.detailedScores.length > 0 && (
+        <div className="p-4 rounded-xl bg-secondary/50">
+          <h5 className="font-semibold text-foreground mb-2 text-sm">Score Details</h5>
+          <div className="space-y-1">
+            {parts.detailedScores.map((score, idx) => (
+              <p key={idx} className="text-xs text-muted-foreground">{score}</p>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Fallback for unparsed feedback */}
+      {!parts.verdict && !parts.weaknesses.length && (
+        <div className="p-4 rounded-xl bg-secondary/50 whitespace-pre-wrap">
+          <p className="text-sm text-muted-foreground">{feedback}</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Parse feedback string into structured parts
+function parseFeedback(feedback: string): {
+  verdict: string;
+  weaknesses: string[];
+  detailedScores: string[];
+} {
+  const result = {
+    verdict: '',
+    weaknesses: [] as string[],
+    detailedScores: [] as string[]
+  };
+
+  const lines = feedback.split('\n');
+  let currentSection = '';
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    
+    if (trimmed.startsWith('**Verdict:**')) {
+      result.verdict = trimmed.replace('**Verdict:**', '').trim();
+      currentSection = 'verdict';
+    } else if (trimmed.includes('Critical Weaknesses:') || trimmed.includes('**Critical Weaknesses:**')) {
+      currentSection = 'weaknesses';
+    } else if (trimmed.includes('Detailed Scores:') || trimmed.includes('**Detailed Scores:**')) {
+      currentSection = 'scores';
+    } else if (trimmed.startsWith('-')) {
+      const content = trimmed.substring(1).trim();
+      if (currentSection === 'weaknesses') {
+        result.weaknesses.push(content);
+      } else if (currentSection === 'scores') {
+        result.detailedScores.push(content);
+      }
+    }
+  }
+
+  return result;
+}
 
 export default InterviewHistory;
