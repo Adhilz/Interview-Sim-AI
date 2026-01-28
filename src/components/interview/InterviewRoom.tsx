@@ -123,19 +123,44 @@ const InterviewRoom = ({
         const role = message.role === 'assistant' ? 'Interviewer' : 'Candidate';
         const line = `${role}: ${message.transcript}`;
         
+        console.log('[InterviewRoom] Transcript line captured:', line.substring(0, 100));
+        
         // Accumulate full transcript
-        setFullTranscript(prev => [...prev, line]);
+        setFullTranscript(prev => {
+          const newTranscript = [...prev, line];
+          // Notify parent with full transcript for evaluation
+          const transcriptText = newTranscript.join('\n');
+          onTranscriptUpdate?.(transcriptText);
+          return newTranscript;
+        });
         
         // Update current display
         setCurrentTranscript(message.transcript);
         
-        // Notify parent with full transcript
-        const allTranscripts = [...fullTranscript, line];
-        onTranscriptUpdate?.(allTranscripts.join('\n'));
-        
         // Stream to D-ID avatar if assistant is speaking
         if (message.role === 'assistant' && didAvatarRef.current?.isConnected) {
           didAvatarRef.current.streamText(message.transcript);
+        }
+      }
+      
+      // Also capture conversation-update for more reliable transcript
+      if (message.type === 'conversation-update' && message.conversation && Array.isArray(message.conversation)) {
+        console.log('[InterviewRoom] Conversation update with', message.conversation.length, 'messages');
+        
+        const lines: string[] = [];
+        for (const msg of message.conversation) {
+          const content = msg.content || msg.text;
+          if (content && typeof content === 'string' && content.trim().length > 0 && msg.role !== 'system') {
+            const role = msg.role === 'assistant' ? 'Interviewer' : 'Candidate';
+            lines.push(`${role}: ${content.trim()}`);
+          }
+        }
+        
+        // Use conversation-update if it has more content
+        if (lines.length > fullTranscript.length) {
+          console.log('[InterviewRoom] Using conversation-update transcript:', lines.length, 'lines');
+          setFullTranscript(lines);
+          onTranscriptUpdate?.(lines.join('\n'));
         }
       }
     },
@@ -287,10 +312,16 @@ const InterviewRoom = ({
     // Get transcript from useVapi hook first, then fallback to local accumulation
     const vapiTranscript = getTranscript();
     const localTranscript = fullTranscript.join('\n');
-    const finalTranscript = vapiTranscript || localTranscript;
     
-    console.log('[InterviewRoom] Ending call with transcript lines:', 
-      vapiTranscript ? vapiTranscript.split('\n').length : fullTranscript.length);
+    // Use the longer/more complete transcript
+    const finalTranscript = (vapiTranscript && vapiTranscript.length > localTranscript.length) 
+      ? vapiTranscript 
+      : localTranscript;
+    
+    console.log('[InterviewRoom] Ending call');
+    console.log('[InterviewRoom] VAPI transcript lines:', vapiTranscript?.split('\n').length || 0);
+    console.log('[InterviewRoom] Local transcript lines:', fullTranscript.length);
+    console.log('[InterviewRoom] Final transcript preview:', finalTranscript?.substring(0, 300));
     
     stopVapi();
     stopMedia();
