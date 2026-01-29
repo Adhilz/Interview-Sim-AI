@@ -174,7 +174,9 @@ export type Database = {
           id: string
           interview_id: string
           overall_score: number | null
+          response_analysis: Json | null
           technical_score: number | null
+          transcript: string | null
           user_id: string
         }
         Insert: {
@@ -185,7 +187,9 @@ export type Database = {
           id?: string
           interview_id: string
           overall_score?: number | null
+          response_analysis?: Json | null
           technical_score?: number | null
+          transcript?: string | null
           user_id: string
         }
         Update: {
@@ -196,7 +200,9 @@ export type Database = {
           id?: string
           interview_id?: string
           overall_score?: number | null
+          response_analysis?: Json | null
           technical_score?: number | null
+          transcript?: string | null
           user_id?: string
         }
         Relationships: [

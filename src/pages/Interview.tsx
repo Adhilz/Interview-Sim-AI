@@ -46,6 +46,15 @@ interface SessionData {
   assistantOverrides: any;
 }
 
+interface ResponseAnalysis {
+  question: string;
+  response: string;
+  quality: "good" | "average" | "poor";
+  strengths: string[];
+  improvements: string[];
+  score: number;
+}
+
 interface EvaluationData {
   id: string;
   overall_score: number | null;
@@ -53,6 +62,8 @@ interface EvaluationData {
   technical_score: number | null;
   confidence_score: number | null;
   feedback: string | null;
+  transcript?: string | null;
+  response_analysis?: ResponseAnalysis[] | null;
 }
 
 interface ImprovementSuggestion {

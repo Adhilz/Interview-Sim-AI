@@ -113,8 +113,25 @@ OUTPUT FORMAT (JSON only):
       "category": "communication|technical|confidence|preparation|structure",
       "priority": 1
     }
+  ],
+  "response_analysis": [
+    {
+      "question": "<interviewer question>",
+      "response": "<candidate response>",
+      "quality": "good|average|poor",
+      "strengths": ["<what was good about this response>"],
+      "improvements": ["<how this response could be better>"],
+      "score": <1-10>
+    }
   ]
 }
+
+For response_analysis, analyze EACH candidate response in the transcript:
+- Extract the interviewer question and candidate response pair
+- Rate each response individually
+- Identify specific strengths (what was good)
+- Identify specific improvements (what could be better)
+- Quality: "good" (7-10), "average" (4-6), "poor" (1-3)
 
 FORBIDDEN PHRASES (never use):
 - "Good attempt"
@@ -366,7 +383,8 @@ CANDIDATE RESPONSE COUNT: ${candidateLineCount}
 TOTAL WORD COUNT: ${transcriptWordCount}
 ${evaluationNote}
 
-Evaluate this interview STRICTLY. No soft feedback. Identify every weakness.`;
+Evaluate this interview STRICTLY. No soft feedback. Identify every weakness.
+IMPORTANT: Include response_analysis array with analysis of EACH candidate response in the transcript.`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -425,7 +443,8 @@ Evaluate this interview STRICTLY. No soft feedback. Identify every weakness.`;
         improvements: [
           { suggestion: "Complete the full interview session", category: "preparation", priority: 1 },
           { suggestion: "Ensure stable connection for full transcript capture", category: "technical", priority: 2 }
-        ]
+        ],
+        response_analysis: []
       };
     }
 
@@ -453,7 +472,10 @@ Evaluate this interview STRICTLY. No soft feedback. Identify every weakness.`;
       `- Relevance: ${relevanceScore}/10 - ${evaluation.relevance?.feedback || 'N/A'}`,
     ].join('\n');
 
-    // Save evaluation
+    // Prepare response analysis
+    const responseAnalysis = evaluation.response_analysis || [];
+
+    // Save evaluation with transcript and response analysis
     const { data: evalData, error: evalError } = await supabase
       .from('evaluations')
       .insert({
@@ -464,6 +486,8 @@ Evaluate this interview STRICTLY. No soft feedback. Identify every weakness.`;
         technical_score: technicalScore * 10,
         confidence_score: confidenceScore * 10,
         feedback: feedback,
+        transcript: interviewTranscript || null,
+        response_analysis: responseAnalysis.length > 0 ? responseAnalysis : null,
       })
       .select()
       .single();
@@ -486,7 +510,7 @@ Evaluate this interview STRICTLY. No soft feedback. Identify every weakness.`;
       await supabase.from('improvement_suggestions').insert(suggestions);
     }
 
-    console.log('Strict evaluation saved successfully');
+    console.log('Strict evaluation saved successfully with transcript and response analysis');
 
     return new Response(
       JSON.stringify({ success: true, evaluation: evalData }),
