@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Award,
   MessageSquare,
@@ -14,10 +15,22 @@ import {
   TrendingUp,
   Loader2,
   RefreshCw,
-  Mic,
   CheckCircle,
-  XCircle
+  XCircle,
+  FileText,
+  ThumbsUp,
+  ThumbsDown,
+  Minus
 } from "lucide-react";
+
+interface ResponseAnalysis {
+  question: string;
+  response: string;
+  quality: "good" | "average" | "poor";
+  strengths: string[];
+  improvements: string[];
+  score: number;
+}
 
 interface EvaluationData {
   id: string;
@@ -26,6 +39,8 @@ interface EvaluationData {
   technical_score: number | null;
   confidence_score: number | null;
   feedback: string | null;
+  transcript?: string | null;
+  response_analysis?: ResponseAnalysis[] | null;
 }
 
 interface ImprovementSuggestion {
@@ -117,6 +132,31 @@ const EvaluationDisplay = ({
     general: <Lightbulb className="w-4 h-4" />
   };
 
+  const getQualityIcon = (quality: string) => {
+    switch (quality) {
+      case 'good':
+        return <ThumbsUp className="w-4 h-4 text-success" />;
+      case 'poor':
+        return <ThumbsDown className="w-4 h-4 text-destructive" />;
+      default:
+        return <Minus className="w-4 h-4 text-warning" />;
+    }
+  };
+
+  const getQualityBadge = (quality: string) => {
+    switch (quality) {
+      case 'good':
+        return <Badge className="bg-success/10 text-success border-success/20">Good</Badge>;
+      case 'poor':
+        return <Badge className="bg-destructive/10 text-destructive border-destructive/20">Needs Work</Badge>;
+      default:
+        return <Badge className="bg-warning/10 text-warning border-warning/20">Average</Badge>;
+    }
+  };
+
+  const responseAnalysis = evaluation.response_analysis || [];
+  const hasTranscript = evaluation.transcript && evaluation.transcript.length > 0;
+
   return (
     <div className="space-y-6">
       {/* Overall Score Card */}
@@ -149,7 +189,7 @@ const EvaluationDisplay = ({
       {/* Detailed Scores & Feedback */}
       <Tabs defaultValue="scores" className="w-full">
         <div className="overflow-x-auto -mx-2 px-2 pb-2">
-          <TabsList className="inline-flex w-auto min-w-full sm:grid sm:grid-cols-3">
+          <TabsList className="inline-flex w-auto min-w-full sm:grid sm:grid-cols-4">
             <TabsTrigger value="scores" className="text-xs sm:text-sm whitespace-nowrap">
               <Award className="w-4 h-4 mr-2" />
               Scores
@@ -157,6 +197,10 @@ const EvaluationDisplay = ({
             <TabsTrigger value="feedback" className="text-xs sm:text-sm whitespace-nowrap">
               <MessageSquare className="w-4 h-4 mr-2" />
               Feedback
+            </TabsTrigger>
+            <TabsTrigger value="transcript" className="text-xs sm:text-sm whitespace-nowrap">
+              <FileText className="w-4 h-4 mr-2" />
+              Transcript
             </TabsTrigger>
             <TabsTrigger value="improvements" className="text-xs sm:text-sm whitespace-nowrap">
               <Lightbulb className="w-4 h-4 mr-2" />
@@ -248,6 +292,109 @@ const EvaluationDisplay = ({
               {!feedbackParts.verdict && !feedbackParts.weaknesses.length && evaluation.feedback && (
                 <div className="p-4 rounded-xl bg-secondary/50 whitespace-pre-wrap">
                   <p className="text-muted-foreground">{evaluation.feedback}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Transcript Tab */}
+        <TabsContent value="transcript" className="mt-4">
+          <Card className="border-border/50">
+            <CardHeader>
+              <CardTitle className="text-lg">Interview Transcript</CardTitle>
+              <CardDescription>Full conversation with per-response analysis</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {responseAnalysis.length > 0 ? (
+                <ScrollArea className="h-[500px] pr-4">
+                  <div className="space-y-6">
+                    {responseAnalysis.map((item, idx) => (
+                      <div key={idx} className="border border-border/50 rounded-xl overflow-hidden">
+                        {/* Question */}
+                        <div className="bg-secondary/30 p-4 border-b border-border/50">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0">
+                              <Brain className="w-4 h-4 text-accent" />
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-xs text-muted-foreground mb-1">Interviewer</p>
+                              <p className="text-foreground">{item.question}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Response */}
+                        <div className="p-4 border-b border-border/50">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <MessageSquare className="w-4 h-4 text-primary" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="text-xs text-muted-foreground">Your Response</p>
+                                <div className="flex items-center gap-2">
+                                  {getQualityBadge(item.quality)}
+                                  <span className="text-sm font-medium">{item.score}/10</span>
+                                </div>
+                              </div>
+                              <p className="text-foreground">{item.response}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Analysis */}
+                        <div className="p-4 bg-muted/30 grid sm:grid-cols-2 gap-4">
+                          {/* Strengths */}
+                          {item.strengths && item.strengths.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <ThumbsUp className="w-4 h-4 text-success" />
+                                <span className="text-sm font-medium text-success">What was good</span>
+                              </div>
+                              <ul className="space-y-1">
+                                {item.strengths.map((s, i) => (
+                                  <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                                    <CheckCircle className="w-3 h-3 mt-1 text-success flex-shrink-0" />
+                                    <span>{s}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Improvements */}
+                          {item.improvements && item.improvements.length > 0 && (
+                            <div>
+                              <div className="flex items-center gap-2 mb-2">
+                                <Lightbulb className="w-4 h-4 text-warning" />
+                                <span className="text-sm font-medium text-warning">How to improve</span>
+                              </div>
+                              <ul className="space-y-1">
+                                {item.improvements.map((i, idx) => (
+                                  <li key={idx} className="text-sm text-muted-foreground flex items-start gap-2">
+                                    <AlertTriangle className="w-3 h-3 mt-1 text-warning flex-shrink-0" />
+                                    <span>{i}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              ) : hasTranscript ? (
+                <ScrollArea className="h-[400px]">
+                  <div className="whitespace-pre-wrap text-sm text-muted-foreground font-mono bg-secondary/30 p-4 rounded-lg">
+                    {evaluation.transcript}
+                  </div>
+                </ScrollArea>
+              ) : (
+                <div className="text-center py-8">
+                  <FileText className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
+                  <p className="text-muted-foreground">Transcript not available for this interview.</p>
                 </div>
               )}
             </CardContent>
