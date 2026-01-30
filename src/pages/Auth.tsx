@@ -50,8 +50,25 @@ const Auth = () => {
   const [resetEmailSent, setResetEmailSent] = useState(false);
 
   useEffect(() => {
+    // Check if this is a password recovery flow (from URL hash)
+    const isPasswordRecoveryFlow = () => {
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      return hashParams.get('type') === 'recovery';
+    };
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // Skip redirect for PASSWORD_RECOVERY events - let ResetPassword page handle it
+        if (event === 'PASSWORD_RECOVERY') {
+          navigate('/reset-password' + window.location.hash);
+          return;
+        }
+
+        // Don't redirect if we're in a password recovery flow
+        if (isPasswordRecoveryFlow()) {
+          return;
+        }
+
         if (session?.user) {
           setTimeout(async () => {
             const { data: roleData } = await supabase
@@ -70,21 +87,24 @@ const Auth = () => {
       }
     );
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const { data: roleData } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', session.user.id)
-          .single();
+    // Don't auto-redirect if this is a password recovery flow
+    if (!isPasswordRecoveryFlow()) {
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
+        if (session?.user) {
+          const { data: roleData } = await supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', session.user.id)
+            .single();
 
-        if (roleData?.role === 'admin') {
-          navigate("/admin");
-        } else {
-          navigate("/dashboard");
+          if (roleData?.role === 'admin') {
+            navigate("/admin");
+          } else {
+            navigate("/dashboard");
+          }
         }
-      }
-    });
+      });
+    }
 
     return () => subscription.unsubscribe();
   }, [navigate]);
