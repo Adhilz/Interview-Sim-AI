@@ -15,7 +15,8 @@ import {
   TrendingUp,
   Clock,
   Award,
-  ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Calendar,
   Menu,
   X,
@@ -23,8 +24,14 @@ import {
   Zap,
   AlertTriangle,
   CheckCircle,
-  XCircle
+  XCircle,
+  HelpCircle
 } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 interface Interview {
@@ -60,7 +67,7 @@ const InterviewHistory = () => {
   const [evaluations, setEvaluations] = useState<Record<string, Evaluation>>({});
   const [improvements, setImprovements] = useState<Record<string, Improvement[]>>({});
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedInterview, setSelectedInterview] = useState<string | null>(null);
+  const [expandedInterview, setExpandedInterview] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -156,9 +163,18 @@ const InterviewHistory = () => {
     }
   };
 
-  const selectedEval = selectedInterview ? evaluations[selectedInterview] : null;
-  const selectedInterviewData = interviews.find(i => i.id === selectedInterview);
-  const selectedImprovements = selectedInterview ? improvements[selectedInterview] : null;
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "completed": return <CheckCircle className="w-4 h-4" />;
+      case "in_progress": return <Clock className="w-4 h-4" />;
+      case "cancelled": return <XCircle className="w-4 h-4" />;
+      default: return <Clock className="w-4 h-4" />;
+    }
+  };
+
+  const toggleExpanded = (interviewId: string) => {
+    setExpandedInterview(expandedInterview === interviewId ? null : interviewId);
+  };
 
   if (isLoading) {
     return (
@@ -219,6 +235,13 @@ const InterviewHistory = () => {
           >
             <User className="w-5 h-5" />
             Profile
+          </Link>
+          <Link 
+            to="/help"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+          >
+            <HelpCircle className="w-5 h-5" />
+            Help
           </Link>
         </nav>
 
@@ -285,6 +308,14 @@ const InterviewHistory = () => {
               <User className="w-5 h-5" />
               Profile
             </Link>
+            <Link 
+              to="/help"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <HelpCircle className="w-5 h-5" />
+              Help
+            </Link>
             <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive">
               <LogOut className="w-5 h-5" />
               Logout
@@ -316,171 +347,252 @@ const InterviewHistory = () => {
               </CardContent>
             </Card>
           ) : (
-            <div className="flex flex-col lg:grid lg:grid-cols-3 gap-4 sm:gap-6">
-              {/* Interview list */}
-              <div className="lg:col-span-1 space-y-2 sm:space-y-3">
-                {interviews.map((interview) => (
-                  <Card 
-                    key={interview.id}
-                    className={`border-border/50 cursor-pointer transition-all hover:shadow-md ${
-                      selectedInterview === interview.id ? "ring-2 ring-accent" : ""
-                    }`}
-                    onClick={() => setSelectedInterview(interview.id)}
-                  >
-                    <CardContent className="p-3 sm:p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 sm:gap-3">
-                          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                            <Mic className="w-4 h-4 sm:w-5 sm:h-5 text-accent" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground text-sm sm:text-base">
-                              {interview.duration} Min Interview
-                            </p>
-                            <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-muted-foreground">
-                              <Calendar className="w-3 h-3" />
-                              {new Date(interview.created_at).toLocaleDateString()}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1 sm:gap-2">
-                          <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full text-xs font-medium ${getStatusColor(interview.status)}`}>
-                            {interview.status}
-                          </span>
-                          <ChevronRight className="w-4 h-4 text-muted-foreground hidden sm:block" />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+            <div className="space-y-4">
+              {/* Summary Stats */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
+                <Card className="border-border/50">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-2xl sm:text-3xl font-bold text-foreground">{interviews.length}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Total</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/50">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-2xl sm:text-3xl font-bold text-success">{interviews.filter(i => i.status === 'completed').length}</p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Completed</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/50">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-2xl sm:text-3xl font-bold text-foreground">
+                      {Object.values(evaluations).length > 0 
+                        ? Math.round(Object.values(evaluations).reduce((acc, e) => acc + (e.overall_score || 0), 0) / Object.values(evaluations).length)
+                        : '--'}%
+                    </p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Avg Score</p>
+                  </CardContent>
+                </Card>
+                <Card className="border-border/50">
+                  <CardContent className="p-4 text-center">
+                    <p className="text-2xl sm:text-3xl font-bold text-foreground">
+                      {interviews.reduce((acc, i) => acc + parseInt(i.duration || '0'), 0)}
+                    </p>
+                    <p className="text-xs sm:text-sm text-muted-foreground">Total Mins</p>
+                  </CardContent>
+                </Card>
               </div>
 
-              {/* Detail panel */}
-              <div className="lg:col-span-2">{selectedInterview ? (
-                  <Card className="border-border/50">
-                    <CardHeader className="p-4 sm:p-6">
-                      <CardTitle className="text-base sm:text-lg">Interview Details</CardTitle>
-                      <CardDescription className="text-xs sm:text-sm">
-                        {selectedInterviewData && new Date(selectedInterviewData.created_at).toLocaleString()}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-4 sm:p-6 pt-0 space-y-4 sm:space-y-6">
-                      {/* Interview info */}
-                      <div className="grid grid-cols-3 gap-2 sm:gap-4">
-                        <div className="p-2 sm:p-4 rounded-lg sm:rounded-xl bg-secondary/50 text-center">
-                          <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-accent mx-auto mb-1 sm:mb-2" />
-                          <p className="text-lg sm:text-2xl font-bold text-foreground">
-                            {selectedInterviewData?.duration}
-                          </p>
-                          <p className="text-xs sm:text-sm text-muted-foreground">Minutes</p>
-                        </div>
-                        <div className="p-2 sm:p-4 rounded-lg sm:rounded-xl bg-secondary/50 text-center">
-                          <Award className="w-5 h-5 sm:w-6 sm:h-6 text-accent mx-auto mb-1 sm:mb-2" />
-                          <p className="text-lg sm:text-2xl font-bold text-foreground">
-                            {selectedEval?.overall_score || "--"}%
-                          </p>
-                          <p className="text-xs sm:text-sm text-muted-foreground">Overall</p>
-                        </div>
-                        <div className="p-2 sm:p-4 rounded-lg sm:rounded-xl bg-secondary/50 text-center">
-                          <span className={`inline-block px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-medium ${getStatusColor(selectedInterviewData?.status || "")}`}>
-                            {selectedInterviewData?.status}
-                          </span>
-                          <p className="text-xs sm:text-sm text-muted-foreground mt-1 sm:mt-2">Status</p>
-                        </div>
-                      </div>
-
-                      {/* Scores breakdown - Enhanced */}
-                      {selectedEval && (
-                        <div className="space-y-4">
-                          <h4 className="font-medium text-foreground">Score Breakdown</h4>
-                          <div className="space-y-4">
-                            {[
-                              { label: "Communication", score: selectedEval.communication_score, icon: <MessageSquare className="w-4 h-4" />, desc: "Clarity and articulation" },
-                              { label: "Technical", score: selectedEval.technical_score, icon: <Brain className="w-4 h-4" />, desc: "Accuracy and depth" },
-                              { label: "Confidence", score: selectedEval.confidence_score, icon: <Zap className="w-4 h-4" />, desc: "Presence and composure" },
-                            ].map((item) => (
-                              <div key={item.label} className="space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <div className="w-6 h-6 rounded bg-secondary flex items-center justify-center text-accent">
-                                      {item.icon}
-                                    </div>
-                                    <div>
-                                      <span className="text-sm font-medium text-foreground">{item.label}</span>
-                                      <p className="text-xs text-muted-foreground">{item.desc}</p>
-                                    </div>
+              {/* Interview Cards - Accordion Style */}
+              <div className="space-y-3">
+                {interviews.map((interview, index) => {
+                  const evaluation = evaluations[interview.id];
+                  const interviewImprovements = improvements[interview.id];
+                  const isExpanded = expandedInterview === interview.id;
+                  
+                  return (
+                    <Collapsible 
+                      key={interview.id} 
+                      open={isExpanded}
+                      onOpenChange={() => toggleExpanded(interview.id)}
+                    >
+                      <Card className={`border-border/50 transition-all ${isExpanded ? 'ring-2 ring-accent shadow-lg' : 'hover:shadow-md'}`}>
+                        <CollapsibleTrigger asChild>
+                          <CardContent className="p-4 cursor-pointer">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3 sm:gap-4">
+                                {/* Interview Number Badge */}
+                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-accent/10 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-accent font-bold text-sm sm:text-base">#{interviews.length - index}</span>
+                                </div>
+                                
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="font-semibold text-foreground text-sm sm:text-base">
+                                      {interview.duration} Min Interview
+                                    </p>
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(interview.status)}`}>
+                                      {getStatusIcon(interview.status)}
+                                      <span className="hidden sm:inline">{interview.status}</span>
+                                    </span>
                                   </div>
-                                  <span className={`text-lg font-bold ${
-                                    (item.score || 0) >= 70 ? 'text-success' : 
-                                    (item.score || 0) >= 50 ? 'text-warning' : 'text-destructive'
-                                  }`}>
-                                    {item.score || 0}%
-                                  </span>
-                                </div>
-                                <Progress value={item.score || 0} className="h-2" />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Feedback - Enhanced with structured parsing */}
-                      {selectedEval?.feedback && (
-                        <div className="space-y-4">
-                          <h4 className="font-medium text-foreground">Detailed Feedback</h4>
-                          <FeedbackDisplay feedback={selectedEval.feedback} overallScore={selectedEval.overall_score || 0} />
-                        </div>
-                      )}
-
-                      {/* Improvements - Enhanced */}
-                      {selectedImprovements && selectedImprovements.length > 0 && (
-                        <div>
-                          <h4 className="font-medium text-foreground mb-3">Areas for Improvement</h4>
-                          <div className="space-y-3">
-                            {selectedImprovements.sort((a, b) => (a.priority || 3) - (b.priority || 3)).map((imp, idx) => (
-                              <div key={imp.id} className="flex items-start gap-3 p-4 rounded-xl bg-secondary/30 border border-border/50">
-                                <div className="w-8 h-8 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0">
-                                  <span className="text-accent font-semibold text-sm">{idx + 1}</span>
-                                </div>
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <Badge variant="outline" className="text-xs capitalize">
-                                      {imp.category || 'general'}
-                                    </Badge>
-                                    {imp.priority && imp.priority <= 2 && (
-                                      <Badge variant="destructive" className="text-xs">High Priority</Badge>
+                                  <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground mt-1">
+                                    <Calendar className="w-3 h-3" />
+                                    <span>{new Date(interview.created_at).toLocaleDateString('en-US', { 
+                                      month: 'short', 
+                                      day: 'numeric',
+                                      year: 'numeric'
+                                    })}</span>
+                                    {interview.started_at && (
+                                      <>
+                                        <span className="hidden sm:inline">•</span>
+                                        <Clock className="w-3 h-3 hidden sm:block" />
+                                        <span className="hidden sm:inline">
+                                          {new Date(interview.started_at).toLocaleTimeString('en-US', { 
+                                            hour: '2-digit', 
+                                            minute: '2-digit'
+                                          })}
+                                        </span>
+                                      </>
                                     )}
                                   </div>
-                                  <p className="text-foreground text-sm">{imp.suggestion}</p>
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                              
+                              <div className="flex items-center gap-2 sm:gap-4">
+                                {/* Score Preview */}
+                                {evaluation?.overall_score !== undefined && evaluation?.overall_score !== null && (
+                                  <div className="text-right hidden sm:block">
+                                    <p className={`text-xl sm:text-2xl font-bold ${
+                                      evaluation.overall_score >= 70 ? 'text-success' : 
+                                      evaluation.overall_score >= 50 ? 'text-warning' : 'text-destructive'
+                                    }`}>
+                                      {evaluation.overall_score}%
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">Score</p>
+                                  </div>
+                                )}
+                                {evaluation?.overall_score !== undefined && evaluation?.overall_score !== null && (
+                                  <div className={`sm:hidden w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
+                                    evaluation.overall_score >= 70 ? 'bg-success/10 text-success' : 
+                                    evaluation.overall_score >= 50 ? 'bg-warning/10 text-warning' : 'bg-destructive/10 text-destructive'
+                                  }`}>
+                                    {evaluation.overall_score}
+                                  </div>
+                                )}
+                                
+                                {/* Expand Icon */}
+                                <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
+                                  {isExpanded ? (
+                                    <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                                  ) : (
+                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </CollapsibleTrigger>
+                        
+                        <CollapsibleContent>
+                          <div className="border-t border-border">
+                            <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+                              {/* Quick Stats */}
+                              <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                                <div className="p-3 sm:p-4 rounded-xl bg-secondary/50 text-center">
+                                  <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-accent mx-auto mb-1" />
+                                  <p className="text-lg sm:text-2xl font-bold text-foreground">{interview.duration}</p>
+                                  <p className="text-xs text-muted-foreground">Minutes</p>
+                                </div>
+                                <div className="p-3 sm:p-4 rounded-xl bg-secondary/50 text-center">
+                                  <Award className="w-5 h-5 sm:w-6 sm:h-6 text-accent mx-auto mb-1" />
+                                  <p className="text-lg sm:text-2xl font-bold text-foreground">
+                                    {evaluation?.overall_score ?? '--'}%
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">Overall</p>
+                                </div>
+                                <div className="p-3 sm:p-4 rounded-xl bg-secondary/50 text-center">
+                                  <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(interview.status)}`}>
+                                    {getStatusIcon(interview.status)}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-1 capitalize">{interview.status}</p>
+                                </div>
+                              </div>
 
-                      {!selectedEval && selectedInterviewData?.status === "completed" && (
-                        <div className="text-center py-8">
-                          <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-warning" />
-                          <p className="text-muted-foreground">
-                            Evaluation not available for this interview
-                          </p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <Card className="border-border/50">
-                    <CardContent className="p-12 text-center">
-                      <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center mx-auto mb-4">
-                        <History className="w-8 h-8 text-muted-foreground" />
-                      </div>
-                      <p className="text-muted-foreground">
-                        Select an interview to view details
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
+                              {/* Score Breakdown */}
+                              {evaluation && (
+                                <div className="space-y-4">
+                                  <h4 className="font-semibold text-foreground text-sm sm:text-base">Score Breakdown</h4>
+                                  <div className="space-y-3">
+                                    {[
+                                      { label: "Communication", score: evaluation.communication_score, icon: <MessageSquare className="w-4 h-4" />, desc: "Clarity and articulation" },
+                                      { label: "Technical", score: evaluation.technical_score, icon: <Brain className="w-4 h-4" />, desc: "Accuracy and depth" },
+                                      { label: "Confidence", score: evaluation.confidence_score, icon: <Zap className="w-4 h-4" />, desc: "Presence and composure" },
+                                    ].map((item) => (
+                                      <div key={item.label} className="space-y-2">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center text-accent">
+                                              {item.icon}
+                                            </div>
+                                            <div>
+                                              <span className="text-sm font-medium text-foreground">{item.label}</span>
+                                              <p className="text-xs text-muted-foreground hidden sm:block">{item.desc}</p>
+                                            </div>
+                                          </div>
+                                          <span className={`text-base sm:text-lg font-bold ${
+                                            (item.score || 0) >= 70 ? 'text-success' : 
+                                            (item.score || 0) >= 50 ? 'text-warning' : 'text-destructive'
+                                          }`}>
+                                            {item.score ?? '--'}%
+                                          </span>
+                                        </div>
+                                        <Progress value={item.score || 0} className="h-2" />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Feedback */}
+                              {evaluation?.feedback && (
+                                <div className="space-y-3">
+                                  <h4 className="font-semibold text-foreground text-sm sm:text-base">Detailed Feedback</h4>
+                                  <FeedbackDisplay feedback={evaluation.feedback} overallScore={evaluation.overall_score || 0} />
+                                </div>
+                              )}
+
+                              {/* Improvements */}
+                              {interviewImprovements && interviewImprovements.length > 0 && (
+                                <div>
+                                  <h4 className="font-semibold text-foreground mb-3 text-sm sm:text-base">Areas for Improvement</h4>
+                                  <div className="space-y-2">
+                                    {interviewImprovements.sort((a, b) => (a.priority || 3) - (b.priority || 3)).map((imp, idx) => (
+                                      <div key={imp.id} className="flex items-start gap-3 p-3 sm:p-4 rounded-xl bg-secondary/30 border border-border/50">
+                                        <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0">
+                                          <span className="text-accent font-semibold text-xs sm:text-sm">{idx + 1}</span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                            <Badge variant="outline" className="text-xs capitalize">
+                                              {imp.category || 'general'}
+                                            </Badge>
+                                            {imp.priority && imp.priority <= 2 && (
+                                              <Badge variant="destructive" className="text-xs">High Priority</Badge>
+                                            )}
+                                          </div>
+                                          <p className="text-foreground text-sm">{imp.suggestion}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* No evaluation message */}
+                              {!evaluation && interview.status === "completed" && (
+                                <div className="text-center py-6">
+                                  <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-warning" />
+                                  <p className="text-muted-foreground text-sm">
+                                    Evaluation not available for this interview
+                                  </p>
+                                </div>
+                              )}
+
+                              {interview.status === "in_progress" && (
+                                <div className="text-center py-6">
+                                  <Clock className="w-10 h-10 mx-auto mb-3 text-warning animate-pulse" />
+                                  <p className="text-muted-foreground text-sm">
+                                    This interview is still in progress
+                                  </p>
+                                </div>
+                              )}
+                            </CardContent>
+                          </div>
+                        </CollapsibleContent>
+                      </Card>
+                    </Collapsible>
+                  );
+                })}
               </div>
             </div>
           )}
