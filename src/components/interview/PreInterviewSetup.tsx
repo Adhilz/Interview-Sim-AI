@@ -10,11 +10,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
+type InterviewMode = 'resume_jd' | 'technical' | 'hr';
+
 interface PreInterviewSetupProps {
   onReady: (stream: MediaStream, preferences?: string) => void;
+  interviewMode?: InterviewMode | null;
 }
 
-export const PreInterviewSetup = ({ onReady }: PreInterviewSetupProps) => {
+export const PreInterviewSetup = ({ onReady, interviewMode }: PreInterviewSetupProps) => {
   const [cameraStatus, setCameraStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [interviewerPreferences, setInterviewerPreferences] = useState<string>('');
@@ -94,41 +97,43 @@ export const PreInterviewSetup = ({ onReady }: PreInterviewSetupProps) => {
         </CardContent>
       </Card>
 
-      {/* Interview Preferences */}
-      <Card className="border-border/50">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Briefcase className="w-4 h-4 text-accent" />
-            Interview Context
-            <Tooltip>
-              <TooltipTrigger>
-                <Info className="w-4 h-4 text-muted-foreground" />
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                <p>Provide context about the role you're interviewing for. The AI interviewer will tailor questions based on this information.</p>
-              </TooltipContent>
-            </Tooltip>
-          </CardTitle>
-          <CardDescription>
-            Optional: Add a job description or specific focus areas for this interview
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="space-y-2">
-            <Textarea
-              id="preferences"
-              placeholder="e.g., 'I'm interviewing for a Senior React Developer position at a fintech startup. Focus on state management, performance optimization, and system design...' or paste a job description here"
-              value={interviewerPreferences}
-              onChange={(e) => setInterviewerPreferences(e.target.value)}
-              className="min-h-[100px] resize-none"
-              maxLength={1500}
-            />
-            <p className="text-xs text-muted-foreground text-right">
-              {interviewerPreferences.length}/1500 characters
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Interview Preferences - Only show for resume_jd mode */}
+      {interviewMode === 'resume_jd' && (
+        <Card className="border-border/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-accent" />
+              Interview Context
+              <Tooltip>
+                <TooltipTrigger>
+                  <Info className="w-4 h-4 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs">
+                  <p>Provide context about the role you're interviewing for. The AI interviewer will tailor questions based on this information.</p>
+                </TooltipContent>
+              </Tooltip>
+            </CardTitle>
+            <CardDescription>
+              Optional: Add a job description or specific focus areas for this interview
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-2">
+              <Textarea
+                id="preferences"
+                placeholder="e.g., 'I'm interviewing for a Senior React Developer position at a fintech startup. Focus on state management, performance optimization, and system design...' or paste a job description here"
+                value={interviewerPreferences}
+                onChange={(e) => setInterviewerPreferences(e.target.value)}
+                className="min-h-[100px] resize-none"
+                maxLength={1500}
+              />
+              <p className="text-xs text-muted-foreground text-right">
+                {interviewerPreferences.length}/1500 characters
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Start Button */}
       <Button

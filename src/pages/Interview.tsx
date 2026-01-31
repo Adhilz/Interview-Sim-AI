@@ -27,9 +27,10 @@ import type { User } from "@supabase/supabase-js";
 import InterviewRoom from "@/components/interview/InterviewRoom";
 import PreInterviewSetup from "@/components/interview/PreInterviewSetup";
 import EvaluationDisplay from "@/components/interview/EvaluationDisplay";
+import InterviewModeSelector, { InterviewMode } from "@/components/interview/InterviewModeSelector";
 
 type InterviewDuration = "3" | "5";
-type InterviewStatus = "setup" | "ready" | "connecting" | "in_progress" | "evaluating" | "completed";
+type InterviewStatus = "mode_select" | "setup" | "ready" | "connecting" | "in_progress" | "evaluating" | "completed";
 
 interface ResumeHighlights {
   skills: string[] | null;
@@ -80,7 +81,8 @@ const Interview = () => {
   const streamRef = useRef<MediaStream | null>(null);
   
   const [user, setUser] = useState<User | null>(null);
-  const [status, setStatus] = useState<InterviewStatus>("setup");
+  const [status, setStatus] = useState<InterviewStatus>("mode_select");
+  const [selectedMode, setSelectedMode] = useState<InterviewMode | null>(null);
   const [duration, setDuration] = useState<InterviewDuration>("3");
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isMicOn, setIsMicOn] = useState(false);
@@ -269,14 +271,14 @@ const Interview = () => {
   };
 
   const startInterview = async () => {
-    if (!user) return;
+    if (!user || !selectedMode) return;
 
     setStatus("connecting");
     setVapiError(null);
     setInterviewTranscript('');
 
     try {
-      // Create interview record
+      // Create interview record with interview_mode
       const { data: interview, error: interviewError } = await supabase
         .from("interviews")
         .insert({
@@ -284,6 +286,7 @@ const Interview = () => {
           duration: duration,
           status: "in_progress",
           started_at: new Date().toISOString(),
+          interview_mode: selectedMode,
         })
         .select()
         .single();
@@ -292,12 +295,13 @@ const Interview = () => {
 
       setInterviewId(interview.id);
 
-      // Start session via backend to get personalized first message
+      // Start session via backend with interview mode
       const { data: startData, error: startError } = await supabase.functions.invoke('vapi-interview', {
         body: { 
           action: 'start', 
           interviewId: interview.id,
-          resumeHighlights: resumeHighlights ? {
+          interviewMode: selectedMode,
+          resumeHighlights: selectedMode === 'resume_jd' && resumeHighlights ? {
             ...resumeHighlights,
             name: resumeHighlights.name || user.user_metadata?.full_name || ''
           } : null,
@@ -322,7 +326,7 @@ const Interview = () => {
 
       toast({
         title: "Interview starting!",
-        description: `Connecting to AI interviewer...`,
+        description: `Connecting to ${selectedMode === 'technical' ? 'Technical DSA' : selectedMode === 'hr' ? 'HR Behavioral' : 'Resume + JD'} interview...`,
       });
     } catch (error: any) {
       console.error('Start interview error:', error);
@@ -356,13 +360,14 @@ const Interview = () => {
         })
         .eq("id", interviewId);
 
-      // Trigger evaluation with transcript
+      // Trigger evaluation with transcript and interview mode
       const { data: evalData, error: evalError } = await supabase.functions.invoke('evaluate-interview', {
         body: {
           interviewId,
           userId: user?.id,
+          interviewMode: selectedMode,
           transcript: finalTranscript || undefined,
-          candidateProfile: resumeHighlights ? {
+          candidateProfile: selectedMode === 'resume_jd' && resumeHighlights ? {
             skills: resumeHighlights.skills || [],
             tools: resumeHighlights.tools || [],
             projects: resumeHighlights.projects || [],
@@ -628,57 +633,109 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
         <div className="p-4 sm:p-6 lg:p-10">
           <div className="mb-6 sm:mb-10">
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
-              {status === "setup" ? "Setup Interview" : 
+              {status === "mode_select" ? "New Interview" :
+               status === "setup" ? `${selectedMode === 'technical' ? 'Technical DSA' : selectedMode === 'hr' ? 'HR Behavioral' : 'Resume + JD'} Interview Setup` : 
                status === "ready" ? "Ready to Start" :
                status === "evaluating" ? "Generating Evaluation..." : "Interview Complete"}
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground">
-              {status === "setup" ? "Configure your interview session" :
+              {status === "mode_select" ? "Choose your interview type to get started" :
+               status === "setup" ? "Configure your interview session" :
                status === "ready" ? "Click start when you're ready" :
                status === "evaluating" ? "Analyzing your performance..." : "Great job! Review your performance."}
             </p>
           </div>
 
+          {/* Interview Mode Selection */}
+          {status === "mode_select" && (
+            <div className="max-w-5xl">
+              <InterviewModeSelector
+                selectedMode={selectedMode}
+                onModeSelect={setSelectedMode}
+                onContinue={() => setStatus("setup")}
+                hasResume={!!resumeHighlights}
+              />
+            </div>
+          )}
+
           {/* Pre-Interview Setup - Device Tests & Avatar Preview */}
           {status === "setup" && (
             <div className="max-w-5xl">
-              <PreInterviewSetup onReady={handlePreInterviewReady} />
+              <PreInterviewSetup 
+                onReady={handlePreInterviewReady}
+                interviewMode={selectedMode}
+              />
               
-              {/* Resume status card */}
-              <div className="mt-6 grid lg:grid-cols-2 gap-4">
-                {!resumeHighlights ? (
-                  <Card className="border-warning/50 bg-warning/5">
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <AlertCircle className="w-5 h-5 text-warning flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-foreground">No resume uploaded</p>
-                          <p className="text-xs text-muted-foreground">
-                            Upload a resume for personalized questions.{" "}
-                            <Link to="/resume" className="text-accent hover:underline">
-                              Upload now →
-                            </Link>
-                          </p>
+              {/* Resume status card - only show for resume_jd mode */}
+              {selectedMode === 'resume_jd' && (
+                <div className="mt-6 grid lg:grid-cols-2 gap-4">
+                  {!resumeHighlights ? (
+                    <Card className="border-warning/50 bg-warning/5">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <AlertCircle className="w-5 h-5 text-warning flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-foreground">No resume uploaded</p>
+                            <p className="text-xs text-muted-foreground">
+                              Upload a resume for personalized questions.{" "}
+                              <Link to="/resume" className="text-accent hover:underline">
+                                Upload now →
+                              </Link>
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <Card className="border-success/50 bg-success/5">
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-5 h-5 text-success flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-foreground">Resume ready</p>
-                          <p className="text-xs text-muted-foreground">
-                            Questions will be based on your background
-                          </p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <Card className="border-success/50 bg-success/5">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <FileText className="w-5 h-5 text-success flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Resume ready</p>
+                            <p className="text-xs text-muted-foreground">
+                              Questions will be based on your background
+                            </p>
+                          </div>
                         </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+
+              {/* Mode-specific info cards for technical/hr */}
+              {selectedMode === 'technical' && (
+                <Card className="mt-6 border-warning/50 bg-warning/5">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-warning flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Technical DSA Interview</p>
+                        <p className="text-xs text-muted-foreground">
+                          You'll be asked about algorithms, data structures, and problem-solving. Focus on explaining your thought process clearly.
+                        </p>
                       </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {selectedMode === 'hr' && (
+                <Card className="mt-6 border-success/50 bg-success/5">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-success flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-foreground">HR Behavioral Interview</p>
+                        <p className="text-xs text-muted-foreground">
+                          Use the STAR method (Situation, Task, Action, Result) to structure your answers for best results.
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
 
@@ -762,8 +819,10 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
                 evaluation={null}
                 improvements={[]}
                 isLoading={true}
+                interviewMode={selectedMode}
                 onStartNewInterview={() => {
-                  setStatus("setup");
+                  setStatus("mode_select");
+                  setSelectedMode(null);
                   setInterviewId(null);
                   setVapiError(null);
                   setEvaluationData(null);
@@ -781,8 +840,10 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
                 evaluation={evaluationData}
                 improvements={improvementSuggestions}
                 isLoading={isEvaluating}
+                interviewMode={selectedMode}
                 onStartNewInterview={() => {
-                  setStatus("setup");
+                  setStatus("mode_select");
+                  setSelectedMode(null);
                   setInterviewId(null);
                   setVapiError(null);
                   setEvaluationData(null);

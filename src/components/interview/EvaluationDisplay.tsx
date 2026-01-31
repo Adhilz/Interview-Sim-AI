@@ -50,10 +50,13 @@ interface ImprovementSuggestion {
   priority: number | null;
 }
 
+type InterviewMode = 'resume_jd' | 'technical' | 'hr';
+
 interface EvaluationDisplayProps {
   evaluation: EvaluationData | null;
   improvements: ImprovementSuggestion[];
   isLoading?: boolean;
+  interviewMode?: InterviewMode | null;
   onStartNewInterview?: () => void;
   onViewHistory?: () => void;
 }
@@ -62,6 +65,7 @@ const EvaluationDisplay = ({
   evaluation,
   improvements,
   isLoading = false,
+  interviewMode = 'resume_jd',
   onStartNewInterview,
   onViewHistory
 }: EvaluationDisplayProps) => {
