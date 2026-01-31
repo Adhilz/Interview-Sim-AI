@@ -173,6 +173,7 @@ export type Database = {
           feedback: string | null
           id: string
           interview_id: string
+          interview_mode: string | null
           overall_score: number | null
           response_analysis: Json | null
           technical_score: number | null
@@ -186,6 +187,7 @@ export type Database = {
           feedback?: string | null
           id?: string
           interview_id: string
+          interview_mode?: string | null
           overall_score?: number | null
           response_analysis?: Json | null
           technical_score?: number | null
@@ -199,6 +201,7 @@ export type Database = {
           feedback?: string | null
           id?: string
           interview_id?: string
+          interview_mode?: string | null
           overall_score?: number | null
           response_analysis?: Json | null
           technical_score?: number | null
@@ -294,6 +297,7 @@ export type Database = {
           duration: Database["public"]["Enums"]["interview_duration"]
           ended_at: string | null
           id: string
+          interview_mode: string | null
           resume_id: string | null
           scheduled_at: string | null
           started_at: string | null
@@ -306,6 +310,7 @@ export type Database = {
           duration?: Database["public"]["Enums"]["interview_duration"]
           ended_at?: string | null
           id?: string
+          interview_mode?: string | null
           resume_id?: string | null
           scheduled_at?: string | null
           started_at?: string | null
@@ -318,6 +323,7 @@ export type Database = {
           duration?: Database["public"]["Enums"]["interview_duration"]
           ended_at?: string | null
           id?: string
+          interview_mode?: string | null
           resume_id?: string | null
           scheduled_at?: string | null
           started_at?: string | null

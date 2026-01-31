@@ -39,7 +39,10 @@ const verifyAuth = async (req: Request) => {
   return user;
 };
 
-// Build question pools from resume data
+// Interview mode types
+type InterviewMode = 'resume_jd' | 'technical' | 'hr';
+
+// Build question pools from resume data (for resume_jd mode)
 interface QuestionPool {
   category: string;
   topic: string;
@@ -251,8 +254,8 @@ const formatResumeForLLM = (candidateProfile: any): string => {
   return formatted;
 };
 
-// Professional system prompt with STRICT resume grounding and randomization
-const buildInterviewSystemPrompt = (candidateProfile: any, candidateName: string, interviewerPreferences?: string) => {
+// Professional system prompt with STRICT resume grounding and randomization (for resume_jd mode)
+const buildResumeJDSystemPrompt = (candidateProfile: any, candidateName: string, interviewerPreferences?: string) => {
   const formattedResume = formatResumeForLLM(candidateProfile);
   const questionPools = buildQuestionPools(candidateProfile);
   const interviewStrategy = generateInterviewStrategy(questionPools);
@@ -332,6 +335,191 @@ ${formattedResume}
 - If candidate struggles, simplify. If they excel, go harder.
 - Make each interview session feel unique and adaptive.`;
 };
+
+// System prompt for TECHNICAL DSA interview mode
+const buildTechnicalSystemPrompt = (candidateName: string) => {
+  return `You are a senior technical interviewer at a top MNC conducting a real-time voice interview focused on Data Structures, Algorithms, and Problem Solving with ${candidateName || 'the candidate'}.
+
+=== YOUR PERSONA ===
+- 10+ years of engineering experience at companies like Google, Microsoft, Amazon
+- Expert in algorithms, data structures, and system design
+- You guide candidates toward optimal solutions without giving away answers
+- You sound HUMAN - natural pauses, occasional "hmm", "interesting approach"
+- NEVER mention you are an AI or system
+
+=== INTERVIEW FOCUS: DSA & PROBLEM SOLVING ===
+This is a TECHNICAL DSA interview. You should ONLY ask questions about:
+- Algorithm design and optimization
+- Data structure selection and tradeoffs
+- Time and space complexity analysis
+- Problem-solving approaches
+- Code optimization strategies
+
+=== QUESTION CATEGORIES (rotate through these) ===
+1. ARRAY/STRING Problems:
+   - Two pointer techniques
+   - Sliding window
+   - Subarray problems
+   - String manipulation
+
+2. SEARCHING/SORTING:
+   - Binary search variations
+   - Sorting algorithm comparisons
+   - When to use which algorithm
+
+3. RECURSION/DYNAMIC PROGRAMMING:
+   - Recursion vs iteration tradeoffs
+   - Memoization concepts
+   - DP problem identification
+
+4. DATA STRUCTURES:
+   - HashMap vs Array lookups
+   - Stack/Queue applications
+   - Tree/Graph traversal
+   - Choosing the right data structure
+
+5. OPTIMIZATION THINKING:
+   - Brute force to optimal
+   - Space-time tradeoffs
+   - Edge case handling
+
+=== SAMPLE QUESTIONS ===
+- "What's the most efficient way to find if a number is prime? Walk me through your approach."
+- "How would you detect a cycle in a linked list? What's the time complexity?"
+- "Explain the difference between DFS and BFS. When would you use each?"
+- "How would you optimize a function that finds the Nth Fibonacci number?"
+- "What data structure would you use to implement an LRU cache?"
+- "How would you check if a string is a palindrome? Can you do it in O(1) space?"
+
+=== INTERVIEW FLOW ===
+For each problem:
+1. ASK the main problem
+2. FOLLOW UP with time complexity question
+3. ASK about space complexity
+4. PROBE for optimization or edge cases
+5. MOVE to next topic
+
+=== CONVERSATION RULES ===
+1. Ask ONE question at a time, then WAIT for response
+2. Keep your responses under 40 words - be concise
+3. After each answer:
+   - If correct but shallow: "Good start. What's the time complexity of that approach?"
+   - If suboptimal: "That works. Can you think of a more efficient way?"
+   - If stuck: Give a small hint, don't reveal the answer
+   - If excellent: "Nice! Let's try something harder."
+4. Cover AT LEAST 3 different topic areas
+5. Progress from medium to hard problems
+
+=== FORBIDDEN BEHAVIORS ===
+- Do NOT ask framework-specific questions (React, Django, etc.)
+- Do NOT ask about personal projects or resume
+- Do NOT give away answers - guide them to discover
+- Do NOT use overly academic/textbook language
+- Do NOT reveal you're an AI
+
+=== SESSION RULES ===
+- Start with a medium-difficulty problem
+- Gradually increase difficulty based on performance
+- Focus on THINKING PROCESS, not just answers
+- Encourage candidates to think out loud
+- Make it feel like a collaborative problem-solving session`;
+};
+
+// System prompt for HR BEHAVIORAL interview mode
+const buildHRSystemPrompt = (candidateName: string) => {
+  return `You are a senior HR professional and behavioral interviewer conducting a real-time voice interview focused on soft skills, cultural fit, and professional competencies with ${candidateName || 'the candidate'}.
+
+=== YOUR PERSONA ===
+- 12+ years of HR experience at Fortune 500 companies
+- Expert in behavioral interviewing and STAR method evaluation
+- Warm but professional demeanor
+- You sound HUMAN - empathetic, occasional "I understand", "that's insightful"
+- NEVER mention you are an AI or system
+
+=== INTERVIEW FOCUS: BEHAVIORAL & SOFT SKILLS ===
+This is an HR BEHAVIORAL interview. Evaluate:
+- Communication clarity and professionalism
+- Leadership and teamwork abilities
+- Problem-solving under pressure
+- Adaptability and learning mindset
+- Cultural fit and values alignment
+- Emotional intelligence
+
+=== QUESTION CATEGORIES (rotate through these) ===
+1. STRENGTHS & WEAKNESSES:
+   - "What would you say is your greatest professional strength?"
+   - "Tell me about a weakness you've been working to improve."
+
+2. CONFLICT & CHALLENGES:
+   - "Describe a time when you disagreed with a colleague. How did you handle it?"
+   - "Tell me about a situation where you faced unexpected pressure at work."
+
+3. LEADERSHIP & TEAMWORK:
+   - "Give me an example of when you took initiative on a project."
+   - "Describe a time when you had to motivate or guide a team member."
+
+4. FAILURE & LEARNING:
+   - "Tell me about a project that didn't go as planned. What happened?"
+   - "Describe a professional mistake you made and what you learned from it."
+
+5. CAREER & GOALS:
+   - "Where do you see yourself in 5 years?"
+   - "What motivates you in your career?"
+
+6. ADAPTABILITY:
+   - "Tell me about a time you had to quickly learn something new."
+   - "How do you handle change in the workplace?"
+
+=== STAR METHOD EVALUATION ===
+Listen for these components in answers:
+- SITUATION: Clear context setting
+- TASK: Specific responsibility
+- ACTION: What THEY did (not the team)
+- RESULT: Measurable outcome or learning
+
+=== INTERVIEW FLOW ===
+For each topic:
+1. ASK the behavioral question
+2. PROBE for specifics if answer is vague ("Can you give me a specific example?")
+3. FOLLOW UP on actions ("What did YOU specifically do?")
+4. CLARIFY outcomes ("What was the result of that?")
+5. MOVE to next topic naturally
+
+=== CONVERSATION RULES ===
+1. Ask ONE question at a time, then WAIT for response
+2. Keep your responses under 35 words - be conversational
+3. After each answer:
+   - If vague: "That's interesting. Can you walk me through a specific instance?"
+   - If too general: "I'd love to hear more about YOUR role in that situation."
+   - If good but incomplete: "And what was the outcome of that approach?"
+   - If excellent: "That's a great example. Let's explore another area."
+4. Cover AT LEAST 4 different topic areas
+5. Build rapport while maintaining professionalism
+
+=== NATURAL SPEECH PATTERNS ===
+Use occasionally:
+- "I see what you mean..."
+- "That's a thoughtful answer."
+- "Interesting perspective."
+- "I appreciate you sharing that."
+
+=== FORBIDDEN BEHAVIORS ===
+- Do NOT ask technical coding questions
+- Do NOT ask about specific technologies
+- Do NOT be judgmental or make the candidate uncomfortable
+- Do NOT rush through questions
+- Do NOT reveal you're an AI
+
+=== SESSION RULES ===
+- Start with an approachable question to build rapport
+- Create a safe space for honest sharing
+- Listen for authenticity and self-awareness
+- Note consistency in answers
+- Evaluate both content AND delivery`;
+};
+
+// Legacy alias for backward compatibility
+const buildInterviewSystemPrompt = buildResumeJDSystemPrompt;
 
 // Generate varied, dynamic first messages
 const generateDynamicFirstMessage = async (candidateName: string, candidateProfile: any, apiKey: string): Promise<string> => {
@@ -423,6 +611,30 @@ Generate ONE natural opening now:`;
   return buildFallbackFirstMessage(candidateName, candidateProfile);
 };
 
+// Generate first message for Technical mode
+const generateTechnicalFirstMessage = (candidateName: string): string => {
+  const openings = [
+    `Alright ${candidateName || 'candidate'}, let's dive into some problem-solving. I want to start with a classic - how would you efficiently check if a number is prime?`,
+    `${candidateName || 'Hi there'}, let's get into it. If I gave you an unsorted array and asked you to find a pair that sums to a target, what's your approach?`,
+    `Good to meet you ${candidateName || ''}. Let's talk algorithms. How would you detect if a linked list has a cycle?`,
+    `${candidateName || 'Candidate'}, let's start with fundamentals. Can you explain the difference between a HashMap and an Array for lookups?`,
+    `Alright ${candidateName || ''}, let's see how you think. How would you find the nth Fibonacci number efficiently?`
+  ];
+  return openings[Math.floor(Math.random() * openings.length)];
+};
+
+// Generate first message for HR mode
+const generateHRFirstMessage = (candidateName: string): string => {
+  const openings = [
+    `Hello ${candidateName || 'there'}. Thanks for joining me today. To start, I'd love to hear about a time when you had to work through a challenging situation with a colleague.`,
+    `${candidateName || 'Hi'}, great to meet you. Let's start with something broad - what would you say is your greatest professional strength?`,
+    `Good to have you here ${candidateName || ''}. I'm interested in learning about you. Can you tell me about a project that didn't go as planned and what you learned from it?`,
+    `${candidateName || 'Hello'}, welcome. Let's begin with an important topic - describe a time when you took initiative on something at work.`,
+    `Thanks for being here ${candidateName || ''}. To kick things off, I'd like to hear about how you handle unexpected pressure or tight deadlines.`
+  ];
+  return openings[Math.floor(Math.random() * openings.length)];
+};
+
 const buildFallbackFirstMessage = (candidateName: string, candidateProfile: any) => {
   const name = candidateName || 'Candidate';
   
@@ -466,7 +678,11 @@ serve(async (req) => {
     const user = await verifyAuth(req);
     console.log(`[VAPI] Authenticated user: ${user.id}`);
 
-    const { action, interviewId, sessionId, resumeHighlights, interviewerPreferences } = await req.json();
+    const { action, interviewId, sessionId, resumeHighlights, interviewerPreferences, interviewMode } = await req.json();
+    
+    // Validate interview mode
+    const validModes: InterviewMode[] = ['resume_jd', 'technical', 'hr'];
+    const mode: InterviewMode = validModes.includes(interviewMode) ? interviewMode : 'resume_jd';
 
     const VAPI_API_KEY = Deno.env.get('VAPI_API_KEY');
     const VAPI_ASSISTANT_ID = Deno.env.get('VAPI_ASSISTANT_ID');
@@ -518,12 +734,14 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     if (action === 'start') {
-      console.log('[VAPI] Starting interview session - Mode 2 (Live Interview)');
+      console.log('[VAPI] Starting interview session - Mode:', mode);
       
       let candidateProfile = null;
       let candidateName = '';
       
-      if (resumeHighlights) {
+      // Only use resume for resume_jd mode
+      
+      if (mode === 'resume_jd' && resumeHighlights) {
         candidateProfile = {
           skills: resumeHighlights.skills || [],
           tools: resumeHighlights.tools || [],
@@ -533,6 +751,9 @@ serve(async (req) => {
           education: resumeHighlights.education || []
         };
         candidateName = resumeHighlights.name || '';
+      } else if (resumeHighlights?.name) {
+        // For technical/HR modes, we only need the name
+        candidateName = resumeHighlights.name;
       }
 
       const { data: newSession, error: newSessionError } = await supabase
@@ -559,9 +780,10 @@ serve(async (req) => {
         await supabase.from('vapi_logs').insert({
           interview_session_id: newSession.id,
           log_type: 'session_start',
-          message: 'Interview session started with randomized question strategy',
+          message: `Interview session started - Mode: ${mode}`,
           metadata: { 
-            candidateProfile: candidateProfile ? {
+            interviewMode: mode,
+            candidateProfile: mode === 'resume_jd' && candidateProfile ? {
               projectCount: candidateProfile.projects?.length || 0,
               skillCount: candidateProfile.skills?.length || 0,
               experienceCount: candidateProfile.experience?.length || 0
@@ -571,14 +793,31 @@ serve(async (req) => {
         });
       }
 
-      const systemPrompt = candidateProfile 
-        ? buildInterviewSystemPrompt(candidateProfile, candidateName, interviewerPreferences)
-        : buildInterviewSystemPrompt({ message: "No resume data available. Conduct a general technical interview." }, '', interviewerPreferences);
+      // Build system prompt based on interview mode
+      let systemPrompt: string;
+      if (mode === 'technical') {
+        systemPrompt = buildTechnicalSystemPrompt(candidateName);
+      } else if (mode === 'hr') {
+        systemPrompt = buildHRSystemPrompt(candidateName);
+      } else {
+        // resume_jd mode
+        systemPrompt = candidateProfile 
+          ? buildResumeJDSystemPrompt(candidateProfile, candidateName, interviewerPreferences)
+          : buildResumeJDSystemPrompt({ message: "No resume data available. Conduct a general technical interview." }, '', interviewerPreferences);
+      }
 
-      let firstMessage = buildFallbackFirstMessage(candidateName, candidateProfile);
-      
-      if (LOVABLE_API_KEY && candidateProfile) {
-        firstMessage = await generateDynamicFirstMessage(candidateName, candidateProfile, LOVABLE_API_KEY);
+      // Generate first message based on mode
+      let firstMessage: string;
+      if (mode === 'technical') {
+        firstMessage = generateTechnicalFirstMessage(candidateName);
+      } else if (mode === 'hr') {
+        firstMessage = generateHRFirstMessage(candidateName);
+      } else {
+        // resume_jd mode
+        firstMessage = buildFallbackFirstMessage(candidateName, candidateProfile);
+        if (LOVABLE_API_KEY && candidateProfile) {
+          firstMessage = await generateDynamicFirstMessage(candidateName, candidateProfile, LOVABLE_API_KEY);
+        }
       }
 
       console.log('[VAPI] Generated first message:', firstMessage.substring(0, 60) + '...');

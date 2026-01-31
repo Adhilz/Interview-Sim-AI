@@ -39,8 +39,11 @@ const verifyAuth = async (req: Request) => {
   return user;
 };
 
-// Mode 3 - STRICT Interview Evaluation System Prompt
-const EVALUATION_SYSTEM_PROMPT = `You are an EXTREMELY STRICT interview evaluator. Your job is to identify weaknesses, not to encourage.
+// Interview mode types
+type InterviewMode = 'resume_jd' | 'technical' | 'hr';
+
+// Mode 3 - STRICT Interview Evaluation System Prompt (for resume_jd mode - unchanged)
+const RESUME_JD_EVALUATION_PROMPT = `You are an EXTREMELY STRICT interview evaluator. Your job is to identify weaknesses, not to encourage.
 
 CRITICAL RULES:
 - PENALIZE vague, shallow, or generic answers heavily
@@ -150,6 +153,192 @@ REQUIRED PHRASES (use these instead):
 - "The answer did not address..."
 - "Critical gap in understanding..."`;
 
+// TECHNICAL DSA Evaluation System Prompt
+const TECHNICAL_EVALUATION_PROMPT = `You are an EXTREMELY STRICT technical interviewer evaluating a DSA/Algorithm interview. Focus on problem-solving ability, not soft skills.
+
+CRITICAL RULES:
+- PENALIZE incorrect algorithm choices heavily
+- PENALIZE wrong time/space complexity analysis
+- PENALIZE lack of optimization thinking
+- PENALIZE inability to explain approach clearly
+- PENALIZE missing edge cases
+- DO NOT give credit for "almost correct" solutions
+- DO NOT inflate scores for partial answers
+
+SCORING CRITERIA (0-10 scale):
+
+ALGORITHM_UNDERSTANDING (0-10):
+- 0-2: Cannot identify appropriate algorithm or approach
+- 3-4: Incorrect algorithm choice or flawed logic
+- 5-6: Correct basic approach but misses optimizations
+- 7-8: Solid algorithm choice with good explanation
+- 9-10: Optimal solution with clear reasoning
+
+OPTIMIZATION_THINKING (0-10):
+- 0-2: No consideration of efficiency
+- 3-4: Mentions optimization but can't improve solution
+- 5-6: Identifies improvement opportunities
+- 7-8: Provides concrete optimization strategies
+- 9-10: Demonstrates expert-level optimization awareness
+
+COMPLEXITY_KNOWLEDGE (0-10):
+- 0-2: Cannot analyze time/space complexity
+- 3-4: Incorrect complexity analysis
+- 5-6: Partially correct but with errors
+- 7-8: Accurate complexity analysis
+- 9-10: Comprehensive understanding of tradeoffs
+
+EXPLANATION_CLARITY (0-10):
+- 0-2: Cannot articulate thought process
+- 3-4: Jumbled explanation, hard to follow
+- 5-6: Understandable but disorganized
+- 7-8: Clear, logical explanation
+- 9-10: Exceptionally articulate, teaches the concept
+
+OUTPUT FORMAT (JSON only):
+{
+  "algorithm_understanding": {
+    "score": <0-10>,
+    "feedback": "<specific criticism, max 30 words>"
+  },
+  "optimization_thinking": {
+    "score": <0-10>,
+    "feedback": "<specific criticism, max 30 words>"
+  },
+  "complexity_knowledge": {
+    "score": <0-10>,
+    "feedback": "<specific criticism, max 30 words>"
+  },
+  "explanation_clarity": {
+    "score": <0-10>,
+    "feedback": "<specific criticism, max 30 words>"
+  },
+  "overall_score": <0-100>,
+  "verdict": "<harsh but fair 2-sentence technical assessment>",
+  "strong_areas": ["<area 1>", "<area 2>"],
+  "weak_areas": ["<area 1>", "<area 2>", "<area 3>"],
+  "optimization_awareness_level": "none|basic|intermediate|advanced",
+  "improvements": [
+    {
+      "suggestion": "<specific, actionable improvement for DSA skills>",
+      "category": "algorithm|complexity|optimization|explanation",
+      "priority": 1
+    }
+  ],
+  "response_analysis": [
+    {
+      "question": "<interviewer question>",
+      "response": "<candidate response>",
+      "quality": "good|average|poor",
+      "strengths": ["<what was good>"],
+      "improvements": ["<how to improve>"],
+      "score": <1-10>
+    }
+  ]
+}
+
+FORBIDDEN PHRASES: "Good try", "Nice approach", "Well thought out"
+REQUIRED PHRASES: "Incorrect complexity analysis", "Failed to optimize", "Missing edge case handling"`;
+
+// HR BEHAVIORAL Evaluation System Prompt
+const HR_EVALUATION_PROMPT = `You are a professional HR evaluator assessing behavioral interview responses using the STAR method. Focus on soft skills, communication, and cultural fit.
+
+CRITICAL RULES:
+- EVALUATE use of STAR method (Situation, Task, Action, Result)
+- PENALIZE vague answers without specific examples
+- PENALIZE answers where candidate doesn't take ownership
+- PENALIZE generic responses that could apply to anyone
+- PENALIZE lack of self-awareness
+- DO NOT accept "we did" without "I specifically did"
+
+SCORING CRITERIA (0-10 scale):
+
+COMMUNICATION_CLARITY (0-10):
+- 0-2: Incoherent, cannot express ideas
+- 3-4: Rambling, hard to follow
+- 5-6: Understandable but unstructured
+- 7-8: Clear, well-organized responses
+- 9-10: Exceptionally articulate and engaging
+
+CONFIDENCE_LEVEL (0-10):
+- 0-2: Extremely nervous, cannot respond
+- 3-4: Hesitant, many pauses, unsure
+- 5-6: Some nervousness but functional
+- 7-8: Composed, steady delivery
+- 9-10: Poised, authentic confidence
+
+EMOTIONAL_STABILITY (0-10):
+- 0-2: Becomes defensive or upset
+- 3-4: Struggles with challenging questions
+- 5-6: Handles pressure adequately
+- 7-8: Stays calm under pressure
+- 9-10: Excellent composure and maturity
+
+PROFESSIONALISM (0-10):
+- 0-2: Inappropriate responses or attitude
+- 3-4: Unprofessional language or examples
+- 5-6: Acceptable professional demeanor
+- 7-8: Professional and appropriate
+- 9-10: Exceptional professional presence
+
+ANSWER_STRUCTURE (0-10):
+- 0-2: No structure, random thoughts
+- 3-4: Minimal structure, missing STAR elements
+- 5-6: Basic structure, incomplete STAR
+- 7-8: Good STAR method usage
+- 9-10: Perfect STAR with compelling narrative
+
+OUTPUT FORMAT (JSON only):
+{
+  "communication_clarity": {
+    "score": <0-10>,
+    "feedback": "<specific criticism, max 30 words>"
+  },
+  "confidence_level": {
+    "score": <0-10>,
+    "feedback": "<specific criticism, max 30 words>"
+  },
+  "emotional_stability": {
+    "score": <0-10>,
+    "feedback": "<specific criticism, max 30 words>"
+  },
+  "professionalism": {
+    "score": <0-10>,
+    "feedback": "<specific criticism, max 30 words>"
+  },
+  "answer_structure": {
+    "score": <0-10>,
+    "feedback": "<specific criticism, max 30 words>"
+  },
+  "overall_score": <0-100>,
+  "verdict": "<professional 2-sentence HR assessment>",
+  "hr_selection_probability": "low|medium|high",
+  "personality_summary": "<2-sentence personality assessment>",
+  "improvements": [
+    {
+      "suggestion": "<specific, actionable improvement for soft skills>",
+      "category": "communication|confidence|structure|examples|professionalism",
+      "priority": 1
+    }
+  ],
+  "response_analysis": [
+    {
+      "question": "<interviewer question>",
+      "response": "<candidate response>",
+      "quality": "good|average|poor",
+      "strengths": ["<what was good>"],
+      "improvements": ["<how to improve>"],
+      "score": <1-10>
+    }
+  ]
+}
+
+FORBIDDEN PHRASES: "Great attitude", "Wonderful personality"
+REQUIRED PHRASES: "Lacks specific examples", "Failed to use STAR method", "Did not take ownership"`;
+
+// Legacy alias for backward compatibility
+const EVALUATION_SYSTEM_PROMPT = RESUME_JD_EVALUATION_PROMPT;
+
 serve(async (req) => {
   const origin = req.headers.get('origin');
   const corsHeaders = getCorsHeaders(origin);
@@ -163,11 +352,17 @@ serve(async (req) => {
     const user = await verifyAuth(req);
     console.log(`[Evaluate] Authenticated user: ${user.id}`);
 
-    const { interviewId, userId, transcript, candidateProfile } = await req.json();
+    const { interviewId, userId, transcript, candidateProfile, interviewMode } = await req.json();
+
+    // Validate interview mode
+    const validModes: InterviewMode[] = ['resume_jd', 'technical', 'hr'];
+    const mode: InterviewMode = validModes.includes(interviewMode) ? interviewMode : 'resume_jd';
 
     if (!interviewId || !userId) {
       throw new Error('Missing required fields');
     }
+    
+    console.log(`[Evaluate] Interview mode: ${mode}`);
 
     // Verify the authenticated user matches the userId or is authorized
     if (user.id !== userId) {
@@ -357,7 +552,7 @@ serve(async (req) => {
       length: interviewTranscript?.length || 0
     });
 
-    // Build evaluation prompt with quality checks
+    // Build evaluation prompt with quality checks and mode context
     let evaluationNote = '';
     if (!hasUserResponses || candidateLineCount === 0) {
       evaluationNote = '\n\nNOTE: The transcript appears to contain NO candidate responses. This may indicate a silent session or audio issues. Assign failing scores accordingly.';
@@ -367,12 +562,20 @@ serve(async (req) => {
       evaluationNote = '\n\nNOTE: The candidate provided very few responses. Consider this when evaluating engagement.';
     }
 
-    const userPrompt = `CANDIDATE PROFILE:
-<<<
-${profile ? JSON.stringify(profile, null, 2) : 'No profile available'}
->>>
+    // Select appropriate evaluation prompt based on mode
+    let evaluationSystemPrompt: string;
+    let profileContext = '';
+    
+    if (mode === 'technical') {
+      evaluationSystemPrompt = TECHNICAL_EVALUATION_PROMPT;
+    } else if (mode === 'hr') {
+      evaluationSystemPrompt = HR_EVALUATION_PROMPT;
+    } else {
+      evaluationSystemPrompt = RESUME_JD_EVALUATION_PROMPT;
+      profileContext = profile ? `CANDIDATE PROFILE:\n<<<\n${JSON.stringify(profile, null, 2)}\n>>>\n\n` : '';
+    }
 
-INTERVIEW TRANSCRIPT:
+    const userPrompt = `${profileContext}INTERVIEW TRANSCRIPT:
 <<<
 ${interviewTranscript || 'No transcript available. Assign minimum scores across all categories.'}
 >>>
@@ -381,6 +584,7 @@ TRANSCRIPT SOURCE: ${transcriptSource}
 CANDIDATE RESPONSES DETECTED: ${hasUserResponses ? 'Yes' : 'No'}
 CANDIDATE RESPONSE COUNT: ${candidateLineCount}
 TOTAL WORD COUNT: ${transcriptWordCount}
+INTERVIEW MODE: ${mode}
 ${evaluationNote}
 
 Evaluate this interview STRICTLY. No soft feedback. Identify every weakness.
@@ -395,7 +599,7 @@ IMPORTANT: Include response_analysis array with analysis of EACH candidate respo
       body: JSON.stringify({
         model: 'google/gemini-2.5-flash',
         messages: [
-          { role: 'system', content: EVALUATION_SYSTEM_PROMPT },
+          { role: 'system', content: evaluationSystemPrompt },
           { role: 'user', content: userPrompt }
         ],
       }),
@@ -448,34 +652,108 @@ IMPORTANT: Include response_analysis array with analysis of EACH candidate respo
       };
     }
 
-    // Calculate overall score
-    const communicationScore = evaluation.communication?.score || 4;
-    const technicalScore = evaluation.technical_accuracy?.score || 4;
-    const confidenceScore = evaluation.confidence?.score || 4;
-    const relevanceScore = evaluation.relevance?.score || 4;
+    // Calculate scores based on interview mode
+    let communicationScore: number;
+    let technicalScore: number;
+    let confidenceScore: number;
+    let overallScore: number;
+    let feedback: string;
     
-    const overallScore = evaluation.overall_score || Math.round(
-      ((communicationScore + technicalScore + confidenceScore + relevanceScore) / 4) * 10
-    );
+    if (mode === 'technical') {
+      // Technical mode uses different scoring categories
+      const algorithmScore = evaluation.algorithm_understanding?.score || 4;
+      const optimizationScore = evaluation.optimization_thinking?.score || 4;
+      const complexityScore = evaluation.complexity_knowledge?.score || 4;
+      const clarityScore = evaluation.explanation_clarity?.score || 4;
+      
+      // Map technical scores to standard fields for storage
+      communicationScore = clarityScore;
+      technicalScore = Math.round((algorithmScore + complexityScore) / 2);
+      confidenceScore = optimizationScore; // Store optimization as confidence for now
+      
+      overallScore = evaluation.overall_score || Math.round(
+        ((algorithmScore + optimizationScore + complexityScore + clarityScore) / 4) * 10
+      );
+      
+      feedback = [
+        `**Verdict:** ${evaluation.verdict || 'Evaluation complete.'}`,
+        '',
+        '**Strong Areas:**',
+        ...(evaluation.strong_areas?.map((s: string) => `- ${s}`) || ['- None identified']),
+        '',
+        '**Weak Areas:**',
+        ...(evaluation.weak_areas?.map((w: string) => `- ${w}`) || ['- None identified']),
+        '',
+        `**Optimization Awareness:** ${evaluation.optimization_awareness_level || 'Unknown'}`,
+        '',
+        '**Detailed Scores:**',
+        `- Algorithm Understanding: ${algorithmScore}/10 - ${evaluation.algorithm_understanding?.feedback || 'N/A'}`,
+        `- Optimization Thinking: ${optimizationScore}/10 - ${evaluation.optimization_thinking?.feedback || 'N/A'}`,
+        `- Complexity Knowledge: ${complexityScore}/10 - ${evaluation.complexity_knowledge?.feedback || 'N/A'}`,
+        `- Explanation Clarity: ${clarityScore}/10 - ${evaluation.explanation_clarity?.feedback || 'N/A'}`,
+      ].join('\n');
+      
+    } else if (mode === 'hr') {
+      // HR mode uses behavioral scoring categories
+      const communicationClarity = evaluation.communication_clarity?.score || 4;
+      const confidenceLevel = evaluation.confidence_level?.score || 4;
+      const emotionalStability = evaluation.emotional_stability?.score || 4;
+      const professionalism = evaluation.professionalism?.score || 4;
+      const answerStructure = evaluation.answer_structure?.score || 4;
+      
+      // Map HR scores to standard fields for storage
+      communicationScore = Math.round((communicationClarity + answerStructure) / 2);
+      technicalScore = professionalism; // Store professionalism as technical for now
+      confidenceScore = Math.round((confidenceLevel + emotionalStability) / 2);
+      
+      overallScore = evaluation.overall_score || Math.round(
+        ((communicationClarity + confidenceLevel + emotionalStability + professionalism + answerStructure) / 5) * 10
+      );
+      
+      feedback = [
+        `**Verdict:** ${evaluation.verdict || 'Evaluation complete.'}`,
+        '',
+        `**HR Selection Probability:** ${evaluation.hr_selection_probability || 'Unknown'}`,
+        '',
+        `**Personality Summary:** ${evaluation.personality_summary || 'Not available'}`,
+        '',
+        '**Detailed Scores:**',
+        `- Communication Clarity: ${communicationClarity}/10 - ${evaluation.communication_clarity?.feedback || 'N/A'}`,
+        `- Confidence Level: ${confidenceLevel}/10 - ${evaluation.confidence_level?.feedback || 'N/A'}`,
+        `- Emotional Stability: ${emotionalStability}/10 - ${evaluation.emotional_stability?.feedback || 'N/A'}`,
+        `- Professionalism: ${professionalism}/10 - ${evaluation.professionalism?.feedback || 'N/A'}`,
+        `- Answer Structure (STAR): ${answerStructure}/10 - ${evaluation.answer_structure?.feedback || 'N/A'}`,
+      ].join('\n');
+      
+    } else {
+      // Resume + JD mode (original behavior)
+      communicationScore = evaluation.communication?.score || 4;
+      technicalScore = evaluation.technical_accuracy?.score || 4;
+      confidenceScore = evaluation.confidence?.score || 4;
+      const relevanceScore = evaluation.relevance?.score || 4;
+      
+      overallScore = evaluation.overall_score || Math.round(
+        ((communicationScore + technicalScore + confidenceScore + relevanceScore) / 4) * 10
+      );
 
-    // Build feedback
-    const feedback = [
-      `**Verdict:** ${evaluation.verdict || 'Evaluation complete.'}`,
-      '',
-      '**Critical Weaknesses:**',
-      ...(evaluation.critical_weaknesses?.map((w: string) => `- ${w}`) || ['- No specific weaknesses identified']),
-      '',
-      '**Detailed Scores:**',
-      `- Communication: ${communicationScore}/10 - ${evaluation.communication?.feedback || 'N/A'}`,
-      `- Technical: ${technicalScore}/10 - ${evaluation.technical_accuracy?.feedback || 'N/A'}`,
-      `- Confidence: ${confidenceScore}/10 - ${evaluation.confidence?.feedback || 'N/A'}`,
-      `- Relevance: ${relevanceScore}/10 - ${evaluation.relevance?.feedback || 'N/A'}`,
-    ].join('\n');
+      feedback = [
+        `**Verdict:** ${evaluation.verdict || 'Evaluation complete.'}`,
+        '',
+        '**Critical Weaknesses:**',
+        ...(evaluation.critical_weaknesses?.map((w: string) => `- ${w}`) || ['- No specific weaknesses identified']),
+        '',
+        '**Detailed Scores:**',
+        `- Communication: ${communicationScore}/10 - ${evaluation.communication?.feedback || 'N/A'}`,
+        `- Technical: ${technicalScore}/10 - ${evaluation.technical_accuracy?.feedback || 'N/A'}`,
+        `- Confidence: ${confidenceScore}/10 - ${evaluation.confidence?.feedback || 'N/A'}`,
+        `- Relevance: ${relevanceScore}/10 - ${evaluation.relevance?.feedback || 'N/A'}`,
+      ].join('\n');
+    }
 
     // Prepare response analysis
     const responseAnalysis = evaluation.response_analysis || [];
 
-    // Save evaluation with transcript and response analysis
+    // Save evaluation with transcript, response analysis, and interview mode
     const { data: evalData, error: evalError } = await supabase
       .from('evaluations')
       .insert({
@@ -488,6 +766,7 @@ IMPORTANT: Include response_analysis array with analysis of EACH candidate respo
         feedback: feedback,
         transcript: interviewTranscript || null,
         response_analysis: responseAnalysis.length > 0 ? responseAnalysis : null,
+        interview_mode: mode,
       })
       .select()
       .single();
