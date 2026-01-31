@@ -1,0 +1,1015 @@
+================================================================================
+                    PROJECT MASTER WORKFLOW DOCUMENTATION
+                         AI Interview Simulation Platform
+================================================================================
+                    Generated: 2026-01-31
+                    Last Updated: 2026-01-31
+                    Version: 1.0.0
+================================================================================
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+Project Name:
+    AI Interview Simulation Platform (InterviewSimulationAI)
+
+Project Purpose:
+    A comprehensive AI-powered interview preparation platform designed for 
+    university students. The platform provides realistic interview simulations 
+    using voice AI, animated avatars, and intelligent evaluation to help 
+    candidates improve their interview skills.
+
+Core Features:
+    - Resume Upload & OCR-powered Extraction
+    - ATS (Applicant Tracking System) Resume Scoring
+    - Three Interview Simulation Modes:
+        1. Resume + JD Interview (grounded in parsed resume data)
+        2. Technical DSA/Algorithm Interview
+        3. HR Behavioral Interview
+    - Real-time Voice Conversation with AI Interviewer
+    - Animated D-ID Avatar for Visual Engagement
+    - AI-powered Interview Evaluation & Scoring
+    - Per-response Transcript Analysis
+    - Interview History Tracking
+    - University-based Access Control (Admin/Student roles)
+
+Supported Interview Modes:
+    - resume_jd: Resume-grounded technical interview based on candidate's 
+                 actual experience and projects
+    - technical: DSA/Algorithm focused interview testing problem-solving, 
+                 time/space complexity understanding
+    - hr: Behavioral interview using STAR method for soft skills assessment
+
+High Level System Description:
+    The platform operates as a full-stack web application with:
+    - React/TypeScript frontend for user interface
+    - Supabase (Lovable Cloud) for database and authentication
+    - Edge Functions for serverless backend logic
+    - VAPI for real-time voice AI conversations
+    - D-ID for animated avatar streaming
+    - Gemini AI for resume parsing and interview evaluation
+
+================================================================================
+2. CURRENT TECH STACK
+================================================================================
+
+Frontend Technology:
+    - Framework: React 18.3.1
+    - Build Tool: Vite
+    - Language: TypeScript
+    - Styling: Tailwind CSS with custom design tokens
+    - UI Components: shadcn/ui (Radix UI primitives)
+    - State Management: TanStack React Query
+    - Routing: React Router DOM 6.x
+    - Animations: Framer Motion
+    - Font: DM Sans (@fontsource/dm-sans)
+
+Backend Technology:
+    - Platform: Lovable Cloud (Supabase)
+    - Edge Functions: Deno runtime
+    - Serverless Functions:
+        - parse-resume (Resume text extraction)
+        - ats-score (ATS compatibility scoring)
+        - vapi-interview (VAPI configuration provider)
+        - evaluate-interview (AI evaluation engine)
+        - did-stream (D-ID avatar session management)
+        - admin-signup (Admin user creation)
+
+Database:
+    - Provider: PostgreSQL via Supabase
+    - ORM: Supabase JavaScript Client
+    - Security: Row Level Security (RLS) policies
+    - Real-time: Supabase Realtime (available but not currently used)
+
+Hosting / Deployment:
+    - Preview URL: https://id-preview--ced75cca-36e3-43f9-8f56-881c9946e217.lovable.app
+    - Published URL: https://interviewsimulationai.lovable.app
+    - Automatic deployments via Lovable platform
+
+Real-time Communication Technology:
+    - Voice AI: VAPI (@vapi-ai/web SDK v2.5.2)
+    - Avatar Streaming: D-ID WebRTC
+    - Browser Media: WebRTC getUserMedia API
+
+================================================================================
+3. CURRENT API INTEGRATIONS (DETAILED)
+================================================================================
+
+--------------------------------------------------------------------------------
+API 1: VAPI (Voice AI Platform)
+--------------------------------------------------------------------------------
+    API Name: VAPI
+    Purpose: Real-time voice conversation with AI interviewer
+    
+    Where It Is Used:
+        - src/hooks/useVapi.ts (main integration hook)
+        - src/components/interview/InterviewRoom.tsx (interview session)
+        - supabase/functions/vapi-interview/index.ts (configuration)
+    
+    Input Type:
+        - Audio stream from user microphone
+        - Assistant configuration (system prompt, voice settings)
+    
+    Output Type:
+        - Real-time transcription
+        - AI voice responses
+        - Conversation events (call start, end, speech events)
+    
+    Integration Flow:
+        1. Frontend calls vapi-interview edge function to get config
+        2. Edge function returns publicKey, assistantId, assistantOverrides
+        3. Frontend initializes VAPI SDK with credentials
+        4. User speaks → VAPI transcribes → AI responds → Voice played
+        5. Transcript accumulated for evaluation
+    
+    Which Interview Modes Use It:
+        - resume_jd (with resume-grounded system prompt)
+        - technical (with DSA-focused system prompt)
+        - hr (with behavioral/STAR system prompt)
+    
+    Credentials:
+        - VAPI_PUBLIC_KEY (Supabase secret)
+        - VAPI_API_KEY (Supabase secret)
+        - VAPI_ASSISTANT_ID (Supabase secret)
+
+--------------------------------------------------------------------------------
+API 2: D-ID (Digital Avatar)
+--------------------------------------------------------------------------------
+    API Name: D-ID Streaming API
+    Purpose: Animated avatar that lip-syncs with AI interviewer voice
+    
+    Where It Is Used:
+        - src/hooks/useDidStream.ts (streaming hook)
+        - src/components/interview/DidAvatar.tsx (avatar component)
+        - supabase/functions/did-stream/index.ts (session proxy)
+    
+    Input Type:
+        - Avatar image URL
+        - Text to speak (streamed from VAPI transcript)
+        - WebRTC SDP/ICE candidates
+    
+    Output Type:
+        - WebRTC video stream of animated avatar
+        - Session management data
+    
+    Integration Flow:
+        1. Frontend requests new stream session via did-stream edge function
+        2. Edge function creates D-ID session, returns session_id and SDP offer
+        3. Frontend establishes WebRTC peer connection
+        4. When AI speaks, text streamed to D-ID for lip-sync animation
+        5. Video stream displayed in InterviewRoom
+    
+    Which Interview Modes Use It:
+        - All modes (resume_jd, technical, hr)
+    
+    Fallback Behavior:
+        - If D-ID fails, system falls back to static interviewer.png image
+        - Voice-only interview continues without avatar animation
+    
+    Credentials:
+        - DID_API_KEY (Supabase secret)
+
+--------------------------------------------------------------------------------
+API 3: Google Gemini AI
+--------------------------------------------------------------------------------
+    API Name: Google Gemini (via Lovable AI)
+    Purpose: Resume parsing, ATS scoring, and interview evaluation
+    
+    Where It Is Used:
+        - supabase/functions/parse-resume/index.ts
+        - supabase/functions/ats-score/index.ts
+        - supabase/functions/evaluate-interview/index.ts
+    
+    Model Used: gemini-2.5-flash (via Lovable AI proxy)
+    
+    Input Type:
+        - Resume text (for parsing/scoring)
+        - Interview transcript (for evaluation)
+        - Job role/description (for ATS scoring)
+    
+    Output Type:
+        - Structured JSON responses
+        - Scores, feedback, analysis
+    
+    Integration Flow (Resume Parsing):
+        1. User uploads PDF resume
+        2. Frontend extracts text via pdfjs-dist
+        3. Text sent to parse-resume edge function
+        4. Gemini extracts: summary, experience, projects, skills, education
+        5. Structured data saved to resume_highlights table
+    
+    Integration Flow (ATS Scoring):
+        1. User selects job role
+        2. ats-score edge function receives resume text + job role
+        3. Gemini generates: overall score, keyword match, section scores
+        4. Includes "Brutally Honest Recruiter Review"
+        5. Results saved to ats_scores table
+    
+    Integration Flow (Interview Evaluation):
+        1. Interview ends, transcript sent to evaluate-interview
+        2. Gemini analyzes based on interview_mode
+        3. Returns scores, feedback, per-response analysis
+        4. Results saved to evaluations table
+    
+    Which Interview Modes Use It:
+        - resume_jd: Standard technical scoring rubric
+        - technical: DSA-specific rubric (Algorithm, Optimization, Complexity)
+        - hr: STAR method rubric (Communication, Confidence, Professionalism)
+    
+    Credentials:
+        - LOVABLE_API_KEY (Supabase secret - for Lovable AI proxy)
+
+--------------------------------------------------------------------------------
+API 4: Supabase Auth
+--------------------------------------------------------------------------------
+    API Name: Supabase Authentication
+    Purpose: User registration, login, session management
+    
+    Where It Is Used:
+        - src/pages/Auth.tsx (login/signup forms)
+        - src/pages/ResetPassword.tsx (password reset)
+        - src/components/ProtectedRoute.tsx (route protection)
+        - All authenticated API calls
+    
+    Input Type:
+        - Email/password credentials
+        - University code (for student signup)
+    
+    Output Type:
+        - JWT session tokens
+        - User metadata
+    
+    Integration Flow:
+        1. Student signs up with email + password + university code
+        2. University code validated via validate_university_code function
+        3. User created, profile auto-generated via trigger
+        4. Student role assigned automatically
+        5. Session persisted in localStorage
+    
+    Features Used:
+        - Email/password authentication
+        - Password reset flow
+        - Session persistence
+        - JWT tokens for edge function auth
+
+--------------------------------------------------------------------------------
+API 5: Supabase Storage
+--------------------------------------------------------------------------------
+    API Name: Supabase Storage
+    Purpose: File storage for resumes and avatars
+    
+    Where It Is Used:
+        - src/pages/Resume.tsx (resume upload)
+        - src/pages/Profile.tsx (avatar upload)
+        - src/lib/uploadAvatarToStorage.ts
+    
+    Buckets:
+        - resumes (private) - PDF resume files
+        - avatars (public) - User profile images
+    
+    Integration Flow:
+        1. User selects file
+        2. Frontend uploads to appropriate bucket
+        3. Signed URL or public URL returned
+        4. URL stored in database (resumes.file_url or profiles.avatar_url)
+
+================================================================================
+4. CURRENT INTERVIEW SYSTEM IMPLEMENTATION
+================================================================================
+
+--------------------------------------------------------------------------------
+MODE 1: Resume + JD Interview (interview_mode: "resume_jd")
+--------------------------------------------------------------------------------
+
+How It Is Triggered:
+    1. User navigates to /interview
+    2. Selects "Resume + JD Interview" from InterviewModeSelector
+    3. Proceeds through PreInterviewSetup (optional context input)
+    4. Interview starts with resume-grounded questions
+
+How Questions Are Generated:
+    - VAPI assistant uses GPT-4.0 mini (configured in VAPI dashboard)
+    - System prompt includes:
+        - Full parsed resume data (from resume_highlights)
+        - User-provided interview context (optional)
+        - Instructions to ground questions in actual resume content
+    - Interviewer persona: Senior HR professional ("George" voice via ElevenLabs)
+    - Non-linear questioning strategy across projects/skills
+
+How Evaluation Is Done:
+    - Full transcript sent to evaluate-interview edge function
+    - Gemini uses RESUME_JD_EVALUATION_PROMPT
+    - Analyzes: Technical depth, communication, confidence, relevance
+    - Generates per-response analysis with quality ratings
+
+How Scoring Is Calculated:
+    - communication_score: 1-10 scale
+    - technical_score: 1-10 scale
+    - confidence_score: 1-10 scale
+    - overall_score: Weighted average converted to percentage
+
+How Feedback Is Generated:
+    - Structured feedback with:
+        - Overall verdict
+        - Strengths list
+        - Weaknesses list
+        - Category-specific comments
+        - Per-response improvements
+
+--------------------------------------------------------------------------------
+MODE 2: Technical Interview (interview_mode: "technical")
+--------------------------------------------------------------------------------
+
+How It Is Triggered:
+    1. User selects "Technical Interview" from InterviewModeSelector
+    2. No resume required for this mode
+    3. Interview starts immediately with DSA questions
+
+How Questions Are Generated:
+    - System prompt focuses on:
+        - Algorithm problem-solving
+        - Data structures
+        - Time/space complexity analysis
+        - Optimization strategies
+    - Question flow per topic:
+        1. Main logic problem
+        2. Time complexity follow-up
+        3. Space complexity follow-up
+        4. Optimization improvement follow-up
+    - Topics include: Fibonacci, prime numbers, palindromes, binary search,
+      sorting algorithms, recursion vs iteration, HashMap operations
+
+How Evaluation Is Done:
+    - TECHNICAL_EVALUATION_PROMPT used
+    - Metrics: Algorithm Understanding, Optimization Thinking, 
+      Complexity Knowledge, Explanation Clarity
+    - Returns Technical Score (0-100)
+
+How Scoring Is Calculated:
+    - algorithm_understanding → maps to technical_score
+    - optimization_thinking → maps to communication_score
+    - complexity_knowledge → maps to confidence_score
+    - Overall score: Average of above
+
+How Feedback Is Generated:
+    - Strong Areas in DSA
+    - Weak Areas in DSA
+    - Optimization Awareness Level
+    - Final Technical Verdict
+
+--------------------------------------------------------------------------------
+MODE 3: HR Behavioral Interview (interview_mode: "hr")
+--------------------------------------------------------------------------------
+
+How It Is Triggered:
+    1. User selects "HR Interview" from InterviewModeSelector
+    2. No resume required
+    3. Interview starts with behavioral questions
+
+How Questions Are Generated:
+    - System prompt focuses on:
+        - STAR method (Situation, Task, Action, Result)
+        - Soft skills assessment
+        - Cultural fit evaluation
+    - Question categories:
+        - Strengths and weaknesses
+        - Conflict handling
+        - Leadership experience
+        - Failure stories
+        - Team collaboration
+        - Career goals
+        - Pressure handling
+
+How Evaluation Is Done:
+    - HR_EVALUATION_PROMPT used
+    - Evaluates answers against STAR framework
+    - Metrics: Communication Clarity, Confidence Level,
+      Emotional Stability, Professionalism, Answer Structure
+
+How Scoring Is Calculated:
+    - communication_clarity → maps to communication_score
+    - confidence_level → maps to confidence_score
+    - answer_structure → maps to technical_score
+    - Overall score: Weighted average
+
+How Feedback Is Generated:
+    - Behavioral Score
+    - Communication Rating
+    - Confidence Index
+    - HR Selection Probability
+    - Personality Feedback Summary
+
+================================================================================
+5. COMPLETE CURRENT DATA FLOW
+================================================================================
+
+--------------------------------------------------------------------------------
+FLOW 1: Resume Upload & Parsing
+--------------------------------------------------------------------------------
+    User → Upload PDF
+         → Frontend extracts text (pdfjs-dist)
+         → Save file to Supabase Storage (resumes bucket)
+         → Send text to parse-resume edge function
+         → Gemini extracts structured data
+         → Save to resume_highlights table
+         → Update resumes.parsed_at timestamp
+         → Display extracted data in UI
+
+--------------------------------------------------------------------------------
+FLOW 2: ATS Scoring
+--------------------------------------------------------------------------------
+    User → Select job role
+         → Frontend sends resume text + role to ats-score
+         → Gemini analyzes compatibility
+         → Returns: score, keywords, section scores, review
+         → Save to ats_scores table
+         → Display in ATSAnalysisPanel component
+
+--------------------------------------------------------------------------------
+FLOW 3: Interview Session
+--------------------------------------------------------------------------------
+    User → Select interview mode
+         → Create interview record (status: scheduled)
+         → Enter PreInterviewSetup (optional context)
+         → Start Interview:
+             → Update status to in_progress
+             → Create interview_session record
+             → Fetch VAPI config from vapi-interview edge function
+             → Initialize VAPI SDK
+             → Start D-ID avatar session
+             → Begin voice conversation
+         → During Interview:
+             → VAPI handles STT/TTS
+             → Transcript accumulated locally
+             → Text streamed to D-ID for lip-sync
+             → Timer countdown (3 or 5 minutes)
+             → 30-second warning spoken
+         → End Interview:
+             → Speak closing message
+             → Stop VAPI call
+             → Destroy D-ID session
+             → Update interview status to completed
+             → Send transcript to evaluate-interview
+             → Display evaluation results
+
+--------------------------------------------------------------------------------
+FLOW 4: Evaluation
+--------------------------------------------------------------------------------
+    Interview Ends → Transcript sent to evaluate-interview
+                   → Mode-specific prompt selected
+                   → Gemini analyzes transcript
+                   → Returns structured evaluation
+                   → Save to evaluations table
+                   → Save improvement_suggestions
+                   → Display in EvaluationDisplay component
+
+--------------------------------------------------------------------------------
+FLOW 5: Avatar Rendering
+--------------------------------------------------------------------------------
+    Interview Starts → Request D-ID session via did-stream
+                     → Receive session_id + SDP offer
+                     → Create RTCPeerConnection
+                     → Exchange ICE candidates
+                     → Receive video stream
+                     → Display in DidAvatar component
+                     → Stream text for lip-sync during AI speech
+                     → Fallback to static image if connection fails
+
+================================================================================
+6. CURRENT DATABASE STRUCTURE
+================================================================================
+
+Database Provider: PostgreSQL via Supabase (Lovable Cloud)
+
+--------------------------------------------------------------------------------
+TABLE: profiles
+--------------------------------------------------------------------------------
+    Purpose: User profile information
+    Columns:
+        - id (uuid, PK)
+        - user_id (uuid, FK to auth.users)
+        - email (varchar)
+        - full_name (varchar)
+        - avatar_url (text)
+        - university_code_id (uuid, FK to university_codes)
+        - university_id (uuid, FK to university_codes)
+        - camera_permission (boolean)
+        - microphone_permission (boolean)
+        - created_at, updated_at (timestamptz)
+    
+    RLS: Users can view/update own profile; Admins can view university members
+
+--------------------------------------------------------------------------------
+TABLE: university_codes
+--------------------------------------------------------------------------------
+    Purpose: Institution access codes for student registration
+    Columns:
+        - id (uuid, PK)
+        - code (varchar, unique)
+        - university_name (varchar)
+        - admin_user_id (uuid)
+        - max_uses (integer)
+        - current_uses (integer)
+        - expires_at (timestamptz)
+        - is_active (boolean)
+        - created_at, updated_at (timestamptz)
+    
+    RLS: Admins can manage their own codes only
+
+--------------------------------------------------------------------------------
+TABLE: user_roles
+--------------------------------------------------------------------------------
+    Purpose: Role-based access control
+    Columns:
+        - id (uuid, PK)
+        - user_id (uuid)
+        - role (app_role enum: 'admin' | 'student')
+        - created_at (timestamptz)
+    
+    RLS: Users can view own roles; No direct inserts/updates/deletes
+
+--------------------------------------------------------------------------------
+TABLE: resumes
+--------------------------------------------------------------------------------
+    Purpose: Uploaded resume files
+    Columns:
+        - id (uuid, PK)
+        - user_id (uuid)
+        - file_name (varchar)
+        - file_url (text)
+        - file_size (integer)
+        - parsed_at (timestamptz)
+        - created_at, updated_at (timestamptz)
+    
+    RLS: Users can CRUD own resumes
+
+--------------------------------------------------------------------------------
+TABLE: resume_highlights
+--------------------------------------------------------------------------------
+    Purpose: Parsed resume structured data
+    Columns:
+        - id (uuid, PK)
+        - resume_id (uuid, FK to resumes)
+        - user_id (uuid)
+        - summary (text)
+        - experience (jsonb)
+        - projects (jsonb)
+        - education (jsonb)
+        - skills (text[])
+        - tools (text[])
+        - created_at, updated_at (timestamptz)
+    
+    RLS: Users can CRUD own highlights
+
+--------------------------------------------------------------------------------
+TABLE: ats_scores
+--------------------------------------------------------------------------------
+    Purpose: ATS compatibility analysis results
+    Columns:
+        - id (uuid, PK)
+        - resume_id (uuid, FK to resumes)
+        - user_id (uuid)
+        - job_role (text)
+        - overall_score (integer, 0-100)
+        - keyword_match_percentage (integer)
+        - section_scores (jsonb)
+        - missing_keywords (text[])
+        - strengths (text[])
+        - weaknesses (text[])
+        - formatting_issues (text[])
+        - recruiter_review (text)
+        - improvement_suggestions (jsonb)
+        - optimized_bullets (jsonb)
+        - created_at, updated_at (timestamptz)
+    
+    RLS: Users can CRUD own scores; Admins can view university members
+
+--------------------------------------------------------------------------------
+TABLE: interviews
+--------------------------------------------------------------------------------
+    Purpose: Interview session records
+    Columns:
+        - id (uuid, PK)
+        - user_id (uuid)
+        - resume_id (uuid, FK to resumes, nullable)
+        - interview_mode (varchar: 'resume_jd' | 'technical' | 'hr')
+        - duration (interview_duration enum: '3' | '5')
+        - status (interview_status enum: 'scheduled' | 'in_progress' | 
+                  'completed' | 'cancelled')
+        - scheduled_at, started_at, ended_at (timestamptz)
+        - created_at, updated_at (timestamptz)
+    
+    RLS: Users can create/update/view own interviews; Admins can view university
+
+--------------------------------------------------------------------------------
+TABLE: interview_sessions
+--------------------------------------------------------------------------------
+    Purpose: Technical session details for interviews
+    Columns:
+        - id (uuid, PK)
+        - interview_id (uuid, FK to interviews)
+        - vapi_session_id (varchar)
+        - start_time, end_time (timestamptz)
+        - duration_seconds (integer)
+        - created_at (timestamptz)
+    
+    RLS: Users can create/view own sessions; No updates/deletes
+
+--------------------------------------------------------------------------------
+TABLE: evaluations
+--------------------------------------------------------------------------------
+    Purpose: AI-generated interview evaluations
+    Columns:
+        - id (uuid, PK)
+        - interview_id (uuid, FK to interviews, unique)
+        - user_id (uuid)
+        - interview_mode (varchar)
+        - overall_score (integer)
+        - communication_score (integer)
+        - technical_score (integer)
+        - confidence_score (integer)
+        - feedback (text)
+        - transcript (text)
+        - response_analysis (jsonb)
+        - created_at (timestamptz)
+    
+    RLS: Users can view own evaluations; Admins can view university members
+
+--------------------------------------------------------------------------------
+TABLE: improvement_suggestions
+--------------------------------------------------------------------------------
+    Purpose: Specific improvement recommendations
+    Columns:
+        - id (uuid, PK)
+        - evaluation_id (uuid, FK to evaluations)
+        - suggestion (text)
+        - category (varchar)
+        - priority (integer)
+        - created_at (timestamptz)
+    
+    RLS: Users can view own suggestions; Admins can view university members
+
+--------------------------------------------------------------------------------
+TABLE: vapi_logs
+--------------------------------------------------------------------------------
+    Purpose: VAPI conversation event logs
+    Columns:
+        - id (uuid, PK)
+        - interview_session_id (uuid, FK to interview_sessions)
+        - log_type (varchar)
+        - message (text)
+        - metadata (jsonb)
+        - created_at (timestamptz)
+    
+    RLS: Backend insert only; Users can view own logs
+
+--------------------------------------------------------------------------------
+TABLE: avatar_sessions
+--------------------------------------------------------------------------------
+    Purpose: D-ID avatar session tracking
+    Columns:
+        - id (uuid, PK)
+        - interview_session_id (uuid, FK to interview_sessions)
+        - avatar_provider (varchar, default 'd-id')
+        - session_data (jsonb)
+        - created_at (timestamptz)
+    
+    RLS: Backend managed; Users can view own sessions
+
+--------------------------------------------------------------------------------
+TABLE: admin_notifications
+--------------------------------------------------------------------------------
+    Purpose: Notifications for admins when students complete interviews
+    Columns:
+        - id (uuid, PK)
+        - admin_user_id (uuid)
+        - university_id (uuid, FK to university_codes)
+        - student_id (uuid)
+        - student_name (text)
+        - interview_id (uuid, FK to interviews)
+        - interview_type (text)
+        - message (text)
+        - is_read (boolean)
+        - created_at (timestamptz)
+    
+    RLS: Admins can view/update own notifications
+
+================================================================================
+7. CURRENT SESSION MANAGEMENT
+================================================================================
+
+Interview Session Creation:
+    1. User clicks "Start Interview" on any mode
+    2. Create interview record with status: 'scheduled', interview_mode set
+    3. User proceeds through PreInterviewSetup
+    4. On "Begin Interview":
+        - Update interview status to 'in_progress'
+        - Create interview_session record with start_time
+        - Initialize VAPI with mode-specific system prompt
+        - Start D-ID avatar session
+
+Interview Mode Controls Behavior:
+    - interview_mode passed to vapi-interview edge function
+    - Edge function selects appropriate system prompt:
+        - resume_jd → buildResumeJDSystemPrompt() with resume data
+        - technical → buildTechnicalSystemPrompt() for DSA questions
+        - hr → buildHRSystemPrompt() for behavioral questions
+    - Mode also determines first message and evaluation rubric
+
+Context Reset Between Sessions:
+    - Each interview creates new VAPI call (fresh context)
+    - No memory carryover between sessions
+    - Interview mode explicitly set prevents cross-mode behavior
+    - D-ID session destroyed on interview end
+
+Multi-User Handling:
+    - Each user has isolated data via user_id foreign keys
+    - RLS policies enforce data isolation
+    - University-based grouping for admin oversight
+    - Concurrent sessions supported (different browser tabs)
+
+================================================================================
+8. CURRENT SCORING SYSTEM
+================================================================================
+
+--------------------------------------------------------------------------------
+Resume + JD Mode Scoring:
+--------------------------------------------------------------------------------
+    Categories:
+        - Communication: Clarity, articulation, professional language
+        - Technical: Depth of knowledge, accuracy, relevance to resume
+        - Confidence: Assertiveness, conviction in answers
+        - Overall: Weighted combination
+    
+    Scale: 1-10 per category, converted to percentage for overall
+
+--------------------------------------------------------------------------------
+Technical Mode Scoring:
+--------------------------------------------------------------------------------
+    Categories:
+        - Algorithm Understanding: Problem-solving approach
+        - Optimization Thinking: Ability to improve solutions
+        - Complexity Knowledge: Time/space analysis accuracy
+        - Explanation Clarity: Communication of technical concepts
+    
+    Scale: 1-10, with overall Technical Score as percentage
+
+--------------------------------------------------------------------------------
+HR Mode Scoring:
+--------------------------------------------------------------------------------
+    Categories:
+        - Communication Clarity: Clear, structured responses
+        - Confidence Level: Self-assurance in delivery
+        - Emotional Stability: Composure under pressure
+        - Professionalism: Appropriate workplace demeanor
+        - Answer Structure: STAR method adherence
+    
+    Scale: 1-10, with HR Selection Probability as percentage
+
+================================================================================
+9. CURRENT UI STRUCTURE
+================================================================================
+
+--------------------------------------------------------------------------------
+Landing Page (/)
+--------------------------------------------------------------------------------
+    - Hero section with platform introduction
+    - Feature highlights
+    - CTA buttons for login/signup
+
+--------------------------------------------------------------------------------
+Authentication (/login, /signup, /forgot-password)
+--------------------------------------------------------------------------------
+    - Email/password forms
+    - University code input for students
+    - Password reset flow
+
+--------------------------------------------------------------------------------
+Student Dashboard (/dashboard)
+--------------------------------------------------------------------------------
+    - Welcome message with user name
+    - Quick stats (interviews completed, average score)
+    - Navigation to Resume, Interview, History
+
+--------------------------------------------------------------------------------
+Resume Page (/resume)
+--------------------------------------------------------------------------------
+    - Resume upload dropzone
+    - PDF preview
+    - Extracted highlights display
+    - ATS scoring panel with job role selection
+
+--------------------------------------------------------------------------------
+Interview Flow (/interview)
+--------------------------------------------------------------------------------
+    States:
+        1. mode_select: InterviewModeSelector component
+        2. setup: PreInterviewSetup with duration/context options
+        3. connecting: Loading state while VAPI/D-ID initialize
+        4. in_progress: InterviewRoom with avatar, timer, controls
+        5. ended: EvaluationDisplay with scores and feedback
+
+--------------------------------------------------------------------------------
+Interview History (/history)
+--------------------------------------------------------------------------------
+    - List of past interviews
+    - Filter by mode (planned)
+    - Click to view detailed evaluation
+
+--------------------------------------------------------------------------------
+Profile (/profile)
+--------------------------------------------------------------------------------
+    - Avatar upload
+    - Name editing
+    - Permission settings
+
+--------------------------------------------------------------------------------
+Admin Dashboard (/admin)
+--------------------------------------------------------------------------------
+    - University code management
+    - Student list
+    - Interview completion notifications
+    - Aggregate statistics
+
+================================================================================
+10. SECURITY AND API KEY HANDLING
+================================================================================
+
+Environment Variables (Auto-managed):
+    - VITE_SUPABASE_URL: Public Supabase endpoint
+    - VITE_SUPABASE_PUBLISHABLE_KEY: Anon key for client
+    - VITE_SUPABASE_PROJECT_ID: Project identifier
+
+Supabase Secrets (Server-side only):
+    - SUPABASE_URL
+    - SUPABASE_ANON_KEY
+    - SUPABASE_SERVICE_ROLE_KEY (admin operations)
+    - VAPI_PUBLIC_KEY
+    - VAPI_API_KEY
+    - VAPI_ASSISTANT_ID
+    - DID_API_KEY
+    - LOVABLE_API_KEY (Gemini access)
+
+Security Measures:
+    - All API keys stored as Supabase secrets (encrypted)
+    - Edge functions access secrets via Deno.env.get()
+    - Frontend never sees private keys
+    - RLS policies enforce data isolation
+    - JWT verification on all protected edge functions
+    - University codes for controlled access
+
+Authentication Security:
+    - Email verification required (auto-confirm disabled)
+    - Password requirements enforced by Supabase Auth
+    - Session tokens stored in localStorage
+    - Automatic token refresh
+
+================================================================================
+11. EDGE FUNCTIONS REFERENCE
+================================================================================
+
+--------------------------------------------------------------------------------
+parse-resume
+--------------------------------------------------------------------------------
+    Path: supabase/functions/parse-resume/index.ts
+    Auth: JWT required
+    Input: { resumeText: string }
+    Output: { summary, experience, projects, skills, education, tools }
+    AI: Gemini 2.5 Flash
+
+--------------------------------------------------------------------------------
+ats-score
+--------------------------------------------------------------------------------
+    Path: supabase/functions/ats-score/index.ts
+    Auth: JWT required
+    Input: { resumeText: string, jobRole: string }
+    Output: { overall_score, keyword_match_percentage, section_scores, 
+              recruiter_review, strengths, weaknesses, ... }
+    AI: Gemini 2.5 Flash
+
+--------------------------------------------------------------------------------
+vapi-interview
+--------------------------------------------------------------------------------
+    Path: supabase/functions/vapi-interview/index.ts
+    Auth: JWT required
+    Input: { interview_mode, resumeData?, interviewContext? }
+    Output: { publicKey, assistantId, assistantOverrides }
+    Logic: Builds mode-specific system prompts
+
+--------------------------------------------------------------------------------
+evaluate-interview
+--------------------------------------------------------------------------------
+    Path: supabase/functions/evaluate-interview/index.ts
+    Auth: JWT required
+    Input: { transcript: string, interview_mode: string, interviewId: string }
+    Output: { overall_score, communication_score, technical_score, 
+              confidence_score, feedback, response_analysis }
+    AI: Gemini 2.5 Flash with mode-specific prompts
+
+--------------------------------------------------------------------------------
+did-stream
+--------------------------------------------------------------------------------
+    Path: supabase/functions/did-stream/index.ts
+    Auth: JWT required
+    Actions: create_session, send_ice, start_stream, send_text, destroy
+    Output: Session management data, SDP/ICE for WebRTC
+
+--------------------------------------------------------------------------------
+admin-signup
+--------------------------------------------------------------------------------
+    Path: supabase/functions/admin-signup/index.ts
+    Auth: Service role key
+    Purpose: Create admin users with university association
+
+================================================================================
+12. FILE STRUCTURE
+================================================================================
+
+src/
+├── components/
+│   ├── interview/
+│   │   ├── DidAvatar.tsx           # D-ID avatar component
+│   │   ├── EvaluationDisplay.tsx   # Scores/feedback display
+│   │   ├── InterviewModeSelector.tsx # Mode selection UI
+│   │   ├── InterviewRoom.tsx       # Main interview interface
+│   │   ├── InterviewSettings.tsx   # Audio/video settings
+│   │   └── PreInterviewSetup.tsx   # Pre-interview configuration
+│   ├── ats/
+│   │   ├── ATSAnalysisPanel.tsx    # ATS results display
+│   │   ├── ATSScoreGauge.tsx       # Score visualization
+│   │   └── JobRoleCombobox.tsx     # Job role selector
+│   └── ui/                         # shadcn/ui components
+├── hooks/
+│   ├── useVapi.ts                  # VAPI SDK integration
+│   ├── useDidStream.ts             # D-ID streaming
+│   └── useTheme.tsx                # Theme management
+├── pages/
+│   ├── Interview.tsx               # Interview flow orchestrator
+│   ├── Resume.tsx                  # Resume management
+│   ├── Dashboard.tsx               # Student dashboard
+│   ├── AdminDashboard.tsx          # Admin dashboard
+│   └── ...
+├── integrations/supabase/
+│   ├── client.ts                   # Supabase client (auto-generated)
+│   └── types.ts                    # Database types (auto-generated)
+└── lib/
+    └── utils.ts                    # Utility functions
+
+supabase/
+├── functions/
+│   ├── parse-resume/index.ts
+│   ├── ats-score/index.ts
+│   ├── vapi-interview/index.ts
+│   ├── evaluate-interview/index.ts
+│   ├── did-stream/index.ts
+│   └── admin-signup/index.ts
+└── config.toml                     # Function configuration
+
+================================================================================
+                              CHANGE LOG
+================================================================================
+
+--------------------------------------------------------------------------------
+Date: 2026-01-31
+Change: Initial documentation creation
+--------------------------------------------------------------------------------
+Features Documented:
+    - Complete project architecture
+    - All three interview modes (resume_jd, technical, hr)
+    - All API integrations (VAPI, D-ID, Gemini, Supabase)
+    - Full database schema
+    - UI structure and flows
+
+APIs Affected: None (documentation only)
+
+Database Changes: None
+
+Workflow Changes: None
+
+--------------------------------------------------------------------------------
+Date: 2026-01-31
+Change: Added Technical and HR interview modes
+--------------------------------------------------------------------------------
+Features Added:
+    - Technical DSA interview mode
+    - HR Behavioral interview mode
+    - Mode-specific evaluation prompts
+    - InterviewModeSelector component
+
+APIs Affected:
+    - vapi-interview (new system prompts)
+    - evaluate-interview (new evaluation rubrics)
+
+Database Changes:
+    - Added interview_mode column to interviews table
+    - Added interview_mode column to evaluations table
+
+Workflow Changes:
+    - New mode selection step before interview setup
+    - Mode-specific question generation
+    - Mode-specific scoring metrics
+
+================================================================================
+                            END OF DOCUMENT
+================================================================================
