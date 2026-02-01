@@ -1010,6 +1010,33 @@ Workflow Changes:
     - Mode-specific question generation
     - Mode-specific scoring metrics
 
+--------------------------------------------------------------------------------
+Date: 2026-02-01
+Change: Refactored evaluation system to be fully dynamic
+--------------------------------------------------------------------------------
+Features Updated:
+    - Evaluation scores now fully derived from actual transcript content
+    - No hardcoded fallback scores (except for parse errors)
+    - Silent sessions (no user input) now receive 0 scores across all metrics
+    - Candidate word count analysis for response quality assessment
+    - Per-response analysis generated from actual conversation pairs
+    - EvaluationDisplay adapts labels based on interview mode
+
+APIs Affected:
+    - evaluate-interview (complete evaluation logic refactored)
+
+Database Changes: None
+
+Workflow Changes:
+    - Silent sessions now clearly indicate 0 scores with helpful feedback
+    - Technical mode shows: Explanation Clarity, Algorithm & Logic, Optimization
+    - HR mode shows: Communication & Structure, Professionalism, Confidence
+    - Resume mode shows: Communication, Technical Accuracy, Confidence
+
+Code Files Modified:
+    - supabase/functions/evaluate-interview/index.ts
+    - src/components/interview/EvaluationDisplay.tsx
+
 ================================================================================
                             END OF DOCUMENT
 ================================================================================
