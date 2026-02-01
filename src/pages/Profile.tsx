@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { motion } from "framer-motion";
 import { 
   Brain, 
   FileText, 
@@ -22,7 +23,10 @@ import {
   Save,
   Upload,
   Menu,
-  X
+  X,
+  Shield,
+  Mail,
+  Settings
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
@@ -100,7 +104,6 @@ const Profile = () => {
         setMicPermission(typedProfile.microphone_permission || false);
         setAvatarUrl(typedProfile.avatar_url);
 
-        // Fetch university code
         if (typedProfile.university_code_id) {
           const { data: codeData } = await supabase
             .from("university_codes")
@@ -124,7 +127,6 @@ const Profile = () => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    // Validate file
     if (!file.type.startsWith('image/')) {
       toast({
         title: "Invalid file",
@@ -148,19 +150,16 @@ const Profile = () => {
       const fileExt = file.name.split('.').pop();
       const fileName = `${user.id}/avatar.${fileExt}`;
 
-      // Upload to storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(fileName, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('avatars')
         .getPublicUrl(fileName);
 
-      // Update profile with avatar URL
       const { error: updateError } = await supabase
         .from('profiles')
         .update({ avatar_url: publicUrl })
@@ -219,6 +218,12 @@ const Profile = () => {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/");
+  };
+
+  const fadeIn = {
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.4 }
   };
 
   if (isLoading) {
@@ -354,187 +359,246 @@ const Profile = () => {
         </div>
       )}
 
-      {/* Main content */}
-      <main className="lg:ml-64 pt-20 lg:pt-0">
-        <div className="p-4 lg:p-10 max-w-2xl mx-auto lg:mx-0">
-          <div className="mb-6 lg:mb-10">
-            <h1 className="text-2xl lg:text-3xl font-bold text-foreground mb-2">Profile Settings</h1>
-            <p className="text-muted-foreground text-sm lg:text-base">
-              Manage your account and preferences
+      {/* Main content - Centered */}
+      <main className="lg:ml-64 pt-20 lg:pt-0 min-h-screen">
+        <div className="max-w-4xl mx-auto p-4 lg:p-10">
+          {/* Header */}
+          <motion.div 
+            className="mb-8 text-center lg:text-left"
+            {...fadeIn}
+          >
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 text-accent text-sm font-medium mb-4">
+              <Settings className="w-4 h-4" />
+              Account Settings
+            </div>
+            <h1 className="text-3xl lg:text-4xl font-bold text-foreground mb-2">Profile Settings</h1>
+            <p className="text-muted-foreground">
+              Manage your account information and preferences
             </p>
-          </div>
+          </motion.div>
 
-          {/* Avatar section */}
-          <Card className="border-border/50 mb-6">
-            <CardContent className="p-4 lg:p-6">
-              <div className="flex flex-col sm:flex-row items-center gap-4 lg:gap-6">
-                <div className="relative">
-                  {avatarUrl ? (
-                    <img 
-                      src={avatarUrl} 
-                      alt="Profile" 
-                      className="w-20 h-20 lg:w-24 lg:h-24 rounded-2xl object-cover"
-                    />
-                  ) : (
-                    <div className="w-20 h-20 lg:w-24 lg:h-24 rounded-2xl bg-gradient-to-br from-accent to-primary flex items-center justify-center">
-                      <span className="text-2xl lg:text-3xl font-bold text-primary-foreground">
-                        {fullName.charAt(0).toUpperCase() || "S"}
-                      </span>
-                    </div>
-                  )}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAvatarUpload}
-                    className="hidden"
-                  />
-                  <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-card border border-border flex items-center justify-center shadow-md hover:bg-secondary transition-colors disabled:opacity-50"
-                  >
-                    {isUploading ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+          {/* Profile Card - Hero Section */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+          >
+            <Card className="border-border/50 mb-8 overflow-hidden">
+              <div className="h-24 lg:h-32 gradient-hero" />
+              <CardContent className="relative px-6 pb-6">
+                <div className="flex flex-col sm:flex-row items-center sm:items-end gap-4 -mt-12 sm:-mt-16">
+                  <div className="relative">
+                    {avatarUrl ? (
+                      <img 
+                        src={avatarUrl} 
+                        alt="Profile" 
+                        className="w-24 h-24 lg:w-32 lg:h-32 rounded-2xl object-cover border-4 border-background shadow-lg"
+                      />
                     ) : (
-                      <Camera className="w-4 h-4 text-muted-foreground" />
+                      <div className="w-24 h-24 lg:w-32 lg:h-32 rounded-2xl bg-gradient-to-br from-accent to-primary flex items-center justify-center border-4 border-background shadow-lg">
+                        <span className="text-3xl lg:text-4xl font-bold text-primary-foreground">
+                          {fullName.charAt(0).toUpperCase() || "S"}
+                        </span>
+                      </div>
                     )}
-                  </button>
-                </div>
-                <div className="text-center sm:text-left">
-                  <h3 className="text-lg lg:text-xl font-semibold text-foreground">{fullName || "Student"}</h3>
-                  <p className="text-muted-foreground text-sm">{profile?.email}</p>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarUpload}
+                      className="hidden"
+                    />
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className="absolute -bottom-2 -right-2 w-10 h-10 rounded-full bg-card border-2 border-border flex items-center justify-center shadow-lg hover:bg-secondary transition-colors disabled:opacity-50"
+                    >
+                      {isUploading ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <Camera className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </button>
+                  </div>
+                  <div className="flex-1 text-center sm:text-left pb-2">
+                    <h2 className="text-xl lg:text-2xl font-bold text-foreground">{fullName || "Student"}</h2>
+                    <p className="text-muted-foreground flex items-center justify-center sm:justify-start gap-2">
+                      <Mail className="w-4 h-4" />
+                      {profile?.email}
+                    </p>
+                  </div>
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    className="mt-2"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
+                    className="hidden sm:flex"
                   >
                     <Upload className="w-4 h-4 mr-2" />
                     {avatarUrl ? "Change Photo" : "Upload Photo"}
                   </Button>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </motion.div>
 
-          {/* Personal info */}
-          <Card className="border-border/50 mb-6">
-            <CardHeader className="p-4 lg:p-6">
-              <CardTitle className="text-base lg:text-lg">Personal Information</CardTitle>
-              <CardDescription className="text-sm">Update your profile details</CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 lg:p-6 pt-0 space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name</Label>
-                <Input
-                  id="fullName"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Enter your full name"
-                  className="h-11"
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  value={profile?.email || ""}
-                  disabled
-                  className="bg-secondary/50 h-11"
-                />
-                <p className="text-xs text-muted-foreground">Email cannot be changed</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* University info */}
-          <Card className="border-border/50 mb-6">
-            <CardHeader className="p-4 lg:p-6">
-              <CardTitle className="flex items-center gap-2 text-base lg:text-lg">
-                <GraduationCap className="w-5 h-5" />
-                University Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 lg:p-6 pt-0">
-              <div className="p-4 rounded-xl bg-secondary/50">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-muted-foreground">University</span>
-                  <span className="font-medium text-foreground text-sm lg:text-base">
-                    {universityCode?.university_name || "Not linked"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Code</span>
-                  <span className="font-mono text-foreground text-sm">
-                    {universityCode?.code || "N/A"}
-                  </span>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                University code cannot be changed after registration
-              </p>
-            </CardContent>
-          </Card>
-
-          {/* Permissions */}
-          <Card className="border-border/50 mb-6">
-            <CardHeader className="p-4 lg:p-6">
-              <CardTitle className="text-base lg:text-lg">Device Permissions</CardTitle>
-              <CardDescription className="text-sm">Manage camera and microphone access</CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 lg:p-6 pt-0 space-y-4">
-              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
-                    <Camera className="w-5 h-5 text-accent" />
+          {/* Settings Grid */}
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Personal info */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.2 }}
+            >
+              <Card className="border-border/50 h-full">
+                <CardHeader className="p-6">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <User className="w-5 h-5 text-accent" />
+                    Personal Information
+                  </CardTitle>
+                  <CardDescription>Update your profile details</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 pt-0 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName">Full Name</Label>
+                    <Input
+                      id="fullName"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Enter your full name"
+                      className="h-11"
+                    />
                   </div>
-                  <div>
-                    <p className="font-medium text-foreground text-sm lg:text-base">Camera Access</p>
-                    <p className="text-xs lg:text-sm text-muted-foreground">Allow video during interviews</p>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      value={profile?.email || ""}
+                      disabled
+                      className="bg-secondary/50 h-11"
+                    />
+                    <p className="text-xs text-muted-foreground">Email cannot be changed</p>
                   </div>
-                </div>
-                <Switch
-                  checked={cameraPermission}
-                  onCheckedChange={setCameraPermission}
-                />
-              </div>
+                </CardContent>
+              </Card>
+            </motion.div>
 
-              <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+            {/* University info */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.3 }}
+            >
+              <Card className="border-border/50 h-full">
+                <CardHeader className="p-6">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <GraduationCap className="w-5 h-5 text-accent" />
+                    University Details
+                  </CardTitle>
+                  <CardDescription>Your academic affiliation</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 pt-0">
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-xl bg-secondary/50">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm text-muted-foreground">University</span>
+                        <span className="font-medium text-foreground">
+                          {universityCode?.university_name || "Not linked"}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Access Code</span>
+                        <span className="font-mono text-foreground bg-background px-2 py-1 rounded">
+                          {universityCode?.code || "N/A"}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Shield className="w-3 h-3" />
+                      University code cannot be changed after registration
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Permissions */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.4 }}
+              className="md:col-span-2"
+            >
+              <Card className="border-border/50">
+                <CardHeader className="p-6">
+                  <CardTitle className="flex items-center gap-2 text-lg">
                     <Video className="w-5 h-5 text-accent" />
+                    Device Permissions
+                  </CardTitle>
+                  <CardDescription>Manage camera and microphone access for interviews</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 pt-0">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                          <Camera className="w-5 h-5 text-accent" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">Camera Access</p>
+                          <p className="text-sm text-muted-foreground">Allow video during interviews</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={cameraPermission}
+                        onCheckedChange={setCameraPermission}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 rounded-xl bg-secondary/50">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                          <Mic className="w-5 h-5 text-accent" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-foreground">Microphone Access</p>
+                          <p className="text-sm text-muted-foreground">Allow audio during interviews</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={micPermission}
+                        onCheckedChange={setMicPermission}
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-foreground text-sm lg:text-base">Microphone Access</p>
-                    <p className="text-xs lg:text-sm text-muted-foreground">Allow audio during interviews</p>
-                  </div>
-                </div>
-                <Switch
-                  checked={micPermission}
-                  onCheckedChange={setMicPermission}
-                />
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </div>
 
           {/* Save button */}
-          <Button 
-            variant="hero" 
-            size="lg" 
-            className="w-full h-12" 
-            onClick={handleSave}
-            disabled={isSaving}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.5 }}
+            className="mt-8"
           >
-            {isSaving ? (
-              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            ) : (
-              <Save className="w-4 h-4 mr-2" />
-            )}
-            Save Changes
-          </Button>
+            <Button 
+              variant="hero" 
+              size="lg" 
+              className="w-full sm:w-auto h-12 px-8" 
+              onClick={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              Save Changes
+            </Button>
+          </motion.div>
         </div>
       </main>
     </div>
