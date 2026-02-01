@@ -218,27 +218,80 @@ const EvaluationDisplay = ({
           <Card className="border-border/50">
             <CardHeader>
               <CardTitle className="text-lg">Score Breakdown</CardTitle>
-              <CardDescription>Detailed analysis across key performance areas</CardDescription>
+              <CardDescription>
+                {interviewMode === 'technical' 
+                  ? 'Technical skills assessment based on your responses'
+                  : interviewMode === 'hr'
+                  ? 'Behavioral competencies evaluated using STAR methodology'
+                  : 'Detailed analysis across key performance areas'
+                }
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <ScoreBar
-                label="Communication"
-                score={communicationScore}
-                icon={<MessageSquare className="w-5 h-5" />}
-                description="Clarity, structure, and articulation of responses"
-              />
-              <ScoreBar
-                label="Technical Accuracy"
-                score={technicalScore}
-                icon={<Brain className="w-5 h-5" />}
-                description="Correctness and depth of technical explanations"
-              />
-              <ScoreBar
-                label="Confidence & Presence"
-                score={confidenceScore}
-                icon={<Zap className="w-5 h-5" />}
-                description="Composure, pace, and professional demeanor"
-              />
+              {interviewMode === 'technical' ? (
+                <>
+                  <ScoreBar
+                    label="Explanation Clarity"
+                    score={communicationScore}
+                    icon={<MessageSquare className="w-5 h-5" />}
+                    description="Ability to articulate technical concepts clearly"
+                  />
+                  <ScoreBar
+                    label="Algorithm & Logic"
+                    score={technicalScore}
+                    icon={<Brain className="w-5 h-5" />}
+                    description="Problem-solving approach and correctness"
+                  />
+                  <ScoreBar
+                    label="Optimization Thinking"
+                    score={confidenceScore}
+                    icon={<Zap className="w-5 h-5" />}
+                    description="Awareness of time/space complexity tradeoffs"
+                  />
+                </>
+              ) : interviewMode === 'hr' ? (
+                <>
+                  <ScoreBar
+                    label="Communication & Structure"
+                    score={communicationScore}
+                    icon={<MessageSquare className="w-5 h-5" />}
+                    description="Clarity and use of STAR method in responses"
+                  />
+                  <ScoreBar
+                    label="Professionalism"
+                    score={technicalScore}
+                    icon={<Target className="w-5 h-5" />}
+                    description="Professional demeanor and appropriate examples"
+                  />
+                  <ScoreBar
+                    label="Confidence & Composure"
+                    score={confidenceScore}
+                    icon={<Zap className="w-5 h-5" />}
+                    description="Emotional stability and self-assurance"
+                  />
+                </>
+              ) : (
+                <>
+                  <ScoreBar
+                    label="Communication"
+                    score={communicationScore}
+                    icon={<MessageSquare className="w-5 h-5" />}
+                    description="Clarity, structure, and articulation of responses"
+                  />
+                  <ScoreBar
+                    label="Technical Accuracy"
+                    score={technicalScore}
+                    icon={<Brain className="w-5 h-5" />}
+                    description="Correctness and depth of technical explanations"
+                  />
+                  <ScoreBar
+                    label="Confidence & Presence"
+                    score={confidenceScore}
+                    icon={<Zap className="w-5 h-5" />}
+                    description="Composure, pace, and professional demeanor"
+                  />
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

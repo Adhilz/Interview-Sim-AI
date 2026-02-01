@@ -531,17 +531,18 @@ serve(async (req) => {
       /Candidate:/i,
       /User:/i,
       /\buser\b.*?:/i,
-      /^[^:]+:\s+[A-Z]/m  // Any role label followed by content starting with capital
     ];
     
     const hasUserResponses = interviewTranscript && candidatePatterns.some(p => p.test(interviewTranscript));
     const transcriptWordCount = interviewTranscript ? interviewTranscript.split(/\s+/).length : 0;
     const transcriptLineCount = interviewTranscript ? interviewTranscript.split('\n').filter((l: string) => l.trim()).length : 0;
     
-    // Count actual candidate lines
-    const candidateLineCount = interviewTranscript 
-      ? interviewTranscript.split('\n').filter((l: string) => /^(Candidate|User):/i.test(l.trim())).length 
-      : 0;
+    // Count actual candidate lines and their content length
+    const candidateLines = interviewTranscript 
+      ? interviewTranscript.split('\n').filter((l: string) => /^(Candidate|User):/i.test(l.trim()))
+      : [];
+    const candidateLineCount = candidateLines.length;
+    const candidateWordCount = candidateLines.reduce((acc: number, line: string) => acc + line.split(/\s+/).length, 0);
     
     console.log('[Evaluate] Transcript analysis:', {
       source: transcriptSource,
@@ -549,17 +550,75 @@ serve(async (req) => {
       wordCount: transcriptWordCount,
       lineCount: transcriptLineCount,
       candidateLineCount,
+      candidateWordCount,
       length: interviewTranscript?.length || 0
     });
 
-    // Build evaluation prompt with quality checks and mode context
+    // CRITICAL: If no candidate responses detected, return zero scores immediately
+    const isSilentSession = !hasUserResponses || candidateLineCount === 0 || candidateWordCount < 5;
+    
+    if (isSilentSession) {
+      console.log('[Evaluate] SILENT SESSION DETECTED - Assigning zero scores');
+      
+      // Zero scores for silent/no-input session
+      const zeroEvaluation = {
+        interview_id: interviewId,
+        user_id: userId,
+        overall_score: 0,
+        communication_score: 0,
+        technical_score: 0,
+        confidence_score: 0,
+        feedback: `**Verdict:** No candidate responses detected in this interview session.
+
+**Critical Issue:**
+- The system did not capture any responses from the candidate
+- This may indicate audio issues, microphone problems, or a silent session
+
+**What to do next:**
+1. Ensure your microphone is working and permissions are granted
+2. Speak clearly during the interview
+3. Restart the interview and try again
+
+**Transcript Analysis:**
+- Candidate responses found: 0
+- Words from candidate: ${candidateWordCount}
+- Total transcript lines: ${transcriptLineCount}`,
+        transcript: interviewTranscript || 'No transcript captured',
+        response_analysis: [],
+        interview_mode: mode,
+      };
+
+      const { data: evalData, error: evalError } = await supabase
+        .from('evaluations')
+        .insert(zeroEvaluation)
+        .select()
+        .single();
+
+      if (evalError) {
+        console.error('Evaluation save error:', evalError);
+        throw new Error('Failed to save evaluation');
+      }
+
+      // Add one improvement suggestion for silent sessions
+      await supabase.from('improvement_suggestions').insert({
+        evaluation_id: evalData.id,
+        suggestion: 'Ensure your microphone is working properly and speak clearly during the interview. The system could not capture any of your responses.',
+        category: 'technical',
+        priority: 1,
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, evaluation: evalData }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Build evaluation prompt with quality context
     let evaluationNote = '';
-    if (!hasUserResponses || candidateLineCount === 0) {
-      evaluationNote = '\n\nNOTE: The transcript appears to contain NO candidate responses. This may indicate a silent session or audio issues. Assign failing scores accordingly.';
-    } else if (transcriptWordCount < 100) {
-      evaluationNote = '\n\nNOTE: The transcript is very short. The candidate may not have provided substantial responses. Consider this when scoring.';
-    } else if (candidateLineCount < 2) {
-      evaluationNote = '\n\nNOTE: The candidate provided very few responses. Consider this when evaluating engagement.';
+    if (candidateWordCount < 50) {
+      evaluationNote = '\n\nNOTE: The candidate provided very brief responses. Score accordingly - limited data means lower confidence in abilities.';
+    } else if (candidateLineCount < 3) {
+      evaluationNote = '\n\nNOTE: The candidate answered very few questions. Consider this when evaluating overall engagement and preparation.';
     }
 
     // Select appropriate evaluation prompt based on mode
@@ -577,18 +636,25 @@ serve(async (req) => {
 
     const userPrompt = `${profileContext}INTERVIEW TRANSCRIPT:
 <<<
-${interviewTranscript || 'No transcript available. Assign minimum scores across all categories.'}
+${interviewTranscript}
 >>>
 
 TRANSCRIPT SOURCE: ${transcriptSource}
-CANDIDATE RESPONSES DETECTED: ${hasUserResponses ? 'Yes' : 'No'}
+CANDIDATE RESPONSES DETECTED: Yes
 CANDIDATE RESPONSE COUNT: ${candidateLineCount}
+CANDIDATE WORD COUNT: ${candidateWordCount}
 TOTAL WORD COUNT: ${transcriptWordCount}
 INTERVIEW MODE: ${mode}
 ${evaluationNote}
 
-Evaluate this interview STRICTLY. No soft feedback. Identify every weakness.
-IMPORTANT: Include response_analysis array with analysis of EACH candidate response in the transcript.`;
+CRITICAL INSTRUCTIONS:
+1. Analyze ONLY what the candidate actually said in the transcript above
+2. Base ALL scores strictly on the actual responses provided
+3. For response_analysis, include EVERY question-response pair from the transcript
+4. If responses are brief or incomplete, score accordingly (don't give benefit of doubt)
+5. Do NOT make up or infer content that isn't in the transcript
+
+Evaluate this interview STRICTLY based on the actual transcript content.`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -624,29 +690,36 @@ IMPORTANT: Include response_analysis array with analysis of EACH candidate respo
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
 
-    console.log('AI evaluation response received');
+    console.log('[Evaluate] AI evaluation response received');
 
     let evaluation;
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         evaluation = JSON.parse(jsonMatch[0]);
+        console.log('[Evaluate] Parsed evaluation:', {
+          hasScores: !!evaluation.overall_score,
+          hasResponseAnalysis: Array.isArray(evaluation.response_analysis),
+          responseCount: evaluation.response_analysis?.length || 0
+        });
       } else {
-        throw new Error('No JSON found');
+        throw new Error('No JSON found in AI response');
       }
-    } catch {
-      console.log('Failed to parse AI response, using strict defaults');
+    } catch (parseError) {
+      console.error('[Evaluate] Failed to parse AI response:', parseError);
+      console.log('[Evaluate] Raw content:', content?.substring(0, 500));
+      
+      // Return minimal scores when parsing fails - not zeros since there WAS input
       evaluation = {
-        communication: { score: 4, feedback: "Unable to evaluate from transcript. Insufficient data." },
-        technical_accuracy: { score: 4, feedback: "Unable to evaluate from transcript. Insufficient data." },
-        confidence: { score: 4, feedback: "Unable to evaluate from transcript. Insufficient data." },
-        relevance: { score: 4, feedback: "Unable to evaluate from transcript. Insufficient data." },
-        overall_score: 40,
-        verdict: "The interview data was insufficient for proper evaluation. The candidate should retry with a complete session.",
-        critical_weaknesses: ["Incomplete interview session", "No evaluable responses provided"],
+        communication: { score: 2, feedback: "Evaluation parsing failed. Minimal score assigned." },
+        technical_accuracy: { score: 2, feedback: "Evaluation parsing failed. Minimal score assigned." },
+        confidence: { score: 2, feedback: "Evaluation parsing failed. Minimal score assigned." },
+        relevance: { score: 2, feedback: "Evaluation parsing failed. Minimal score assigned." },
+        overall_score: 20,
+        verdict: "The evaluation system encountered an error processing the responses. A minimal score has been assigned. Please try again.",
+        critical_weaknesses: ["Evaluation processing error"],
         improvements: [
-          { suggestion: "Complete the full interview session", category: "preparation", priority: 1 },
-          { suggestion: "Ensure stable connection for full transcript capture", category: "technical", priority: 2 }
+          { suggestion: "Try the interview again for a complete evaluation", category: "preparation", priority: 1 }
         ],
         response_analysis: []
       };
