@@ -755,6 +755,20 @@ serve(async (req) => {
         // For technical/HR modes, we only need the name
         candidateName = resumeHighlights.name;
       }
+      
+      // Fallback: If candidateName is still empty, fetch from user's profile
+      if (!candidateName) {
+        const { data: userProfile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (userProfile?.full_name) {
+          candidateName = userProfile.full_name;
+          console.log('[VAPI] Retrieved candidate name from profile:', candidateName);
+        }
+      }
 
       const { data: newSession, error: newSessionError } = await supabase
         .from('interview_sessions')
