@@ -704,8 +704,8 @@ const Resume = () => {
       )}
 
       {/* Main content */}
-      <main className="lg:ml-64 pt-20 lg:pt-0">
-        <div className="p-4 sm:p-6 lg:p-10 max-w-4xl">
+      <main className="lg:ml-64 pt-20 lg:pt-0 min-h-screen">
+        <div className="p-4 sm:p-6 lg:p-10 max-w-4xl mx-auto lg:mx-0 lg:max-w-none lg:pr-10">
           <div className="mb-6 sm:mb-10">
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">Resume</h1>
             <p className="text-sm sm:text-base text-muted-foreground">
