@@ -50,9 +50,8 @@ const Navbar = () => {
             </Link>
             <Link to="/login" className="hidden sm:block">
               <Button 
-                variant="ghost" 
                 size="sm"
-                className="text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-700/70 rounded-full px-4 sm:px-6 border border-slate-600/50"
+                className="text-slate-300 hover:text-white bg-transparent hover:bg-slate-700/50 rounded-full px-4 sm:px-6 border border-slate-500/50"
               >
                 Sign in
               </Button>
