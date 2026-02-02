@@ -52,7 +52,7 @@ const Navbar = () => {
               <Button 
                 variant="ghost" 
                 size="sm"
-                className="text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-full px-4 sm:px-6"
+                className="text-slate-300 hover:text-white bg-slate-800/60 hover:bg-slate-700/70 rounded-full px-4 sm:px-6 border border-slate-600/50"
               >
                 Sign in
               </Button>
