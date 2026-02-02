@@ -5,10 +5,10 @@ import { ArrowRight, Zap } from "lucide-react";
 
 const CTASection = () => {
   return (
-    <section className="py-24 px-4 sm:px-6 relative overflow-hidden">
+    <section className="py-16 sm:py-24 px-3 sm:px-6 relative overflow-hidden">
       <div className="container mx-auto max-w-4xl">
         <motion.div
-          className="relative rounded-3xl overflow-hidden p-8 sm:p-12 lg:p-16 text-center"
+          className="relative rounded-2xl sm:rounded-3xl overflow-hidden p-6 sm:p-12 lg:p-16 text-center"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -20,11 +20,11 @@ const CTASection = () => {
           }}
         >
           {/* Background glow */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] rounded-full bg-teal-500/10 blur-[100px]" />
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[300px] sm:w-[600px] h-[150px] sm:h-[300px] rounded-full bg-teal-500/10 blur-[60px] sm:blur-[100px]" />
           
           {/* Animated background elements */}
           <motion.div
-            className="absolute top-0 left-0 w-40 h-40 rounded-full bg-teal-500/20 blur-3xl"
+            className="absolute top-0 left-0 w-24 sm:w-40 h-24 sm:h-40 rounded-full bg-teal-500/20 blur-2xl sm:blur-3xl"
             animate={{
               x: [0, 50, 0],
               y: [0, 30, 0],
@@ -36,7 +36,7 @@ const CTASection = () => {
             }}
           />
           <motion.div
-            className="absolute bottom-0 right-0 w-60 h-60 rounded-full bg-cyan-500/15 blur-3xl"
+            className="absolute bottom-0 right-0 w-32 sm:w-60 h-32 sm:h-60 rounded-full bg-cyan-500/15 blur-2xl sm:blur-3xl"
             animate={{
               x: [0, -40, 0],
               y: [0, -20, 0],
@@ -51,7 +51,7 @@ const CTASection = () => {
           {/* Content */}
           <div className="relative z-10">
             <motion.div
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-6"
+              className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full mb-4 sm:mb-6"
               initial={{ opacity: 0, scale: 0.9 }}
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
@@ -61,12 +61,12 @@ const CTASection = () => {
                 border: "1px solid rgba(45, 212, 191, 0.3)",
               }}
             >
-              <Zap className="w-4 h-4 text-teal-400" />
-              <span className="text-teal-300 text-sm font-medium">Join thousands of students</span>
+              <Zap className="w-3 h-3 sm:w-4 sm:h-4 text-teal-400" />
+              <span className="text-teal-300 text-xs sm:text-sm font-medium">Join thousands of students</span>
             </motion.div>
             
             <motion.h2 
-              className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white mb-6"
+              className="text-2xl sm:text-3xl lg:text-5xl font-bold text-white mb-4 sm:mb-6 px-2"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -79,7 +79,7 @@ const CTASection = () => {
             </motion.h2>
 
             <motion.p 
-              className="text-slate-400 text-lg mb-10 max-w-xl mx-auto"
+              className="text-slate-400 text-sm sm:text-lg mb-6 sm:mb-10 max-w-xl mx-auto px-4"
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -97,7 +97,7 @@ const CTASection = () => {
               <Link to="/signup">
                 <Button 
                   size="lg" 
-                  className="h-14 px-10 text-base group rounded-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-white border-0 shadow-lg shadow-teal-500/25"
+                  className="h-12 sm:h-14 px-8 sm:px-10 text-sm sm:text-base group rounded-full bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-white border-0 shadow-lg shadow-teal-500/25"
                 >
                   Get started free
                   <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />

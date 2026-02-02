@@ -44,23 +44,23 @@ const FeaturesSection = () => {
   return (
     <>
       {/* How It Works */}
-      <section className="py-24 px-4 sm:px-6 relative">
+      <section className="py-16 sm:py-24 px-3 sm:px-6 relative">
         <div className="container mx-auto max-w-5xl">
           <motion.div 
-            className="text-center mb-16"
+            className="text-center mb-10 sm:mb-16"
             {...fadeIn}
             viewport={{ once: true }}
           >
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-3 sm:mb-4">
               How it works
             </h2>
-            <p className="text-slate-400 text-lg">
+            <p className="text-slate-400 text-base sm:text-lg px-4">
               Four steps to interview-ready confidence
             </p>
           </motion.div>
 
           <motion.div 
-            className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6"
+            className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6"
             variants={stagger}
             initial="initial"
             whileInView="animate"
@@ -69,7 +69,7 @@ const FeaturesSection = () => {
             {howItWorks.map((item, index) => (
               <motion.div 
                 key={index}
-                className="group relative rounded-2xl p-6 transition-all duration-300"
+                className="group relative rounded-xl sm:rounded-2xl p-4 sm:p-6 transition-all duration-300"
                 style={{
                   background: "linear-gradient(135deg, rgba(13, 40, 71, 0.6) 0%, rgba(10, 22, 40, 0.8) 100%)",
                   border: "1px solid rgba(45, 212, 191, 0.1)",
@@ -82,7 +82,7 @@ const FeaturesSection = () => {
                 }}
               >
                 <div 
-                  className="absolute -top-3 -left-3 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                  className="absolute -top-2 -left-2 sm:-top-3 sm:-left-3 w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold text-white"
                   style={{
                     background: "linear-gradient(135deg, #14b8a6 0%, #0d9488 100%)",
                     boxShadow: "0 0 20px rgba(45, 212, 191, 0.4)",
@@ -91,16 +91,16 @@ const FeaturesSection = () => {
                   {item.step}
                 </div>
                 <div 
-                  className="w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-110"
+                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl flex items-center justify-center mb-3 sm:mb-4 transition-all duration-300 group-hover:scale-110"
                   style={{
                     background: "linear-gradient(135deg, rgba(45, 212, 191, 0.15) 0%, rgba(45, 212, 191, 0.05) 100%)",
                     border: "1px solid rgba(45, 212, 191, 0.2)",
                   }}
                 >
-                  <item.icon className="w-6 h-6 text-teal-400" />
+                  <item.icon className="w-5 h-5 sm:w-6 sm:h-6 text-teal-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">{item.title}</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">{item.description}</p>
+                <h3 className="text-sm sm:text-lg font-semibold text-white mb-1 sm:mb-2">{item.title}</h3>
+                <p className="text-xs sm:text-sm text-slate-400 leading-relaxed hidden sm:block">{item.description}</p>
               </motion.div>
             ))}
           </motion.div>
@@ -108,7 +108,7 @@ const FeaturesSection = () => {
       </section>
 
       {/* Features */}
-      <section className="py-24 px-4 sm:px-6 relative">
+      <section className="py-16 sm:py-24 px-3 sm:px-6 relative">
         <div 
           className="absolute inset-0"
           style={{
@@ -117,23 +117,23 @@ const FeaturesSection = () => {
         />
         <div className="container mx-auto max-w-5xl relative">
           <motion.div 
-            className="text-center mb-16"
+            className="text-center mb-10 sm:mb-16"
             {...fadeIn}
             viewport={{ once: true }}
           >
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+            <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-3 sm:mb-4 px-4">
               Built for{" "}
               <span className="bg-gradient-to-r from-teal-400 to-cyan-400 text-transparent bg-clip-text">
                 real results
               </span>
             </h2>
-            <p className="text-slate-400 text-lg">
+            <p className="text-slate-400 text-base sm:text-lg px-4">
               Everything you need to prepare effectively
             </p>
           </motion.div>
 
           <motion.div 
-            className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
+            className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6"
             variants={stagger}
             initial="initial"
             whileInView="animate"
@@ -142,7 +142,7 @@ const FeaturesSection = () => {
             {features.map((feature, index) => (
               <motion.div 
                 key={index}
-                className="group p-6 rounded-2xl transition-all duration-300"
+                className="group p-4 sm:p-6 rounded-xl sm:rounded-2xl transition-all duration-300 relative"
                 style={{
                   background: "linear-gradient(135deg, rgba(13, 40, 71, 0.6) 0%, rgba(10, 22, 40, 0.8) 100%)",
                   border: "1px solid rgba(45, 212, 191, 0.1)",
@@ -155,19 +155,19 @@ const FeaturesSection = () => {
                 }}
               >
                 <div 
-                  className="w-12 h-12 rounded-xl flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-110"
+                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl flex items-center justify-center mb-3 sm:mb-4 transition-all duration-300 group-hover:scale-110"
                   style={{
                     background: "linear-gradient(135deg, rgba(45, 212, 191, 0.2) 0%, rgba(45, 212, 191, 0.05) 100%)",
                     border: "1px solid rgba(45, 212, 191, 0.2)",
                   }}
                 >
-                  <feature.icon className="w-6 h-6 text-teal-400" />
+                  <feature.icon className="w-5 h-5 sm:w-6 sm:h-6 text-teal-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">{feature.title}</h3>
-                <p className="text-sm text-slate-400 leading-relaxed">{feature.description}</p>
+                <h3 className="text-sm sm:text-lg font-semibold text-white mb-1 sm:mb-2">{feature.title}</h3>
+                <p className="text-xs sm:text-sm text-slate-400 leading-relaxed hidden sm:block">{feature.description}</p>
                 
                 {/* Hover glow */}
-                <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-teal-500/5 to-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                <div className="absolute inset-0 rounded-xl sm:rounded-2xl bg-gradient-to-r from-teal-500/5 to-cyan-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
               </motion.div>
             ))}
           </motion.div>
