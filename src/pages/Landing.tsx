@@ -73,7 +73,7 @@ const Landing = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background relative">
+    <div className="min-h-screen bg-[#0a1628] relative">
       <AnimatedBackground />
       <Navbar />
       <HeroSection 
