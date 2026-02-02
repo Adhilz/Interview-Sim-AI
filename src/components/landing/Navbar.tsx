@@ -1,39 +1,72 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { Brain, HelpCircle } from "lucide-react";
+import { motion } from "framer-motion";
+import { Cpu, HelpCircle } from "lucide-react";
 
 const Navbar = () => {
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-      <div className="container mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-foreground flex items-center justify-center">
-            <Brain className="w-5 h-5 text-background" />
+    <motion.nav
+      className="fixed top-0 left-0 right-0 z-50 px-4 sm:px-6 py-4"
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      <div 
+        className="container mx-auto max-w-7xl rounded-2xl px-6 py-3"
+        style={{
+          background: "rgba(10, 22, 40, 0.8)",
+          backdropFilter: "blur(20px)",
+          border: "1px solid rgba(45, 212, 191, 0.1)",
+        }}
+      >
+        <div className="flex items-center justify-between">
+          {/* Logo */}
+          <Link to="/" className="flex items-center gap-2 group">
+            <div 
+              className="w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 group-hover:scale-105"
+              style={{
+                background: "linear-gradient(135deg, rgba(45, 212, 191, 0.2) 0%, rgba(45, 212, 191, 0.05) 100%)",
+                border: "1px solid rgba(45, 212, 191, 0.3)",
+              }}
+            >
+              <Cpu className="w-5 h-5 text-teal-400" />
+            </div>
+            <span className="text-white font-semibold text-lg hidden sm:block">
+              Interview<span className="text-teal-400">Sim</span>
+            </span>
+          </Link>
+
+          {/* Auth buttons */}
+          <div className="flex items-center gap-3">
+            <Link to="/help" className="hidden sm:block">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="text-slate-400 hover:text-white hover:bg-slate-800/50"
+              >
+                <HelpCircle className="w-4 h-4 mr-1.5" />
+                Help
+              </Button>
+            </Link>
+            <Link to="/login">
+              <Button 
+                variant="ghost" 
+                className="text-slate-300 hover:text-white hover:bg-slate-800/50 rounded-full px-6"
+              >
+                Sign in
+              </Button>
+            </Link>
+            <Link to="/signup">
+              <Button 
+                className="rounded-full px-6 bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-400 hover:to-teal-500 text-white border-0"
+              >
+                Get Started
+              </Button>
+            </Link>
           </div>
-          <span className="text-lg font-semibold text-foreground">InterviewSim</span>
-        </Link>
-        <div className="flex items-center gap-3">
-          <Link to="/help" className="hidden sm:block">
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-              <HelpCircle className="w-4 h-4 mr-1.5" />
-              Help
-            </Button>
-          </Link>
-          <ThemeToggle />
-          <Link to="/login">
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-              Log in
-            </Button>
-          </Link>
-          <Link to="/signup">
-            <Button size="sm" className="bg-foreground text-background hover:bg-foreground/90">
-              Get Started
-            </Button>
-          </Link>
         </div>
       </div>
-    </nav>
+    </motion.nav>
   );
 };
 
