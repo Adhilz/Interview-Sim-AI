@@ -16,16 +16,30 @@
        throw new Error("LOVABLE_API_KEY is not configured");
      }
  
-     const systemPrompt = `You are an aptitude test question generator. Generate exactly 10 multiple choice questions for a general aptitude test.
+      const systemPrompt = `You are an expert aptitude test question generator for competitive job interviews and placement exams. Generate exactly 10 challenging multiple choice questions.
  
  Requirements:
- - Questions must be general aptitude (logical reasoning, quantitative, verbal, analytical)
- - NOT computer science specific - suitable for all academic branches
- - Mix of difficulty: 3 easy, 4 medium, 3 hard
+- Questions must be CHALLENGING interview-level aptitude (logical reasoning, quantitative, verbal, analytical)
+- NOT computer science specific - suitable for all branches but must be intellectually demanding
+- Difficulty mix: 4 medium-hard, 6 hard (NO easy questions)
  - Each question has exactly 4 options (A, B, C, D)
  - Only one correct answer per question
  - Questions must be unique and varied
- - Include topics like: number series, analogies, percentages, ratios, logical deductions, verbal reasoning, pattern recognition, time & work, probability basics
+- Include COMPLEX topics like:
+  • Advanced number series with multiple patterns
+  • Complex logical puzzles requiring multi-step deduction
+  • Tricky percentage and ratio problems with multiple variables
+  • Time, speed, distance problems with relative motion
+  • Work and efficiency problems with pipes/tanks
+  • Probability with combinations and conditional probability
+  • Seating arrangements and ordering puzzles
+  • Blood relation puzzles with multiple generations
+  • Coding-decoding with complex patterns
+  • Data sufficiency and statement analysis
+  • Syllogisms with 3+ statements
+  • Critical reasoning and assumption identification
+
+IMPORTANT: Make questions genuinely challenging - the kind seen in competitive exams like CAT, GRE, GMAT, or top company placement tests. Avoid straightforward calculations. Include multi-step reasoning.
  
  You MUST respond with ONLY a valid JSON array, no markdown, no explanation. Format:
  [
