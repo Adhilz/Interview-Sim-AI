@@ -68,6 +68,39 @@ export type Database = {
           },
         ]
       }
+      aptitude_tests: {
+        Row: {
+          answers: Json
+          completed_at: string
+          created_at: string
+          id: string
+          questions: Json
+          score: number
+          total_questions: number
+          user_id: string
+        }
+        Insert: {
+          answers: Json
+          completed_at?: string
+          created_at?: string
+          id?: string
+          questions: Json
+          score: number
+          total_questions?: number
+          user_id: string
+        }
+        Update: {
+          answers?: Json
+          completed_at?: string
+          created_at?: string
+          id?: string
+          questions?: Json
+          score?: number
+          total_questions?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       ats_scores: {
         Row: {
           created_at: string | null

@@ -18,7 +18,8 @@ import {
   Plus,
   Menu,
   X,
-  HelpCircle
+  HelpCircle,
+  Calculator
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 
@@ -202,6 +203,13 @@ const Dashboard = () => {
             History
           </Link>
           <Link 
+            to="/aptitude"
+            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+          >
+            <Calculator className="w-5 h-5" />
+            Aptitude Test
+          </Link>
+          <Link 
             to="/profile"
             className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
           >
@@ -271,6 +279,14 @@ const Dashboard = () => {
             >
               <History className="w-5 h-5" />
               History
+            </Link>
+            <Link 
+              to="/aptitude"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Calculator className="w-5 h-5" />
+              Aptitude Test
             </Link>
             <Link 
               to="/profile"
