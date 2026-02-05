@@ -14,6 +14,7 @@ import Interview from "./pages/Interview";
 import InterviewHistory from "./pages/InterviewHistory";
 import Profile from "./pages/Profile";
 import Help from "./pages/Help";
+import AptitudeTest from "./pages/AptitudeTest";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -53,6 +54,11 @@ const App = () => (
           <Route path="/history" element={
             <ProtectedRoute allowedRoles={["student"]}>
               <InterviewHistory />
+            </ProtectedRoute>
+          } />
+          <Route path="/aptitude" element={
+            <ProtectedRoute allowedRoles={["student"]}>
+              <AptitudeTest />
             </ProtectedRoute>
           } />
           <Route path="/profile" element={
