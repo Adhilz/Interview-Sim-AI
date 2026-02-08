@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
-import { Mic, Speaker, Video, Eye, Gauge, Captions, Save } from "lucide-react";
+import { Mic, Speaker, Video, Eye, Gauge, Captions, Save, Bot } from "lucide-react";
 
 interface InterviewSettingsProps {
   open: boolean;
@@ -32,7 +32,8 @@ export interface InterviewSettingsState {
   selectedSpeaker: string;
   cameraEnabled: boolean;
   avatarVisible: boolean;
-  voiceSpeed: number; // 0.75, 1, 1.25
+  avatarProvider: "simli" | "did";
+  voiceSpeed: number;
   captionsEnabled: boolean;
 }
 
@@ -140,6 +141,28 @@ const InterviewSettings = ({
               onCheckedChange={(checked) => setLocalSettings({ ...localSettings, avatarVisible: checked })}
             />
           </div>
+
+          {/* Avatar Provider Selection */}
+          {localSettings.avatarVisible && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Bot className="w-4 h-4" />
+                Avatar Provider
+              </Label>
+              <Select
+                value={localSettings.avatarProvider}
+                onValueChange={(value: "simli" | "did") => setLocalSettings({ ...localSettings, avatarProvider: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="simli">Simli (Real-time Lipsync)</SelectItem>
+                  <SelectItem value="did">D-ID (Legacy)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Voice Speed */}
           <div className="space-y-3">
