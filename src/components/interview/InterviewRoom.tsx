@@ -242,22 +242,16 @@ const InterviewRoom = ({
     }
   }, [simliReady, hasStartedVapi, isLoading, isConnected, startVapi]);
 
-  // ─── Pipe VAPI audio to Simli for lip-sync & mute Simli audio output ───
+  // ─── Pipe VAPI audio to Simli for lip-sync & silence VAPI via Web Audio API ───
   useEffect(() => {
     if (!isConnected || !simliReady || !simliAvatarRef.current?.isReady) return;
 
-    // Mute Simli's audio element so it only does visual lip-sync (no duplicate audio)
-    const simliAudioEl = document.querySelector('audio[data-simli-audio="true"]') as HTMLAudioElement;
-    if (simliAudioEl) {
-      simliAudioEl.muted = true;
-      simliAudioEl.volume = 0;
-      console.log('[InterviewRoom] Simli audio output MUTED — VAPI is sole audio renderer');
-    }
+    let audioCtx: AudioContext | null = null;
 
     const pipeVapiAudioToSimli = () => {
       const audioElements = document.querySelectorAll('audio');
       for (const audioEl of audioElements) {
-        // Skip Simli's own audio element
+        // Skip Simli's own audio element — it must stay unmuted for lip-sync to work
         if (audioEl.hasAttribute('data-simli-audio')) continue;
         
         const stream = (audioEl as any).srcObject as MediaStream;
@@ -265,10 +259,24 @@ const InterviewRoom = ({
           const audioTrack = stream.getAudioTracks()[0];
           console.log('[VAPI] TTS started — routing audio track to Simli for lip-sync');
           
-          // Pipe audio track to Simli for real-time lip-sync analysis
+          // Pipe audio track to Simli for real-time lip-sync
           simliAvatarRef.current?.listenToMediaStreamTrack(audioTrack);
-          console.log('[VAPI] TTS chunk sent to Simli');
-          console.log('[VAPI] TTS finished piping setup');
+          console.log('[VAPI] Audio track piped to Simli');
+
+          // Silence VAPI audio using Web Audio API (keeps track active, no muting)
+          try {
+            audioCtx = new AudioContext();
+            const source = audioCtx.createMediaElementSource(audioEl);
+            const gain = audioCtx.createGain();
+            gain.gain.value = 0;
+            source.connect(gain);
+            gain.connect(audioCtx.destination);
+            console.log('[InterviewRoom] VAPI audio silenced via Web Audio API — Simli is sole audio output');
+          } catch (e) {
+            console.warn('[InterviewRoom] Web Audio API muting failed, falling back to volume=0:', e);
+            audioEl.volume = 0;
+          }
+
           return true;
         }
       }
@@ -289,8 +297,13 @@ const InterviewRoom = ({
       return () => {
         clearInterval(retryInterval);
         clearTimeout(timeout);
+        audioCtx?.close();
       };
     }
+
+    return () => {
+      audioCtx?.close();
+    };
   }, [isConnected, simliReady]);
 
   // ─── Handle VAPI error ───
