@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import { useVapi } from "@/hooks/useVapi";
 import { supabase } from "@/integrations/supabase/client";
-import DidAvatar, { DidAvatarRef } from "./DidAvatar";
 import SimliAvatar, { SimliAvatarRef } from "./SimliAvatar";
 import InterviewSettings, { InterviewSettingsState } from "./InterviewSettings";
 
@@ -46,17 +45,14 @@ const InterviewRoom = ({
 }: InterviewRoomProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const didAvatarRef = useRef<DidAvatarRef>(null);
   const simliAvatarRef = useRef<SimliAvatarRef>(null);
   const [simliConfig, setSimliConfig] = useState<{ apiKey: string; faceId: string } | null>(null);
+  const [simliReady, setSimliReady] = useState(false);
   
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
   const [hasStartedVapi, setHasStartedVapi] = useState(false);
-  const [isDidConnected, setIsDidConnected] = useState(false);
-  const [isAvatarSpeaking, setIsAvatarSpeaking] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [isAvatarLoading, setIsAvatarLoading] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [audioInputDevices, setAudioInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [audioOutputDevices, setAudioOutputDevices] = useState<MediaDeviceInfo[]>([]);
@@ -80,7 +76,6 @@ const InterviewRoom = ({
       selectedSpeaker: '',
       cameraEnabled: true,
       avatarVisible: true,
-      avatarProvider: 'simli' as const,
       voiceSpeed: 1,
       captionsEnabled: false,
     };
@@ -113,7 +108,6 @@ const InterviewRoom = ({
       onVapiError?.(e.message || 'VAPI connection failed');
     },
     onSpeechEnd: () => {
-      // Check if we need to speak the 30-second warning after current utterance ends
       if (timeRemaining <= 30 && timeRemaining > 0 && !hasShown30SecWarning && isConnected) {
         console.log('[InterviewRoom] INTERVIEW_END_WARNING: Speaking 30-second warning');
         setHasShown30SecWarning(true);
@@ -122,32 +116,22 @@ const InterviewRoom = ({
       }
     },
     onMessage: (message) => {
-      // Handle transcript messages
       if (message.type === 'transcript' && message.transcriptType === 'final' && message.transcript) {
         const role = message.role === 'assistant' ? 'Interviewer' : 'Candidate';
         const line = `${role}: ${message.transcript}`;
         
         console.log('[InterviewRoom] Transcript line captured:', line.substring(0, 100));
         
-        // Accumulate full transcript
         setFullTranscript(prev => {
           const newTranscript = [...prev, line];
-          // Notify parent with full transcript for evaluation
           const transcriptText = newTranscript.join('\n');
           onTranscriptUpdate?.(transcriptText);
           return newTranscript;
         });
         
-        // Update current display
         setCurrentTranscript(message.transcript);
-        
-        // Stream to D-ID avatar if assistant is speaking (only when using D-ID provider)
-        if (message.role === 'assistant' && settings.avatarProvider === 'did' && didAvatarRef.current?.isConnected) {
-          didAvatarRef.current.streamText(message.transcript);
-        }
       }
       
-      // Also capture conversation-update for more reliable transcript
       if (message.type === 'conversation-update' && message.conversation && Array.isArray(message.conversation)) {
         console.log('[InterviewRoom] Conversation update with', message.conversation.length, 'messages');
         
@@ -160,7 +144,6 @@ const InterviewRoom = ({
           }
         }
         
-        // Use conversation-update if it has more content
         if (lines.length > fullTranscript.length) {
           console.log('[InterviewRoom] Using conversation-update transcript:', lines.length, 'lines');
           setFullTranscript(lines);
@@ -170,28 +153,26 @@ const InterviewRoom = ({
     },
   });
 
-  // 30-second warning effect - trigger check when time hits 30 seconds
+  // ─── 30-second warning ───
   useEffect(() => {
     if (timeRemaining === 30 && !hasShown30SecWarning && isConnected && !isSpeaking) {
-      // If assistant is not currently speaking, trigger warning immediately
-      console.log('[InterviewRoom] INTERVIEW_END_WARNING: Time reached 30 seconds, speaking warning');
+      console.log('[InterviewRoom] INTERVIEW_END_WARNING: Time reached 30 seconds');
       setHasShown30SecWarning(true);
       say("You have about thirty seconds remaining. Please wrap up your current answer.");
       onTimeWarning?.();
     }
   }, [timeRemaining, hasShown30SecWarning, isConnected, isSpeaking, say, onTimeWarning]);
 
-  // Interview end effect - speak closing message when time reaches 0
+  // ─── Interview end ───
   useEffect(() => {
     if (timeRemaining === 0 && !hasSpokenEndMessage && isConnected) {
       console.log('[InterviewRoom] INTERVIEW_ENDED: Speaking closing message');
       setHasSpokenEndMessage(true);
-      // Use say with endCallAfter=true to end after speaking
       say("Thank you. This concludes your interview.", true);
     }
   }, [timeRemaining, hasSpokenEndMessage, isConnected, say]);
 
-  // Fetch user's profile avatar
+  // ─── Fetch user avatar ───
   useEffect(() => {
     const fetchUserAvatar = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -201,16 +182,13 @@ const InterviewRoom = ({
           .select('avatar_url')
           .eq('user_id', session.user.id)
           .single();
-        
-        if (profile?.avatar_url) {
-          setUserAvatarUrl(profile.avatar_url);
-        }
+        if (profile?.avatar_url) setUserAvatarUrl(profile.avatar_url);
       }
     };
     fetchUserAvatar();
   }, []);
 
-  // Enumerate devices
+  // ─── Enumerate devices ───
   useEffect(() => {
     const getDevices = async () => {
       try {
@@ -224,64 +202,60 @@ const InterviewRoom = ({
     getDevices();
   }, []);
 
-  // Use the app-hosted avatar from /public/avatars
+  // ─── Static fallback avatar image ───
   useEffect(() => {
-    setIsAvatarLoading(true);
     setAvatarUrl(new URL('/avatars/interviewer.png', window.location.origin).toString());
-    setIsAvatarLoading(false);
   }, []);
 
-  // Fetch Simli config when provider is simli
+  // ─── Fetch Simli config ───
   useEffect(() => {
-    if (settings.avatarProvider !== 'simli') return;
     const fetchSimliConfig = async () => {
       try {
         const { data, error } = await supabase.functions.invoke('simli-config');
         if (error || !data?.apiKey) {
-          console.warn('[InterviewRoom] Simli config not available, falling back to D-ID');
+          console.error('[InterviewRoom] Simli config not available:', error);
+          onVapiError?.('Simli avatar configuration failed');
           return;
         }
         setSimliConfig({ apiKey: data.apiKey, faceId: data.faceId });
         console.log('[InterviewRoom] Simli config loaded');
       } catch (e) {
-        console.warn('[InterviewRoom] Failed to fetch Simli config:', e);
+        console.error('[InterviewRoom] Failed to fetch Simli config:', e);
+        onVapiError?.('Failed to load avatar configuration');
       }
     };
     fetchSimliConfig();
-  }, [settings.avatarProvider]);
+  }, []);
 
-  // Start media on mount
+  // ─── Start media on mount ───
   useEffect(() => {
     startMedia();
     return () => stopMedia();
   }, []);
 
-  // Auto-start VAPI
+  // ─── GATE: Start VAPI only after simliReady ───
   useEffect(() => {
-    if (status === "connecting" && !hasStartedVapi && !isLoading && !isConnected && avatarUrl) {
-      console.log('[InterviewRoom] Starting VAPI');
+    if (simliReady && !hasStartedVapi && !isLoading && !isConnected) {
+      console.log('[InterviewRoom] Simli is ready — starting VAPI now');
       setHasStartedVapi(true);
       startVapi();
     }
-  }, [status, hasStartedVapi, isLoading, isConnected, startVapi, avatarUrl]);
+  }, [simliReady, hasStartedVapi, isLoading, isConnected, startVapi]);
 
-  // Pipe VAPI's TTS audio to Simli for real-time lip-sync
+  // ─── Pipe VAPI audio to Simli for real-time lip-sync ───
   useEffect(() => {
-    if (!isConnected || settings.avatarProvider !== 'simli' || !simliAvatarRef.current?.isConnected) return;
+    if (!isConnected || !simliReady || !simliAvatarRef.current?.isReady) return;
 
-    // VAPI creates audio elements in the DOM for its WebRTC audio output
-    // Find them and capture the audio stream to pipe to Simli
     const pipeVapiAudioToSimli = () => {
-      // Look for VAPI's audio elements (they're typically added to document.body)
       const audioElements = document.querySelectorAll('audio');
       for (const audioEl of audioElements) {
-        // Skip our own Simli audio element
-        if (audioEl.closest('[data-simli-audio]')) continue;
+        if (audioEl.closest('[data-simli-audio]') || audioEl.hasAttribute('data-simli-audio')) continue;
         
         const stream = (audioEl as any).srcObject as MediaStream;
         if (stream && stream.getAudioTracks().length > 0) {
           const audioTrack = stream.getAudioTracks()[0];
           console.log('[InterviewRoom] Found VAPI audio track, piping to Simli for lip-sync');
+          console.log('[VAPI] TTS audio routed to Simli');
           simliAvatarRef.current?.listenToMediaStreamTrack(audioTrack);
           return true;
         }
@@ -289,31 +263,30 @@ const InterviewRoom = ({
       return false;
     };
 
-    // Try immediately, then retry a few times as VAPI audio may not be ready yet
     if (!pipeVapiAudioToSimli()) {
       const retryInterval = setInterval(() => {
         if (pipeVapiAudioToSimli()) {
           clearInterval(retryInterval);
         }
-      }, 1000);
+      }, 500);
 
-      // Stop retrying after 15 seconds
-      const timeout = setTimeout(() => clearInterval(retryInterval), 15000);
+      const timeout = setTimeout(() => {
+        clearInterval(retryInterval);
+        console.warn('[InterviewRoom] Could not find VAPI audio track after 15s');
+      }, 15000);
       return () => {
         clearInterval(retryInterval);
         clearTimeout(timeout);
       };
     }
-  }, [isConnected, settings.avatarProvider, simliAvatarRef.current?.isConnected]);
+  }, [isConnected, simliReady]);
 
-  // Handle VAPI error
+  // ─── Handle VAPI error ───
   useEffect(() => {
-    if (vapiError) {
-      onVapiError?.(vapiError);
-    }
+    if (vapiError) onVapiError?.(vapiError);
   }, [vapiError, onVapiError]);
 
-  // Apply camera setting
+  // ─── Apply camera setting ───
   useEffect(() => {
     if (streamRef.current) {
       streamRef.current.getVideoTracks().forEach(track => {
@@ -329,12 +302,9 @@ const InterviewRoom = ({
         video: true,
         audio: settings.selectedMic ? { deviceId: { exact: settings.selectedMic } } : true,
       };
-      
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
+      if (videoRef.current) videoRef.current.srcObject = stream;
     } catch (error) {
       console.error("Media error:", error);
     }
@@ -349,9 +319,7 @@ const InterviewRoom = ({
 
   const toggleMic = () => {
     if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach(track => {
-        track.enabled = !track.enabled;
-      });
+      streamRef.current.getAudioTracks().forEach(track => { track.enabled = !track.enabled; });
       setIsMicOn(!isMicOn);
       toggleMute();
     }
@@ -359,9 +327,7 @@ const InterviewRoom = ({
 
   const toggleVideo = () => {
     if (streamRef.current) {
-      streamRef.current.getVideoTracks().forEach(track => {
-        track.enabled = !track.enabled;
-      });
+      streamRef.current.getVideoTracks().forEach(track => { track.enabled = !track.enabled; });
       setIsVideoOn(!isVideoOn);
     }
   };
@@ -373,40 +339,24 @@ const InterviewRoom = ({
   };
 
   const handleEndCall = () => {
-    // Get transcript from useVapi hook first, then fallback to local accumulation
     const vapiTranscript = getTranscript();
     const localTranscript = fullTranscript.join('\n');
-    
-    // Use the longer/more complete transcript
     const finalTranscript = (vapiTranscript && vapiTranscript.length > localTranscript.length) 
       ? vapiTranscript 
       : localTranscript;
     
     console.log('[InterviewRoom] Ending call');
-    console.log('[InterviewRoom] VAPI transcript lines:', vapiTranscript?.split('\n').length || 0);
-    console.log('[InterviewRoom] Local transcript lines:', fullTranscript.length);
-    console.log('[InterviewRoom] Final transcript preview:', finalTranscript?.substring(0, 300));
+    console.log('[InterviewRoom] Final transcript lines:', finalTranscript?.split('\n').length || 0);
     
     stopVapi();
     stopMedia();
-    didAvatarRef.current?.destroy();
     simliAvatarRef.current?.destroy();
     onEndInterview(finalTranscript);
   };
 
-  const handleDidConnected = () => {
-    console.log('[InterviewRoom] D-ID avatar connected');
-    setIsDidConnected(true);
-  };
-
-  const handleDidError = (error: string) => {
-    console.error('[InterviewRoom] D-ID error:', error);
-  };
-
-  const handleSimliFallback = (error: string) => {
-    console.warn('[InterviewRoom] Simli failed, falling back to D-ID:', error);
-    // Auto-fallback to D-ID
-    setSettings(prev => ({ ...prev, avatarProvider: 'did' as const }));
+  const handleSimliReady = () => {
+    console.log('[InterviewRoom] Simli avatar ready — interview can start');
+    setSimliReady(true);
   };
 
   const isActuallyConnected = isConnected || status === "in_progress";
@@ -415,34 +365,31 @@ const InterviewRoom = ({
     <div className="fixed inset-0 bg-[#202124] flex flex-col">
       {/* Main content area */}
       <div className="flex-1 relative flex items-center justify-center p-2 sm:p-4">
-        {/* AI Interviewer Avatar - Center */}
         <div className="relative w-full h-full max-w-4xl max-h-[70vh] sm:max-h-[75vh] aspect-video rounded-xl sm:rounded-2xl overflow-hidden">
-          {settings.avatarVisible && !isAvatarLoading && avatarUrl && settings.avatarProvider === 'did' && (
-            <DidAvatar
-              ref={didAvatarRef}
-              autoStart={true}
-              avatarUrl={avatarUrl}
-              onConnected={handleDidConnected}
-              onError={handleDidError}
-              onSpeakingChange={setIsAvatarSpeaking}
-              className="w-full h-full"
-            />
-          )}
-
-          {settings.avatarVisible && !isAvatarLoading && settings.avatarProvider === 'simli' && simliConfig && (
+          
+          {/* Simli Avatar */}
+          {settings.avatarVisible && simliConfig && (
             <SimliAvatar
               ref={simliAvatarRef}
               apiKey={simliConfig.apiKey}
               faceId={simliConfig.faceId}
               autoStart={true}
               avatarUrl={avatarUrl || undefined}
-              onConnected={() => console.log('[InterviewRoom] Simli avatar connected')}
-              onError={handleSimliFallback}
-              onSpeakingChange={setIsAvatarSpeaking}
+              onConnected={() => console.log('[InterviewRoom] Simli connected')}
+              onReady={handleSimliReady}
+              onError={(err) => {
+                console.error('[InterviewRoom] Simli error:', err);
+                onVapiError?.(err);
+              }}
+              onSpeakingChange={(speaking) => {
+                if (speaking) console.log('[Simli] Speaking started');
+                else console.log('[Simli] Speaking ended');
+              }}
               className="w-full h-full"
             />
           )}
           
+          {/* Avatar hidden fallback */}
           {!settings.avatarVisible && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#3c4043]">
               <div className="w-24 h-24 rounded-full bg-accent/20 flex items-center justify-center mb-4">
@@ -452,14 +399,23 @@ const InterviewRoom = ({
             </div>
           )}
           
-          {isAvatarLoading && settings.avatarVisible && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#3c4043]">
-              <Loader2 className="w-12 h-12 sm:w-16 sm:h-16 text-accent animate-spin mb-4" />
-              <p className="text-white/70 text-sm">Loading avatar...</p>
+          {/* Waiting for Simli overlay */}
+          {!simliReady && simliConfig && settings.avatarVisible && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/50">
+              <Loader2 className="w-12 h-12 text-white animate-spin mb-4" />
+              <p className="text-white text-sm font-medium">Connecting to AI interviewer...</p>
             </div>
           )}
 
-          {/* User's self video - bottom right */}
+          {/* Waiting for config */}
+          {!simliConfig && settings.avatarVisible && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#3c4043]">
+              <Loader2 className="w-12 h-12 sm:w-16 sm:h-16 text-accent animate-spin mb-4" />
+              <p className="text-white/70 text-sm">Loading avatar configuration...</p>
+            </div>
+          )}
+
+          {/* User's self video — bottom right */}
           <div className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 w-24 h-18 sm:w-40 sm:h-28 md:w-52 md:h-36 rounded-lg sm:rounded-xl overflow-hidden bg-[#3c4043] border-2 border-white/10 shadow-2xl z-10">
             <video
               ref={videoRef}
@@ -484,7 +440,7 @@ const InterviewRoom = ({
             </div>
           </div>
 
-          {/* Timer - top right */}
+          {/* Timer — top right */}
           <div className={`absolute top-2 right-2 sm:top-4 sm:right-4 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg z-10 ${
             timeRemaining < 60 ? "bg-destructive/80" : "bg-black/50"
           }`}>
@@ -498,13 +454,16 @@ const InterviewRoom = ({
 
           {/* Connection status */}
           <div className="absolute top-2 left-2 sm:top-4 sm:left-4 flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-black/50 z-10">
-            <div className={`w-2 h-2 rounded-full ${isActuallyConnected ? "bg-success" : isLoading ? "bg-warning animate-pulse" : "bg-muted"}`} />
+            <div className={`w-2 h-2 rounded-full ${
+              isActuallyConnected ? "bg-success" : 
+              isLoading || !simliReady ? "bg-warning animate-pulse" : "bg-muted"
+            }`} />
             <span className="text-white/70 text-xs sm:text-sm">
-              {isActuallyConnected ? "Connected" : isLoading ? "Connecting..." : "Disconnected"}
+              {isActuallyConnected ? "Connected" : !simliReady ? "Preparing avatar..." : isLoading ? "Connecting..." : "Disconnected"}
             </span>
           </div>
 
-          {/* VAPI status indicator */}
+          {/* Listening indicator */}
           {isActuallyConnected && !isSpeaking && (
             <div className="absolute bottom-14 sm:bottom-4 left-2 sm:left-4 flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-black/50 z-10">
               <Mic className="w-3 h-3 sm:w-4 sm:h-4 text-success animate-pulse" />
@@ -519,7 +478,7 @@ const InterviewRoom = ({
             </div>
           )}
 
-          {/* VAPI error display */}
+          {/* VAPI error */}
           {vapiError && (
             <div className="absolute top-14 sm:top-16 left-2 right-2 sm:left-4 sm:right-4 p-2 sm:p-3 bg-destructive/80 rounded-lg z-10">
               <p className="text-white text-xs sm:text-sm">{vapiError}</p>
@@ -530,35 +489,24 @@ const InterviewRoom = ({
 
       {/* Bottom controls bar */}
       <div className="h-16 sm:h-20 bg-[#202124] border-t border-white/10 flex items-center justify-center gap-2 sm:gap-4 px-4">
-        {/* Mic toggle */}
         <button
           onClick={toggleMic}
           className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-colors ${
             isMicOn ? "bg-[#3c4043] hover:bg-[#4a4f54]" : "bg-destructive hover:bg-destructive/90"
           }`}
         >
-          {isMicOn ? (
-            <Mic className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-          ) : (
-            <MicOff className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-          )}
+          {isMicOn ? <Mic className="w-4 h-4 sm:w-5 sm:h-5 text-white" /> : <MicOff className="w-4 h-4 sm:w-5 sm:h-5 text-white" />}
         </button>
 
-        {/* Video toggle */}
         <button
           onClick={toggleVideo}
           className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-colors ${
             isVideoOn ? "bg-[#3c4043] hover:bg-[#4a4f54]" : "bg-destructive hover:bg-destructive/90"
           }`}
         >
-          {isVideoOn ? (
-            <Video className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-          ) : (
-            <VideoOff className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-          )}
+          {isVideoOn ? <Video className="w-4 h-4 sm:w-5 sm:h-5 text-white" /> : <VideoOff className="w-4 h-4 sm:w-5 sm:h-5 text-white" />}
         </button>
 
-        {/* End call button */}
         <button
           onClick={handleEndCall}
           className="w-12 h-10 sm:w-14 sm:h-12 rounded-full bg-destructive hover:bg-destructive/90 flex items-center justify-center transition-colors"
@@ -566,7 +514,6 @@ const InterviewRoom = ({
           <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
         </button>
 
-        {/* Settings button */}
         <button 
           onClick={() => setSettingsOpen(true)}
           className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#3c4043] hover:bg-[#4a4f54] flex items-center justify-center transition-colors"
@@ -575,7 +522,6 @@ const InterviewRoom = ({
         </button>
       </div>
 
-      {/* Settings Dialog */}
       <InterviewSettings
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
