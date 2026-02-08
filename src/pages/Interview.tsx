@@ -326,7 +326,7 @@ const Interview = () => {
 
       toast({
         title: "Interview starting!",
-        description: `Connecting to ${selectedMode === 'technical' ? 'Technical DSA' : selectedMode === 'hr' ? 'HR Behavioral' : 'Resume + JD'} interview...`,
+        description: `Connecting to ${selectedMode === 'technical' ? 'Technical' : selectedMode === 'hr' ? 'HR Behavioral' : 'Resume + JD'} interview...`,
       });
     } catch (error: any) {
       console.error('Start interview error:', error);

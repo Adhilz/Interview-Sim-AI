@@ -32,15 +32,15 @@ const modes = [
   },
   {
     id: 'technical' as InterviewMode,
-    title: 'Technical DSA Interview',
-    description: 'Algorithm, logic, and problem-solving focused interview',
+    title: 'Technical Interview',
+    description: 'Domain-specific knowledge and problem-solving evaluation',
     icon: Code,
     color: 'warning',
     features: [
-      'Data structures & algorithms',
-      'Time & space complexity',
-      'Optimization thinking',
-      'Problem-solving approach'
+      'Domain-specific knowledge',
+      'Problem-solving approach',
+      'Analytical & logical thinking',
+      'Technical depth & clarity'
     ],
     requiresResume: false,
     badge: 'New',

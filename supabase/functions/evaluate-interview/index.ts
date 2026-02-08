@@ -153,40 +153,40 @@ REQUIRED PHRASES (use these instead):
 - "The answer did not address..."
 - "Critical gap in understanding..."`;
 
-// TECHNICAL DSA Evaluation System Prompt
-const TECHNICAL_EVALUATION_PROMPT = `You are an EXTREMELY STRICT technical interviewer evaluating a DSA/Algorithm interview. Focus on problem-solving ability, not soft skills.
+// TECHNICAL Evaluation System Prompt
+const TECHNICAL_EVALUATION_PROMPT = `You are an EXTREMELY STRICT technical interviewer evaluating a professional interview. The candidate could be from ANY field (engineering, marketing, finance, healthcare, etc.). Focus on how well they answered questions, NOT on any single methodology.
 
 CRITICAL RULES:
-- PENALIZE incorrect algorithm choices heavily
-- PENALIZE wrong time/space complexity analysis
-- PENALIZE lack of optimization thinking
-- PENALIZE inability to explain approach clearly
-- PENALIZE missing edge cases
-- DO NOT give credit for "almost correct" solutions
-- DO NOT inflate scores for partial answers
+- EVALUATE the quality and depth of each response
+- PENALIZE vague, generic, or surface-level answers
+- PENALIZE inability to explain concepts clearly
+- PENALIZE lack of concrete examples or specifics
+- PENALIZE answers that don't directly address the question
+- DO NOT assume the interview is about algorithms or DSA — it could be about ANY professional domain
+- Score based on HOW WELL the candidate responded, not on whether they used a specific framework
 
 SCORING CRITERIA (0-10 scale):
 
-ALGORITHM_UNDERSTANDING (0-10):
-- 0-2: Cannot identify appropriate algorithm or approach
-- 3-4: Incorrect algorithm choice or flawed logic
-- 5-6: Correct basic approach but misses optimizations
-- 7-8: Solid algorithm choice with good explanation
-- 9-10: Optimal solution with clear reasoning
+RESPONSE_QUALITY (0-10):
+- 0-2: Cannot provide meaningful answers
+- 3-4: Vague or incorrect responses
+- 5-6: Adequate but lacks depth or specifics
+- 7-8: Strong, detailed responses with good examples
+- 9-10: Exceptional depth, accuracy, and insight
 
-OPTIMIZATION_THINKING (0-10):
-- 0-2: No consideration of efficiency
-- 3-4: Mentions optimization but can't improve solution
-- 5-6: Identifies improvement opportunities
-- 7-8: Provides concrete optimization strategies
-- 9-10: Demonstrates expert-level optimization awareness
+DOMAIN_KNOWLEDGE (0-10):
+- 0-2: No understanding of the subject matter
+- 3-4: Surface-level knowledge with major gaps
+- 5-6: Reasonable knowledge but misses nuances
+- 7-8: Solid understanding with practical awareness
+- 9-10: Expert-level knowledge with real-world insight
 
-COMPLEXITY_KNOWLEDGE (0-10):
-- 0-2: Cannot analyze time/space complexity
-- 3-4: Incorrect complexity analysis
-- 5-6: Partially correct but with errors
-- 7-8: Accurate complexity analysis
-- 9-10: Comprehensive understanding of tradeoffs
+PROBLEM_SOLVING (0-10):
+- 0-2: Cannot approach problems logically
+- 3-4: Weak analytical thinking
+- 5-6: Basic problem-solving with some structure
+- 7-8: Clear, logical approach with good reasoning
+- 9-10: Exceptional analytical and critical thinking
 
 EXPLANATION_CLARITY (0-10):
 - 0-2: Cannot articulate thought process
@@ -197,15 +197,15 @@ EXPLANATION_CLARITY (0-10):
 
 OUTPUT FORMAT (JSON only):
 {
-  "algorithm_understanding": {
+  "response_quality": {
     "score": <0-10>,
     "feedback": "<specific criticism, max 30 words>"
   },
-  "optimization_thinking": {
+  "domain_knowledge": {
     "score": <0-10>,
     "feedback": "<specific criticism, max 30 words>"
   },
-  "complexity_knowledge": {
+  "problem_solving": {
     "score": <0-10>,
     "feedback": "<specific criticism, max 30 words>"
   },
@@ -217,11 +217,10 @@ OUTPUT FORMAT (JSON only):
   "verdict": "<harsh but fair 2-sentence technical assessment>",
   "strong_areas": ["<area 1>", "<area 2>"],
   "weak_areas": ["<area 1>", "<area 2>", "<area 3>"],
-  "optimization_awareness_level": "none|basic|intermediate|advanced",
   "improvements": [
     {
-      "suggestion": "<specific, actionable improvement for DSA skills>",
-      "category": "algorithm|complexity|optimization|explanation",
+      "suggestion": "<specific, actionable improvement>",
+      "category": "response_quality|domain_knowledge|problem_solving|explanation",
       "priority": 1
     }
   ],
@@ -238,18 +237,19 @@ OUTPUT FORMAT (JSON only):
 }
 
 FORBIDDEN PHRASES: "Good try", "Nice approach", "Well thought out"
-REQUIRED PHRASES: "Incorrect complexity analysis", "Failed to optimize", "Missing edge case handling"`;
+REQUIRED PHRASES: "The response lacked depth", "Failed to provide specifics", "Did not adequately address the question"`;
 
 // HR BEHAVIORAL Evaluation System Prompt
-const HR_EVALUATION_PROMPT = `You are a professional HR evaluator assessing behavioral interview responses using the STAR method. Focus on soft skills, communication, and cultural fit.
+const HR_EVALUATION_PROMPT = `You are a professional HR evaluator assessing behavioral interview responses. Focus on how well the candidate answers each question — the quality, depth, and relevance of their responses.
 
 CRITICAL RULES:
-- EVALUATE use of STAR method (Situation, Task, Action, Result)
+- EVALUATE the quality of each response based on clarity, specifics, and relevance
 - PENALIZE vague answers without specific examples
 - PENALIZE answers where candidate doesn't take ownership
 - PENALIZE generic responses that could apply to anyone
 - PENALIZE lack of self-awareness
-- DO NOT accept "we did" without "I specifically did"
+- Score based on HOW WELL they responded, not strictly on whether they used STAR format
+- If they use STAR method, that's a bonus, but it's not the sole criterion
 
 SCORING CRITERIA (0-10 scale):
 
@@ -260,19 +260,19 @@ COMMUNICATION_CLARITY (0-10):
 - 7-8: Clear, well-organized responses
 - 9-10: Exceptionally articulate and engaging
 
+RESPONSE_DEPTH (0-10):
+- 0-2: No meaningful content
+- 3-4: Surface-level without specifics
+- 5-6: Some detail but lacks concrete examples
+- 7-8: Rich with specific examples and outcomes
+- 9-10: Compelling stories with measurable impact
+
 CONFIDENCE_LEVEL (0-10):
 - 0-2: Extremely nervous, cannot respond
 - 3-4: Hesitant, many pauses, unsure
 - 5-6: Some nervousness but functional
 - 7-8: Composed, steady delivery
 - 9-10: Poised, authentic confidence
-
-EMOTIONAL_STABILITY (0-10):
-- 0-2: Becomes defensive or upset
-- 3-4: Struggles with challenging questions
-- 5-6: Handles pressure adequately
-- 7-8: Stays calm under pressure
-- 9-10: Excellent composure and maturity
 
 PROFESSIONALISM (0-10):
 - 0-2: Inappropriate responses or attitude
@@ -281,16 +281,13 @@ PROFESSIONALISM (0-10):
 - 7-8: Professional and appropriate
 - 9-10: Exceptional professional presence
 
-ANSWER_STRUCTURE (0-10):
-- 0-2: No structure, random thoughts
-- 3-4: Minimal structure, missing STAR elements
-- 5-6: Basic structure, incomplete STAR
-- 7-8: Good STAR method usage
-- 9-10: Perfect STAR with compelling narrative
-
 OUTPUT FORMAT (JSON only):
 {
   "communication_clarity": {
+    "score": <0-10>,
+    "feedback": "<specific criticism, max 30 words>"
+  },
+  "response_depth": {
     "score": <0-10>,
     "feedback": "<specific criticism, max 30 words>"
   },
@@ -298,15 +295,7 @@ OUTPUT FORMAT (JSON only):
     "score": <0-10>,
     "feedback": "<specific criticism, max 30 words>"
   },
-  "emotional_stability": {
-    "score": <0-10>,
-    "feedback": "<specific criticism, max 30 words>"
-  },
   "professionalism": {
-    "score": <0-10>,
-    "feedback": "<specific criticism, max 30 words>"
-  },
-  "answer_structure": {
     "score": <0-10>,
     "feedback": "<specific criticism, max 30 words>"
   },
@@ -316,8 +305,8 @@ OUTPUT FORMAT (JSON only):
   "personality_summary": "<2-sentence personality assessment>",
   "improvements": [
     {
-      "suggestion": "<specific, actionable improvement for soft skills>",
-      "category": "communication|confidence|structure|examples|professionalism",
+      "suggestion": "<specific, actionable improvement for interview skills>",
+      "category": "communication|confidence|depth|examples|professionalism",
       "priority": 1
     }
   ],
@@ -334,7 +323,7 @@ OUTPUT FORMAT (JSON only):
 }
 
 FORBIDDEN PHRASES: "Great attitude", "Wonderful personality"
-REQUIRED PHRASES: "Lacks specific examples", "Failed to use STAR method", "Did not take ownership"`;
+REQUIRED PHRASES: "Lacks specific examples", "Response was too vague", "Did not demonstrate impact"`;
 
 // Legacy alias for backward compatibility
 const EVALUATION_SYSTEM_PROMPT = RESUME_JD_EVALUATION_PROMPT;
@@ -733,19 +722,19 @@ Evaluate this interview STRICTLY based on the actual transcript content.`;
     let feedback: string;
     
     if (mode === 'technical') {
-      // Technical mode uses different scoring categories
-      const algorithmScore = evaluation.algorithm_understanding?.score || 4;
-      const optimizationScore = evaluation.optimization_thinking?.score || 4;
-      const complexityScore = evaluation.complexity_knowledge?.score || 4;
+      // Technical mode uses response-quality-focused scoring
+      const responseQuality = evaluation.response_quality?.score || 4;
+      const domainKnowledge = evaluation.domain_knowledge?.score || 4;
+      const problemSolving = evaluation.problem_solving?.score || 4;
       const clarityScore = evaluation.explanation_clarity?.score || 4;
       
       // Map technical scores to standard fields for storage
       communicationScore = clarityScore;
-      technicalScore = Math.round((algorithmScore + complexityScore) / 2);
-      confidenceScore = optimizationScore; // Store optimization as confidence for now
+      technicalScore = Math.round((responseQuality + domainKnowledge) / 2);
+      confidenceScore = problemSolving;
       
       overallScore = evaluation.overall_score || Math.round(
-        ((algorithmScore + optimizationScore + complexityScore + clarityScore) / 4) * 10
+        ((responseQuality + domainKnowledge + problemSolving + clarityScore) / 4) * 10
       );
       
       feedback = [
@@ -757,30 +746,27 @@ Evaluate this interview STRICTLY based on the actual transcript content.`;
         '**Weak Areas:**',
         ...(evaluation.weak_areas?.map((w: string) => `- ${w}`) || ['- None identified']),
         '',
-        `**Optimization Awareness:** ${evaluation.optimization_awareness_level || 'Unknown'}`,
-        '',
         '**Detailed Scores:**',
-        `- Algorithm Understanding: ${algorithmScore}/10 - ${evaluation.algorithm_understanding?.feedback || 'N/A'}`,
-        `- Optimization Thinking: ${optimizationScore}/10 - ${evaluation.optimization_thinking?.feedback || 'N/A'}`,
-        `- Complexity Knowledge: ${complexityScore}/10 - ${evaluation.complexity_knowledge?.feedback || 'N/A'}`,
+        `- Response Quality: ${responseQuality}/10 - ${evaluation.response_quality?.feedback || 'N/A'}`,
+        `- Domain Knowledge: ${domainKnowledge}/10 - ${evaluation.domain_knowledge?.feedback || 'N/A'}`,
+        `- Problem Solving: ${problemSolving}/10 - ${evaluation.problem_solving?.feedback || 'N/A'}`,
         `- Explanation Clarity: ${clarityScore}/10 - ${evaluation.explanation_clarity?.feedback || 'N/A'}`,
       ].join('\n');
       
     } else if (mode === 'hr') {
-      // HR mode uses behavioral scoring categories
+      // HR mode uses response-quality-focused scoring
       const communicationClarity = evaluation.communication_clarity?.score || 4;
+      const responseDepth = evaluation.response_depth?.score || 4;
       const confidenceLevel = evaluation.confidence_level?.score || 4;
-      const emotionalStability = evaluation.emotional_stability?.score || 4;
       const professionalism = evaluation.professionalism?.score || 4;
-      const answerStructure = evaluation.answer_structure?.score || 4;
       
       // Map HR scores to standard fields for storage
-      communicationScore = Math.round((communicationClarity + answerStructure) / 2);
-      technicalScore = professionalism; // Store professionalism as technical for now
-      confidenceScore = Math.round((confidenceLevel + emotionalStability) / 2);
+      communicationScore = communicationClarity;
+      technicalScore = responseDepth;
+      confidenceScore = Math.round((confidenceLevel + professionalism) / 2);
       
       overallScore = evaluation.overall_score || Math.round(
-        ((communicationClarity + confidenceLevel + emotionalStability + professionalism + answerStructure) / 5) * 10
+        ((communicationClarity + responseDepth + confidenceLevel + professionalism) / 4) * 10
       );
       
       feedback = [
@@ -792,10 +778,9 @@ Evaluate this interview STRICTLY based on the actual transcript content.`;
         '',
         '**Detailed Scores:**',
         `- Communication Clarity: ${communicationClarity}/10 - ${evaluation.communication_clarity?.feedback || 'N/A'}`,
+        `- Response Depth: ${responseDepth}/10 - ${evaluation.response_depth?.feedback || 'N/A'}`,
         `- Confidence Level: ${confidenceLevel}/10 - ${evaluation.confidence_level?.feedback || 'N/A'}`,
-        `- Emotional Stability: ${emotionalStability}/10 - ${evaluation.emotional_stability?.feedback || 'N/A'}`,
         `- Professionalism: ${professionalism}/10 - ${evaluation.professionalism?.feedback || 'N/A'}`,
-        `- Answer Structure (STAR): ${answerStructure}/10 - ${evaluation.answer_structure?.feedback || 'N/A'}`,
       ].join('\n');
       
     } else {
