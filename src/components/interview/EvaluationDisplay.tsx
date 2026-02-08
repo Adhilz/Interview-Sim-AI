@@ -219,10 +219,10 @@ const EvaluationDisplay = ({
             <CardHeader>
               <CardTitle className="text-lg">Score Breakdown</CardTitle>
               <CardDescription>
-                {interviewMode === 'technical' 
-                  ? 'Technical skills assessment based on your responses'
+              {interviewMode === 'technical' 
+                  ? 'Response quality assessment across key performance areas'
                   : interviewMode === 'hr'
-                  ? 'Behavioral competencies evaluated using STAR methodology'
+                  ? 'Behavioral competencies and response quality evaluation'
                   : 'Detailed analysis across key performance areas'
                 }
               </CardDescription>
@@ -234,40 +234,40 @@ const EvaluationDisplay = ({
                     label="Explanation Clarity"
                     score={communicationScore}
                     icon={<MessageSquare className="w-5 h-5" />}
-                    description="Ability to articulate technical concepts clearly"
+                    description="Ability to articulate concepts clearly"
                   />
                   <ScoreBar
-                    label="Algorithm & Logic"
+                    label="Response Quality & Knowledge"
                     score={technicalScore}
                     icon={<Brain className="w-5 h-5" />}
-                    description="Problem-solving approach and correctness"
+                    description="Depth, accuracy, and relevance of responses"
                   />
                   <ScoreBar
-                    label="Optimization Thinking"
+                    label="Problem Solving"
                     score={confidenceScore}
                     icon={<Zap className="w-5 h-5" />}
-                    description="Awareness of time/space complexity tradeoffs"
+                    description="Analytical thinking and logical approach"
                   />
                 </>
               ) : interviewMode === 'hr' ? (
                 <>
                   <ScoreBar
-                    label="Communication & Structure"
+                    label="Communication Clarity"
                     score={communicationScore}
                     icon={<MessageSquare className="w-5 h-5" />}
-                    description="Clarity and use of STAR method in responses"
+                    description="Clarity and structure of responses"
                   />
                   <ScoreBar
-                    label="Professionalism"
+                    label="Response Depth"
                     score={technicalScore}
                     icon={<Target className="w-5 h-5" />}
-                    description="Professional demeanor and appropriate examples"
+                    description="Specific examples, details, and impact shown"
                   />
                   <ScoreBar
-                    label="Confidence & Composure"
+                    label="Confidence & Professionalism"
                     score={confidenceScore}
                     icon={<Zap className="w-5 h-5" />}
-                    description="Emotional stability and self-assurance"
+                    description="Composure, poise, and professional presence"
                   />
                 </>
               ) : (
