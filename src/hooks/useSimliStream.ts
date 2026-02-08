@@ -4,8 +4,6 @@ import { SimliClient } from "simli-client";
 interface UseSimliStreamOptions {
   apiKey: string;
   faceId: string;
-  videoRef: React.RefObject<HTMLVideoElement | null>;
-  audioRef: React.RefObject<HTMLAudioElement | null>;
   onConnected?: () => void;
   onError?: (error: string) => void;
   onSpeaking?: (speaking: boolean) => void;
@@ -19,6 +17,16 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
 
   const simliClientRef = useRef<SimliClient | null>(null);
   const speakingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoElRef = useRef<HTMLVideoElement | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+
+  const setVideoElement = useCallback((el: HTMLVideoElement | null) => {
+    videoElRef.current = el;
+  }, []);
+
+  const setAudioElement = useCallback((el: HTMLAudioElement | null) => {
+    audioElRef.current = el;
+  }, []);
 
   const initialize = useCallback(async () => {
     if (isLoading || isConnected) return;
@@ -28,18 +36,20 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
       return;
     }
 
+    const videoEl = videoElRef.current;
+    const audioEl = audioElRef.current;
+    if (!videoEl || !audioEl) {
+      console.warn("[Simli] Video/audio elements not ready, retrying in 500ms...");
+      setTimeout(() => initialize(), 500);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
       const client = new SimliClient();
       simliClientRef.current = client;
-
-      const videoEl = options.videoRef.current;
-      const audioEl = options.audioRef.current;
-      if (!videoEl || !audioEl) {
-        throw new Error("Video or audio element not available");
-      }
 
       client.Initialize({
         apiKey: options.apiKey,
@@ -60,7 +70,6 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
 
       console.log("[Simli] Client initialized, starting WebRTC...");
 
-      // Listen for events
       client.on("connected", () => {
         console.log("[Simli] Connected successfully");
         setIsConnected(true);
@@ -99,16 +108,13 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
     try {
       simliClientRef.current.sendAudioData(audioData);
 
-      // Set speaking state
       setIsSpeaking(true);
       options.onSpeaking?.(true);
 
-      // Clear previous timeout
       if (speakingTimeoutRef.current) {
         clearTimeout(speakingTimeoutRef.current);
       }
 
-      // Auto-clear speaking after 500ms of no new audio
       speakingTimeoutRef.current = setTimeout(() => {
         setIsSpeaking(false);
         options.onSpeaking?.(false);
@@ -117,6 +123,20 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
       console.error("[Simli] sendAudioData error:", e);
     }
   }, [isConnected, options]);
+
+  // Listen to an audio MediaStreamTrack (e.g. from VAPI) and pipe to Simli
+  const listenToMediaStreamTrack = useCallback((track: MediaStreamTrack) => {
+    if (!simliClientRef.current || !isConnected) {
+      console.warn("[Simli] Cannot listen to track - not connected");
+      return;
+    }
+    try {
+      console.log("[Simli] Listening to MediaStreamTrack for lip-sync");
+      simliClientRef.current.listenToMediastreamTrack(track);
+    } catch (e) {
+      console.error("[Simli] listenToMediastreamTrack error:", e);
+    }
+  }, [isConnected]);
 
   const clearBuffer = useCallback(() => {
     try {
@@ -143,7 +163,6 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
     }
   }, []);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       destroy();
@@ -158,6 +177,9 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
     initialize,
     destroy,
     sendAudioData,
+    listenToMediaStreamTrack,
     clearBuffer,
+    setVideoElement,
+    setAudioElement,
   };
 };

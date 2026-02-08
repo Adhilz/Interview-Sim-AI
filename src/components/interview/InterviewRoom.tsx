@@ -265,6 +265,47 @@ const InterviewRoom = ({
     }
   }, [status, hasStartedVapi, isLoading, isConnected, startVapi, avatarUrl]);
 
+  // Pipe VAPI's TTS audio to Simli for real-time lip-sync
+  useEffect(() => {
+    if (!isConnected || settings.avatarProvider !== 'simli' || !simliAvatarRef.current?.isConnected) return;
+
+    // VAPI creates audio elements in the DOM for its WebRTC audio output
+    // Find them and capture the audio stream to pipe to Simli
+    const pipeVapiAudioToSimli = () => {
+      // Look for VAPI's audio elements (they're typically added to document.body)
+      const audioElements = document.querySelectorAll('audio');
+      for (const audioEl of audioElements) {
+        // Skip our own Simli audio element
+        if (audioEl.closest('[data-simli-audio]')) continue;
+        
+        const stream = (audioEl as any).srcObject as MediaStream;
+        if (stream && stream.getAudioTracks().length > 0) {
+          const audioTrack = stream.getAudioTracks()[0];
+          console.log('[InterviewRoom] Found VAPI audio track, piping to Simli for lip-sync');
+          simliAvatarRef.current?.listenToMediaStreamTrack(audioTrack);
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // Try immediately, then retry a few times as VAPI audio may not be ready yet
+    if (!pipeVapiAudioToSimli()) {
+      const retryInterval = setInterval(() => {
+        if (pipeVapiAudioToSimli()) {
+          clearInterval(retryInterval);
+        }
+      }, 1000);
+
+      // Stop retrying after 15 seconds
+      const timeout = setTimeout(() => clearInterval(retryInterval), 15000);
+      return () => {
+        clearInterval(retryInterval);
+        clearTimeout(timeout);
+      };
+    }
+  }, [isConnected, settings.avatarProvider, simliAvatarRef.current?.isConnected]);
+
   // Handle VAPI error
   useEffect(() => {
     if (vapiError) {

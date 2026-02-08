@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle, useCallback } from 'react';
 import { User } from 'lucide-react';
 import { useSimliStream } from '@/hooks/useSimliStream';
 
@@ -6,7 +6,7 @@ interface SimliAvatarProps {
   apiKey: string;
   faceId: string;
   autoStart?: boolean;
-  avatarUrl?: string; // static fallback image
+  avatarUrl?: string;
   onConnected?: () => void;
   onError?: (error: string) => void;
   onSpeakingChange?: (speaking: boolean) => void;
@@ -15,6 +15,7 @@ interface SimliAvatarProps {
 
 export interface SimliAvatarRef {
   sendAudioData: (audioData: Uint8Array) => void;
+  listenToMediaStreamTrack: (track: MediaStreamTrack) => void;
   clearBuffer: () => void;
   destroy: () => void;
   isConnected: boolean;
@@ -33,31 +34,42 @@ const SimliAvatar = forwardRef<SimliAvatarRef, SimliAvatarProps>(({
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [simliFailed, setSimliFailed] = useState(false);
+  const [refsReady, setRefsReady] = useState(false);
 
-  const handleSimliError = (error: string) => {
+  const handleSimliError = useCallback((error: string) => {
     console.warn('[SimliAvatar] Simli failed, falling back:', error);
     setSimliFailed(true);
     onError?.(error);
-  };
+  }, [onError]);
 
   const {
     isConnected,
     isLoading,
     isSpeaking,
-    error,
     initialize,
     destroy,
     sendAudioData,
+    listenToMediaStreamTrack,
     clearBuffer,
+    setVideoElement,
+    setAudioElement,
   } = useSimliStream({
     apiKey,
     faceId,
-    videoRef: videoRef as React.RefObject<HTMLVideoElement>,
-    audioRef: audioRef as React.RefObject<HTMLAudioElement>,
     onConnected,
     onError: handleSimliError,
     onSpeaking: onSpeakingChange,
   });
+
+  // Set refs once DOM elements mount
+  useEffect(() => {
+    if (videoRef.current && audioRef.current) {
+      setVideoElement(videoRef.current);
+      setAudioElement(audioRef.current);
+      setRefsReady(true);
+      console.log('[SimliAvatar] Video/audio refs set');
+    }
+  }, [setVideoElement, setAudioElement]);
 
   useImperativeHandle(
     ref,
@@ -67,18 +79,25 @@ const SimliAvatar = forwardRef<SimliAvatarRef, SimliAvatarProps>(({
           sendAudioData(audioData);
         }
       },
+      listenToMediaStreamTrack: (track: MediaStreamTrack) => {
+        if (isConnected && !simliFailed) {
+          listenToMediaStreamTrack(track);
+        }
+      },
       clearBuffer,
       destroy,
       isConnected: isConnected && !simliFailed,
     }),
-    [sendAudioData, clearBuffer, destroy, isConnected, simliFailed]
+    [sendAudioData, listenToMediaStreamTrack, clearBuffer, destroy, isConnected, simliFailed]
   );
 
+  // Only start after refs are ready
   useEffect(() => {
-    if (autoStart && !simliFailed) {
+    if (autoStart && !simliFailed && refsReady) {
+      console.log('[SimliAvatar] Refs ready, initializing...');
       initialize();
     }
-  }, [autoStart, initialize, simliFailed]);
+  }, [autoStart, initialize, simliFailed, refsReady]);
 
   const showStaticAvatar = simliFailed || (!isConnected && !isLoading);
 
@@ -97,7 +116,6 @@ const SimliAvatar = forwardRef<SimliAvatarRef, SimliAvatarProps>(({
         />
       )}
 
-      {/* Fallback icon when no avatar URL */}
       {!avatarUrl && showStaticAvatar && (
         <div className="absolute inset-0 z-0 flex flex-col items-center justify-center bg-[#3c4043]">
           <div className="w-24 h-24 rounded-full bg-gradient-to-br from-accent to-accent/60 flex items-center justify-center mb-4">
@@ -107,20 +125,16 @@ const SimliAvatar = forwardRef<SimliAvatarRef, SimliAvatarProps>(({
         </div>
       )}
 
-      {/* Simli video stream */}
-      {!simliFailed && (
-        <>
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            className={`relative z-10 w-full h-full object-cover transition-opacity duration-300 ${
-              isConnected ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
-          <audio ref={audioRef} autoPlay playsInline />
-        </>
-      )}
+      {/* Simli video/audio - always render so refs are available */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        className={`relative z-10 w-full h-full object-cover transition-opacity duration-300 ${
+          isConnected && !simliFailed ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
+      <audio ref={audioRef} autoPlay playsInline data-simli-audio="true" />
 
       {/* Speaking indicator */}
       {isSpeaking && (
@@ -134,10 +148,9 @@ const SimliAvatar = forwardRef<SimliAvatarRef, SimliAvatarProps>(({
         </div>
       )}
 
-      {/* Loading indicator */}
       {isLoading && (
-        <div className="absolute inset-0 z-5 flex items-center justify-center bg-black/30">
-          <div className="text-white/70 text-sm">Connecting Simli avatar...</div>
+        <div className="absolute inset-0 z-15 flex items-center justify-center bg-black/30">
+          <div className="text-white/70 text-sm animate-pulse">Connecting Simli avatar...</div>
         </div>
       )}
     </div>
