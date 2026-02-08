@@ -14,6 +14,7 @@ import {
 import { useVapi } from "@/hooks/useVapi";
 import { supabase } from "@/integrations/supabase/client";
 import DidAvatar, { DidAvatarRef } from "./DidAvatar";
+import SimliAvatar, { SimliAvatarRef } from "./SimliAvatar";
 import InterviewSettings, { InterviewSettingsState } from "./InterviewSettings";
 
 interface InterviewRoomProps {
@@ -46,6 +47,8 @@ const InterviewRoom = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const didAvatarRef = useRef<DidAvatarRef>(null);
+  const simliAvatarRef = useRef<SimliAvatarRef>(null);
+  const [simliConfig, setSimliConfig] = useState<{ apiKey: string; faceId: string } | null>(null);
   
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
@@ -77,6 +80,7 @@ const InterviewRoom = ({
       selectedSpeaker: '',
       cameraEnabled: true,
       avatarVisible: true,
+      avatarProvider: 'simli' as const,
       voiceSpeed: 1,
       captionsEnabled: false,
     };
@@ -137,8 +141,8 @@ const InterviewRoom = ({
         // Update current display
         setCurrentTranscript(message.transcript);
         
-        // Stream to D-ID avatar if assistant is speaking
-        if (message.role === 'assistant' && didAvatarRef.current?.isConnected) {
+        // Stream to D-ID avatar if assistant is speaking (only when using D-ID provider)
+        if (message.role === 'assistant' && settings.avatarProvider === 'did' && didAvatarRef.current?.isConnected) {
           didAvatarRef.current.streamText(message.transcript);
         }
       }
@@ -226,6 +230,25 @@ const InterviewRoom = ({
     setAvatarUrl(new URL('/avatars/interviewer.png', window.location.origin).toString());
     setIsAvatarLoading(false);
   }, []);
+
+  // Fetch Simli config when provider is simli
+  useEffect(() => {
+    if (settings.avatarProvider !== 'simli') return;
+    const fetchSimliConfig = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('simli-config');
+        if (error || !data?.apiKey) {
+          console.warn('[InterviewRoom] Simli config not available, falling back to D-ID');
+          return;
+        }
+        setSimliConfig({ apiKey: data.apiKey, faceId: data.faceId });
+        console.log('[InterviewRoom] Simli config loaded');
+      } catch (e) {
+        console.warn('[InterviewRoom] Failed to fetch Simli config:', e);
+      }
+    };
+    fetchSimliConfig();
+  }, [settings.avatarProvider]);
 
   // Start media on mount
   useEffect(() => {
@@ -326,6 +349,7 @@ const InterviewRoom = ({
     stopVapi();
     stopMedia();
     didAvatarRef.current?.destroy();
+    simliAvatarRef.current?.destroy();
     onEndInterview(finalTranscript);
   };
 
@@ -338,6 +362,12 @@ const InterviewRoom = ({
     console.error('[InterviewRoom] D-ID error:', error);
   };
 
+  const handleSimliFallback = (error: string) => {
+    console.warn('[InterviewRoom] Simli failed, falling back to D-ID:', error);
+    // Auto-fallback to D-ID
+    setSettings(prev => ({ ...prev, avatarProvider: 'did' as const }));
+  };
+
   const isActuallyConnected = isConnected || status === "in_progress";
 
   return (
@@ -346,13 +376,27 @@ const InterviewRoom = ({
       <div className="flex-1 relative flex items-center justify-center p-2 sm:p-4">
         {/* AI Interviewer Avatar - Center */}
         <div className="relative w-full h-full max-w-4xl max-h-[70vh] sm:max-h-[75vh] aspect-video rounded-xl sm:rounded-2xl overflow-hidden">
-          {settings.avatarVisible && !isAvatarLoading && avatarUrl && (
+          {settings.avatarVisible && !isAvatarLoading && avatarUrl && settings.avatarProvider === 'did' && (
             <DidAvatar
               ref={didAvatarRef}
               autoStart={true}
               avatarUrl={avatarUrl}
               onConnected={handleDidConnected}
               onError={handleDidError}
+              onSpeakingChange={setIsAvatarSpeaking}
+              className="w-full h-full"
+            />
+          )}
+
+          {settings.avatarVisible && !isAvatarLoading && settings.avatarProvider === 'simli' && simliConfig && (
+            <SimliAvatar
+              ref={simliAvatarRef}
+              apiKey={simliConfig.apiKey}
+              faceId={simliConfig.faceId}
+              autoStart={true}
+              avatarUrl={avatarUrl || undefined}
+              onConnected={() => console.log('[InterviewRoom] Simli avatar connected')}
+              onError={handleSimliFallback}
               onSpeakingChange={setIsAvatarSpeaking}
               className="w-full h-full"
             />
