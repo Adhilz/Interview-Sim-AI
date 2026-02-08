@@ -242,29 +242,33 @@ const InterviewRoom = ({
     }
   }, [simliReady, hasStartedVapi, isLoading, isConnected, startVapi]);
 
-  // ─── Pipe VAPI audio to Simli & mute VAPI local playback ───
+  // ─── Pipe VAPI audio to Simli for lip-sync & mute Simli audio output ───
   useEffect(() => {
     if (!isConnected || !simliReady || !simliAvatarRef.current?.isReady) return;
+
+    // Mute Simli's audio element so it only does visual lip-sync (no duplicate audio)
+    const simliAudioEl = document.querySelector('audio[data-simli-audio="true"]') as HTMLAudioElement;
+    if (simliAudioEl) {
+      simliAudioEl.muted = true;
+      simliAudioEl.volume = 0;
+      console.log('[InterviewRoom] Simli audio output MUTED — VAPI is sole audio renderer');
+    }
 
     const pipeVapiAudioToSimli = () => {
       const audioElements = document.querySelectorAll('audio');
       for (const audioEl of audioElements) {
         // Skip Simli's own audio element
-        if (audioEl.closest('[data-simli-audio]') || audioEl.hasAttribute('data-simli-audio')) continue;
+        if (audioEl.hasAttribute('data-simli-audio')) continue;
         
         const stream = (audioEl as any).srcObject as MediaStream;
         if (stream && stream.getAudioTracks().length > 0) {
           const audioTrack = stream.getAudioTracks()[0];
+          console.log('[VAPI] TTS started — routing audio track to Simli for lip-sync');
           
-          // Mute VAPI's local audio — Simli is the sole audio renderer
-          audioEl.muted = true;
-          audioEl.volume = 0;
-          console.log('[InterviewRoom] VAPI local audio MUTED — Simli is sole renderer');
-          console.log('[VAPI] TTS started — routing audio to Simli');
-          
-          // Pipe audio track to Simli for real-time lip-sync
+          // Pipe audio track to Simli for real-time lip-sync analysis
           simliAvatarRef.current?.listenToMediaStreamTrack(audioTrack);
           console.log('[VAPI] TTS chunk sent to Simli');
+          console.log('[VAPI] TTS finished piping setup');
           return true;
         }
       }
@@ -275,7 +279,6 @@ const InterviewRoom = ({
       const retryInterval = setInterval(() => {
         if (pipeVapiAudioToSimli()) {
           clearInterval(retryInterval);
-          console.log('[VAPI] TTS finished piping setup');
         }
       }, 500);
 
