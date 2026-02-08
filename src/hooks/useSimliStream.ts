@@ -7,10 +7,12 @@ interface UseSimliStreamOptions {
   onConnected?: () => void;
   onError?: (error: string) => void;
   onSpeaking?: (speaking: boolean) => void;
+  onReady?: () => void;
 }
 
 export const useSimliStream = (options: UseSimliStreamOptions) => {
   const [isConnected, setIsConnected] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,8 +33,9 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
   const initialize = useCallback(async () => {
     if (isLoading || isConnected) return;
     if (!options.apiKey || !options.faceId) {
-      setError("Simli API key or Face ID not configured");
-      options.onError?.("Simli API key or Face ID not configured");
+      const msg = "Simli API key or Face ID not configured";
+      setError(msg);
+      options.onError?.(msg);
       return;
     }
 
@@ -75,17 +78,33 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
         setIsConnected(true);
         setIsLoading(false);
         options.onConnected?.();
+
+        // Monitor the video element for actual playback to determine true readiness
+        const checkVideoPlaying = () => {
+          if (videoEl.videoWidth > 0 && videoEl.videoHeight > 0 && !videoEl.paused) {
+            console.log("[Simli] Stream active — video is rendering");
+            console.log("[Simli] Avatar ready");
+            setIsReady(true);
+            options.onReady?.();
+          } else {
+            // Retry until video is actually playing
+            setTimeout(checkVideoPlaying, 200);
+          }
+        };
+        checkVideoPlaying();
       });
 
       client.on("disconnected", () => {
         console.log("[Simli] Disconnected");
         setIsConnected(false);
+        setIsReady(false);
       });
 
       client.on("failed", () => {
         console.error("[Simli] Connection failed");
         setError("Simli connection failed");
         setIsConnected(false);
+        setIsReady(false);
         setIsLoading(false);
         options.onError?.("Simli connection failed");
       });
@@ -97,6 +116,7 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
       const msg = e?.message || "Failed to initialize Simli";
       setError(msg);
       setIsConnected(false);
+      setIsReady(false);
       setIsLoading(false);
       options.onError?.(msg);
     }
@@ -108,6 +128,9 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
     try {
       simliClientRef.current.sendAudioData(audioData);
 
+      if (!isSpeaking) {
+        console.log("[Simli] Speaking started");
+      }
       setIsSpeaking(true);
       options.onSpeaking?.(true);
 
@@ -116,22 +139,22 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
       }
 
       speakingTimeoutRef.current = setTimeout(() => {
+        console.log("[Simli] Speaking ended");
         setIsSpeaking(false);
         options.onSpeaking?.(false);
       }, 500);
     } catch (e) {
       console.error("[Simli] sendAudioData error:", e);
     }
-  }, [isConnected, options]);
+  }, [isConnected, isSpeaking, options]);
 
-  // Listen to an audio MediaStreamTrack (e.g. from VAPI) and pipe to Simli
   const listenToMediaStreamTrack = useCallback((track: MediaStreamTrack) => {
     if (!simliClientRef.current || !isConnected) {
-      console.warn("[Simli] Cannot listen to track - not connected");
+      console.warn("[Simli] Cannot listen to track — not connected");
       return;
     }
     try {
-      console.log("[Simli] Listening to MediaStreamTrack for lip-sync");
+      console.log("[Simli] Listening to MediaStreamTrack for real-time lip-sync");
       simliClientRef.current.listenToMediastreamTrack(track);
     } catch (e) {
       console.error("[Simli] listenToMediastreamTrack error:", e);
@@ -154,6 +177,7 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
       simliClientRef.current?.close();
       simliClientRef.current = null;
       setIsConnected(false);
+      setIsReady(false);
       setIsLoading(false);
       setIsSpeaking(false);
       setError(null);
@@ -171,6 +195,7 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
 
   return {
     isConnected,
+    isReady,
     isLoading,
     isSpeaking,
     error,
