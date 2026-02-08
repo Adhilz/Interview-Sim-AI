@@ -895,13 +895,13 @@ serve(async (req) => {
       console.log('[VAPI] System prompt length:', systemPrompt.length);
       console.log('[VAPI] Projects:', candidateProfile?.projects?.length || 0, 'Skills:', candidateProfile?.skills?.length || 0);
 
-      // ElevenLabs voice configuration for professional male interviewer
+      // ElevenLabs voice configuration — professional female interviewer
       const voiceConfig = {
         provider: "11labs",
-        voiceId: "JBFqnCBsd6RMkjVDRZzb", // George - professional, authoritative male voice
-        stability: 0.55,
+        voiceId: "pFZP5JQG7iQjIQuC4Bku", // Lily — calm, professional female voice with natural tone
+        stability: 0.6,
         similarityBoost: 0.8,
-        style: 0.25,
+        style: 0.3,
         useSpeakerBoost: true,
         model: "eleven_turbo_v2_5",
       };

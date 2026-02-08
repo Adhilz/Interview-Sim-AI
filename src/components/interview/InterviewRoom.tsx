@@ -242,21 +242,29 @@ const InterviewRoom = ({
     }
   }, [simliReady, hasStartedVapi, isLoading, isConnected, startVapi]);
 
-  // ─── Pipe VAPI audio to Simli for real-time lip-sync ───
+  // ─── Pipe VAPI audio to Simli & mute VAPI local playback ───
   useEffect(() => {
     if (!isConnected || !simliReady || !simliAvatarRef.current?.isReady) return;
 
     const pipeVapiAudioToSimli = () => {
       const audioElements = document.querySelectorAll('audio');
       for (const audioEl of audioElements) {
+        // Skip Simli's own audio element
         if (audioEl.closest('[data-simli-audio]') || audioEl.hasAttribute('data-simli-audio')) continue;
         
         const stream = (audioEl as any).srcObject as MediaStream;
         if (stream && stream.getAudioTracks().length > 0) {
           const audioTrack = stream.getAudioTracks()[0];
-          console.log('[InterviewRoom] Found VAPI audio track, piping to Simli for lip-sync');
-          console.log('[VAPI] TTS audio routed to Simli');
+          
+          // Mute VAPI's local audio — Simli is the sole audio renderer
+          audioEl.muted = true;
+          audioEl.volume = 0;
+          console.log('[InterviewRoom] VAPI local audio MUTED — Simli is sole renderer');
+          console.log('[VAPI] TTS started — routing audio to Simli');
+          
+          // Pipe audio track to Simli for real-time lip-sync
           simliAvatarRef.current?.listenToMediaStreamTrack(audioTrack);
+          console.log('[VAPI] TTS chunk sent to Simli');
           return true;
         }
       }
@@ -267,6 +275,7 @@ const InterviewRoom = ({
       const retryInterval = setInterval(() => {
         if (pipeVapiAudioToSimli()) {
           clearInterval(retryInterval);
+          console.log('[VAPI] TTS finished piping setup');
         }
       }, 500);
 
