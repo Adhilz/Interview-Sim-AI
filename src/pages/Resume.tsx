@@ -27,6 +27,7 @@ import {
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import type { Json } from "@/integrations/supabase/types";
 import { ATSAnalysisPanel } from "@/components/ats/ATSAnalysisPanel";
+import StudentSidebar from "@/components/StudentSidebar";
 
 interface Resume {
   id: string;
@@ -585,123 +586,7 @@ const Resume = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-64 bg-card border-r border-border p-6 hidden lg:flex flex-col">
-        <Link to="/" className="flex items-center gap-2 mb-10">
-          <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center">
-            <Brain className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <span className="text-lg font-bold text-foreground">InterviewSim</span>
-        </Link>
-
-        <nav className="flex-1 space-y-2">
-          <Link 
-            to="/dashboard"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <TrendingUp className="w-5 h-5" />
-            Dashboard
-          </Link>
-          <Link 
-            to="/interview"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <Mic className="w-5 h-5" />
-            New Interview
-          </Link>
-          <Link 
-            to="/resume"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg bg-accent/10 text-accent font-medium"
-          >
-            <FileText className="w-5 h-5" />
-            Resume
-          </Link>
-          <Link 
-            to="/history"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <History className="w-5 h-5" />
-            History
-          </Link>
-          <Link 
-            to="/profile"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <User className="w-5 h-5" />
-            Profile
-          </Link>
-        </nav>
-
-        <Button variant="ghost" onClick={handleLogout} className="justify-start gap-3 text-muted-foreground hover:text-destructive">
-          <LogOut className="w-5 h-5" />
-          Logout
-        </Button>
-      </aside>
-
-      {/* Mobile header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border p-4 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center">
-            <Brain className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <span className="font-bold text-foreground">InterviewSim</span>
-        </Link>
-        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </Button>
-      </header>
-
-      {/* Mobile menu */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden fixed top-16 left-0 right-0 bottom-0 z-40 bg-card border-t border-border p-4">
-          <nav className="space-y-2">
-            <Link 
-              to="/dashboard"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <TrendingUp className="w-5 h-5" />
-              Dashboard
-            </Link>
-            <Link 
-              to="/interview"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <Mic className="w-5 h-5" />
-              New Interview
-            </Link>
-            <Link 
-              to="/resume"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-accent/10 text-accent font-medium"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <FileText className="w-5 h-5" />
-              Resume
-            </Link>
-            <Link 
-              to="/history"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <History className="w-5 h-5" />
-              History
-            </Link>
-            <Link 
-              to="/profile"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <User className="w-5 h-5" />
-              Profile
-            </Link>
-            <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive">
-              <LogOut className="w-5 h-5" />
-              Logout
-            </Button>
-          </nav>
-        </div>
-      )}
+      <StudentSidebar onLogout={handleLogout} />
 
       {/* Main content */}
       <main className="lg:ml-64 pt-20 lg:pt-0 min-h-screen">

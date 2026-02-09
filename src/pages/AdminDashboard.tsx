@@ -903,8 +903,8 @@ const AdminDashboard = () => {
           <TabsContent value="codes" className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h2 className="text-xl lg:text-2xl font-bold">University Codes</h2>
-                <p className="text-sm text-muted-foreground">Share codes with students to join your university</p>
+                <h2 className="text-xl lg:text-2xl font-bold">College Codes</h2>
+                <p className="text-sm text-muted-foreground">Share codes with students to join your college</p>
               </div>
               <Dialog open={isCodeDialogOpen} onOpenChange={setIsCodeDialogOpen}>
                 <DialogTrigger asChild>
@@ -950,7 +950,7 @@ const AdminDashboard = () => {
                         <Key className="w-6 h-6 text-accent" />
                       </div>
                       <div>
-                        <p className="text-sm text-muted-foreground">Primary University Code</p>
+                        <p className="text-sm text-muted-foreground">Primary College Code</p>
                         <p className="text-2xl font-mono font-bold text-foreground">{adminUniversity.code}</p>
                       </div>
                     </div>

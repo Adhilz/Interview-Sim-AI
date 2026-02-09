@@ -7,25 +7,19 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { 
   Brain, 
-  FileText, 
-  Mic, 
   History, 
-  User, 
-  LogOut, 
   TrendingUp,
   Clock,
   Award,
   ChevronDown,
   ChevronUp,
   Calendar,
-  Menu,
-  X,
   MessageSquare,
   Zap,
   AlertTriangle,
   CheckCircle,
   XCircle,
-  HelpCircle
+  Mic,
 } from "lucide-react";
 import {
   Collapsible,
@@ -33,6 +27,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
+import StudentSidebar from "@/components/StudentSidebar";
 
 interface Interview {
   id: string;
@@ -68,7 +63,6 @@ const InterviewHistory = () => {
   const [improvements, setImprovements] = useState<Record<string, Improvement[]>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [expandedInterview, setExpandedInterview] = useState<string | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -95,7 +89,6 @@ const InterviewHistory = () => {
   const fetchData = async (userId: string) => {
     setIsLoading(true);
     try {
-      // Fetch all interviews
       const { data: interviewsData } = await supabase
         .from("interviews")
         .select("*")
@@ -105,7 +98,6 @@ const InterviewHistory = () => {
       if (interviewsData) {
         setInterviews(interviewsData as Interview[]);
         
-        // Fetch evaluations
         const { data: evaluationsData } = await supabase
           .from("evaluations")
           .select("*")
@@ -120,7 +112,6 @@ const InterviewHistory = () => {
           });
           setEvaluations(evalMap);
 
-          // Fetch improvement suggestions
           if (evalIds.length > 0) {
             const { data: improvementsData } = await supabase
               .from("improvement_suggestions")
@@ -191,138 +182,7 @@ const InterviewHistory = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-64 bg-card border-r border-border p-6 hidden lg:flex flex-col">
-        <Link to="/" className="flex items-center gap-2 mb-10">
-          <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center">
-            <Brain className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <span className="text-lg font-bold text-foreground">InterviewSim</span>
-        </Link>
-
-        <nav className="flex-1 space-y-2">
-          <Link 
-            to="/dashboard"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <TrendingUp className="w-5 h-5" />
-            Dashboard
-          </Link>
-          <Link 
-            to="/interview"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <Mic className="w-5 h-5" />
-            New Interview
-          </Link>
-          <Link 
-            to="/resume"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <FileText className="w-5 h-5" />
-            Resume
-          </Link>
-          <Link 
-            to="/history"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg bg-accent/10 text-accent font-medium"
-          >
-            <History className="w-5 h-5" />
-            History
-          </Link>
-          <Link 
-            to="/profile"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <User className="w-5 h-5" />
-            Profile
-          </Link>
-          <Link 
-            to="/help"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <HelpCircle className="w-5 h-5" />
-            Help
-          </Link>
-        </nav>
-
-        <Button variant="ghost" onClick={handleLogout} className="justify-start gap-3 text-muted-foreground hover:text-destructive">
-          <LogOut className="w-5 h-5" />
-          Logout
-        </Button>
-      </aside>
-
-      {/* Mobile header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border p-4 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center">
-            <Brain className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <span className="font-bold text-foreground">InterviewSim</span>
-        </Link>
-        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </Button>
-      </header>
-
-      {/* Mobile menu */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden fixed top-16 left-0 right-0 bottom-0 z-40 bg-card border-t border-border p-4">
-          <nav className="space-y-2">
-            <Link 
-              to="/dashboard"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <TrendingUp className="w-5 h-5" />
-              Dashboard
-            </Link>
-            <Link 
-              to="/interview"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <Mic className="w-5 h-5" />
-              New Interview
-            </Link>
-            <Link 
-              to="/resume"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <FileText className="w-5 h-5" />
-              Resume
-            </Link>
-            <Link 
-              to="/history"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-accent/10 text-accent font-medium"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <History className="w-5 h-5" />
-              History
-            </Link>
-            <Link 
-              to="/profile"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <User className="w-5 h-5" />
-              Profile
-            </Link>
-            <Link 
-              to="/help"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <HelpCircle className="w-5 h-5" />
-              Help
-            </Link>
-            <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive">
-              <LogOut className="w-5 h-5" />
-              Logout
-            </Button>
-          </nav>
-        </div>
-      )}
+      <StudentSidebar onLogout={handleLogout} />
 
       {/* Main content */}
       <main className="lg:ml-64 pt-20 lg:pt-0">
@@ -382,7 +242,7 @@ const InterviewHistory = () => {
                 </Card>
               </div>
 
-              {/* Interview Cards - Accordion Style */}
+              {/* Interview Cards */}
               <div className="space-y-3">
                 {interviews.map((interview, index) => {
                   const evaluation = evaluations[interview.id];
@@ -400,7 +260,6 @@ const InterviewHistory = () => {
                           <CardContent className="p-4 cursor-pointer">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-3 sm:gap-4">
-                                {/* Interview Number Badge */}
                                 <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-accent/10 flex items-center justify-center flex-shrink-0">
                                   <span className="text-accent font-bold text-sm sm:text-base">#{interviews.length - index}</span>
                                 </div>
@@ -437,156 +296,95 @@ const InterviewHistory = () => {
                                   </div>
                                 </div>
                               </div>
-                              
-                              <div className="flex items-center gap-2 sm:gap-4">
-                                {/* Score Preview */}
-                                {evaluation?.overall_score !== undefined && evaluation?.overall_score !== null && (
-                                  <div className="text-right hidden sm:block">
-                                    <p className={`text-xl sm:text-2xl font-bold ${
-                                      evaluation.overall_score >= 70 ? 'text-success' : 
-                                      evaluation.overall_score >= 50 ? 'text-warning' : 'text-destructive'
+
+                              <div className="flex items-center gap-3">
+                                {evaluation && (
+                                  <div className="hidden sm:flex items-center gap-2">
+                                    <div className={`text-lg font-bold ${
+                                      (evaluation.overall_score || 0) >= 70 ? 'text-success' :
+                                      (evaluation.overall_score || 0) >= 40 ? 'text-warning' : 'text-destructive'
                                     }`}>
-                                      {evaluation.overall_score}%
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">Score</p>
+                                      {evaluation.overall_score || 0}%
+                                    </div>
                                   </div>
                                 )}
-                                {evaluation?.overall_score !== undefined && evaluation?.overall_score !== null && (
-                                  <div className={`sm:hidden w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
-                                    evaluation.overall_score >= 70 ? 'bg-success/10 text-success' : 
-                                    evaluation.overall_score >= 50 ? 'bg-warning/10 text-warning' : 'bg-destructive/10 text-destructive'
-                                  }`}>
-                                    {evaluation.overall_score}
-                                  </div>
-                                )}
-                                
-                                {/* Expand Icon */}
-                                <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-                                  {isExpanded ? (
-                                    <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                                  ) : (
-                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                                  )}
-                                </div>
+                                {isExpanded ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
                               </div>
                             </div>
                           </CardContent>
                         </CollapsibleTrigger>
-                        
+
                         <CollapsibleContent>
-                          <div className="border-t border-border">
-                            <CardContent className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-                              {/* Quick Stats */}
-                              <div className="grid grid-cols-3 gap-2 sm:gap-4">
-                                <div className="p-3 sm:p-4 rounded-xl bg-secondary/50 text-center">
-                                  <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-accent mx-auto mb-1" />
-                                  <p className="text-lg sm:text-2xl font-bold text-foreground">{interview.duration}</p>
-                                  <p className="text-xs text-muted-foreground">Minutes</p>
-                                </div>
-                                <div className="p-3 sm:p-4 rounded-xl bg-secondary/50 text-center">
-                                  <Award className="w-5 h-5 sm:w-6 sm:h-6 text-accent mx-auto mb-1" />
-                                  <p className="text-lg sm:text-2xl font-bold text-foreground">
-                                    {evaluation?.overall_score ?? '--'}%
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">Overall</p>
-                                </div>
-                                <div className="p-3 sm:p-4 rounded-xl bg-secondary/50 text-center">
-                                  <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(interview.status)}`}>
-                                    {getStatusIcon(interview.status)}
+                          <div className="px-4 pb-4 border-t border-border pt-4">
+                            {evaluation ? (
+                              <div className="space-y-6">
+                                {/* Score Overview */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                  <div className="p-3 rounded-lg bg-secondary/50 text-center">
+                                    <p className="text-2xl font-bold text-foreground">{evaluation.overall_score || 0}%</p>
+                                    <p className="text-xs text-muted-foreground">Overall</p>
                                   </div>
-                                  <p className="text-xs text-muted-foreground mt-1 capitalize">{interview.status}</p>
-                                </div>
-                              </div>
-
-                              {/* Score Breakdown */}
-                              {evaluation && (
-                                <div className="space-y-4">
-                                  <h4 className="font-semibold text-foreground text-sm sm:text-base">Score Breakdown</h4>
-                                  <div className="space-y-3">
-                                    {[
-                                      { label: "Communication", score: evaluation.communication_score, icon: <MessageSquare className="w-4 h-4" />, desc: "Clarity and articulation" },
-                                      { label: "Technical", score: evaluation.technical_score, icon: <Brain className="w-4 h-4" />, desc: "Accuracy and depth" },
-                                      { label: "Confidence", score: evaluation.confidence_score, icon: <Zap className="w-4 h-4" />, desc: "Presence and composure" },
-                                    ].map((item) => (
-                                      <div key={item.label} className="space-y-2">
-                                        <div className="flex items-center justify-between">
-                                          <div className="flex items-center gap-2">
-                                            <div className="w-7 h-7 rounded-lg bg-accent/10 flex items-center justify-center text-accent">
-                                              {item.icon}
-                                            </div>
-                                            <div>
-                                              <span className="text-sm font-medium text-foreground">{item.label}</span>
-                                              <p className="text-xs text-muted-foreground hidden sm:block">{item.desc}</p>
-                                            </div>
-                                          </div>
-                                          <span className={`text-base sm:text-lg font-bold ${
-                                            (item.score || 0) >= 70 ? 'text-success' : 
-                                            (item.score || 0) >= 50 ? 'text-warning' : 'text-destructive'
-                                          }`}>
-                                            {item.score ?? '--'}%
-                                          </span>
-                                        </div>
-                                        <Progress value={item.score || 0} className="h-2" />
-                                      </div>
-                                    ))}
+                                  <div className="p-3 rounded-lg bg-secondary/50 text-center">
+                                    <p className="text-2xl font-bold text-foreground">{evaluation.technical_score || 0}%</p>
+                                    <p className="text-xs text-muted-foreground">Technical</p>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-secondary/50 text-center">
+                                    <p className="text-2xl font-bold text-foreground">{evaluation.communication_score || 0}%</p>
+                                    <p className="text-xs text-muted-foreground">Communication</p>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-secondary/50 text-center">
+                                    <p className="text-2xl font-bold text-foreground">{evaluation.confidence_score || 0}%</p>
+                                    <p className="text-xs text-muted-foreground">Confidence</p>
                                   </div>
                                 </div>
-                              )}
 
-                              {/* Feedback */}
-                              {evaluation?.feedback && (
-                                <div className="space-y-3">
-                                  <h4 className="font-semibold text-foreground text-sm sm:text-base">Detailed Feedback</h4>
-                                  <FeedbackDisplay feedback={evaluation.feedback} overallScore={evaluation.overall_score || 0} />
-                                </div>
-                              )}
+                                {/* Feedback */}
+                                {evaluation.feedback && (
+                                  <div>
+                                    <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                                      <MessageSquare className="w-4 h-4 text-accent" />
+                                      AI Feedback
+                                    </h4>
+                                    <p className="text-sm text-muted-foreground leading-relaxed bg-secondary/30 p-4 rounded-lg">
+                                      {evaluation.feedback}
+                                    </p>
+                                  </div>
+                                )}
 
-                              {/* Improvements */}
-                              {interviewImprovements && interviewImprovements.length > 0 && (
-                                <div>
-                                  <h4 className="font-semibold text-foreground mb-3 text-sm sm:text-base">Areas for Improvement</h4>
-                                  <div className="space-y-2">
-                                    {interviewImprovements.sort((a, b) => (a.priority || 3) - (b.priority || 3)).map((imp, idx) => (
-                                      <div key={imp.id} className="flex items-start gap-3 p-3 sm:p-4 rounded-xl bg-secondary/30 border border-border/50">
-                                        <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-accent/10 flex items-center justify-center flex-shrink-0">
-                                          <span className="text-accent font-semibold text-xs sm:text-sm">{idx + 1}</span>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                            <Badge variant="outline" className="text-xs capitalize">
-                                              {imp.category || 'general'}
-                                            </Badge>
-                                            {imp.priority && imp.priority <= 2 && (
-                                              <Badge variant="destructive" className="text-xs">High Priority</Badge>
+                                {/* Improvements */}
+                                {interviewImprovements && interviewImprovements.length > 0 && (
+                                  <div>
+                                    <h4 className="font-semibold text-foreground mb-2 flex items-center gap-2">
+                                      <Zap className="w-4 h-4 text-accent" />
+                                      Improvement Areas
+                                    </h4>
+                                    <div className="space-y-2">
+                                      {interviewImprovements.map((imp) => (
+                                        <div key={imp.id} className="flex items-start gap-3 p-3 rounded-lg bg-secondary/30">
+                                          <AlertTriangle className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" />
+                                          <div>
+                                            <p className="text-sm text-foreground">{imp.suggestion}</p>
+                                            {imp.category && (
+                                              <Badge variant="secondary" className="mt-1 text-xs">
+                                                {imp.category}
+                                              </Badge>
                                             )}
                                           </div>
-                                          <p className="text-foreground text-sm">{imp.suggestion}</p>
                                         </div>
-                                      </div>
-                                    ))}
+                                      ))}
+                                    </div>
                                   </div>
-                                </div>
-                              )}
-
-                              {/* No evaluation message */}
-                              {!evaluation && interview.status === "completed" && (
-                                <div className="text-center py-6">
-                                  <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-warning" />
-                                  <p className="text-muted-foreground text-sm">
-                                    Evaluation not available for this interview
-                                  </p>
-                                </div>
-                              )}
-
-                              {interview.status === "in_progress" && (
-                                <div className="text-center py-6">
-                                  <Clock className="w-10 h-10 mx-auto mb-3 text-warning animate-pulse" />
-                                  <p className="text-muted-foreground text-sm">
-                                    This interview is still in progress
-                                  </p>
-                                </div>
-                              )}
-                            </CardContent>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-center py-6">
+                                <p className="text-muted-foreground text-sm">
+                                  {interview.status === 'completed' 
+                                    ? 'Evaluation not available for this interview' 
+                                    : 'Interview was not completed'}
+                                </p>
+                              </div>
+                            )}
                           </div>
                         </CollapsibleContent>
                       </Card>
@@ -601,100 +399,5 @@ const InterviewHistory = () => {
     </div>
   );
 };
-
-// Helper component to display structured feedback
-const FeedbackDisplay = ({ feedback, overallScore }: { feedback: string; overallScore: number }) => {
-  const parts = parseFeedback(feedback);
-  
-  return (
-    <div className="space-y-4">
-      {/* Verdict */}
-      {parts.verdict && (
-        <div className={`p-4 rounded-xl ${overallScore >= 60 ? 'bg-success/5 border border-success/20' : 'bg-destructive/5 border border-destructive/20'}`}>
-          <h5 className="font-semibold text-foreground mb-2 flex items-center gap-2 text-sm">
-            {overallScore >= 60 ? <CheckCircle className="w-4 h-4 text-success" /> : <XCircle className="w-4 h-4 text-destructive" />}
-            Verdict
-          </h5>
-          <p className="text-sm text-muted-foreground">{parts.verdict}</p>
-        </div>
-      )}
-
-      {/* Weaknesses */}
-      {parts.weaknesses.length > 0 && (
-        <div className="p-4 rounded-xl bg-warning/5 border border-warning/20">
-          <h5 className="font-semibold text-foreground mb-3 flex items-center gap-2 text-sm">
-            <AlertTriangle className="w-4 h-4 text-warning" />
-            Critical Weaknesses
-          </h5>
-          <ul className="space-y-2">
-            {parts.weaknesses.map((weakness, idx) => (
-              <li key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
-                <span className="text-warning mt-0.5">•</span>
-                <span>{weakness}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Detailed Scores */}
-      {parts.detailedScores.length > 0 && (
-        <div className="p-4 rounded-xl bg-secondary/50">
-          <h5 className="font-semibold text-foreground mb-2 text-sm">Score Details</h5>
-          <div className="space-y-1">
-            {parts.detailedScores.map((score, idx) => (
-              <p key={idx} className="text-xs text-muted-foreground">{score}</p>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Fallback for unparsed feedback */}
-      {!parts.verdict && !parts.weaknesses.length && (
-        <div className="p-4 rounded-xl bg-secondary/50 whitespace-pre-wrap">
-          <p className="text-sm text-muted-foreground">{feedback}</p>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Parse feedback string into structured parts
-function parseFeedback(feedback: string): {
-  verdict: string;
-  weaknesses: string[];
-  detailedScores: string[];
-} {
-  const result = {
-    verdict: '',
-    weaknesses: [] as string[],
-    detailedScores: [] as string[]
-  };
-
-  const lines = feedback.split('\n');
-  let currentSection = '';
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    
-    if (trimmed.startsWith('**Verdict:**')) {
-      result.verdict = trimmed.replace('**Verdict:**', '').trim();
-      currentSection = 'verdict';
-    } else if (trimmed.includes('Critical Weaknesses:') || trimmed.includes('**Critical Weaknesses:**')) {
-      currentSection = 'weaknesses';
-    } else if (trimmed.includes('Detailed Scores:') || trimmed.includes('**Detailed Scores:**')) {
-      currentSection = 'scores';
-    } else if (trimmed.startsWith('-')) {
-      const content = trimmed.substring(1).trim();
-      if (currentSection === 'weaknesses') {
-        result.weaknesses.push(content);
-      } else if (currentSection === 'scores') {
-        result.detailedScores.push(content);
-      }
-    }
-  }
-
-  return result;
-}
 
 export default InterviewHistory;

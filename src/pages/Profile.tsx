@@ -10,25 +10,20 @@ import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { 
   Brain, 
-  FileText, 
   Mic, 
-  History, 
   User, 
-  LogOut, 
-  TrendingUp,
-  Camera,
   Loader2,
   GraduationCap,
+  Camera,
   Video,
   Save,
   Upload,
-  Menu,
-  X,
   Shield,
   Mail,
   Settings
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
+import StudentSidebar from "@/components/StudentSidebar";
 
 interface Profile {
   id: string;
@@ -58,7 +53,6 @@ const Profile = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const [fullName, setFullName] = useState("");
   const [cameraPermission, setCameraPermission] = useState(false);
@@ -128,20 +122,12 @@ const Profile = () => {
     if (!file || !user) return;
 
     if (!file.type.startsWith('image/')) {
-      toast({
-        title: "Invalid file",
-        description: "Please upload an image file",
-        variant: "destructive",
-      });
+      toast({ title: "Invalid file", description: "Please upload an image file", variant: "destructive" });
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "Please upload an image smaller than 5MB",
-        variant: "destructive",
-      });
+      toast({ title: "File too large", description: "Please upload an image smaller than 5MB", variant: "destructive" });
       return;
     }
 
@@ -168,17 +154,10 @@ const Profile = () => {
       if (updateError) throw updateError;
 
       setAvatarUrl(publicUrl);
-      toast({
-        title: "Avatar uploaded",
-        description: "Your profile picture has been updated",
-      });
+      toast({ title: "Avatar uploaded", description: "Your profile picture has been updated" });
     } catch (error) {
       console.error("Upload error:", error);
-      toast({
-        title: "Upload failed",
-        description: "Failed to upload avatar. Please try again.",
-        variant: "destructive",
-      });
+      toast({ title: "Upload failed", description: "Failed to upload avatar. Please try again.", variant: "destructive" });
     } finally {
       setIsUploading(false);
     }
@@ -200,16 +179,9 @@ const Profile = () => {
 
       if (error) throw error;
 
-      toast({
-        title: "Profile updated",
-        description: "Your changes have been saved.",
-      });
+      toast({ title: "Profile updated", description: "Your changes have been saved." });
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update profile.",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to update profile.", variant: "destructive" });
     } finally {
       setIsSaving(false);
     }
@@ -241,123 +213,7 @@ const Profile = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Sidebar - Desktop */}
-      <aside className="fixed left-0 top-0 h-full w-64 bg-card border-r border-border p-6 hidden lg:flex flex-col">
-        <Link to="/" className="flex items-center gap-2 mb-10">
-          <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center">
-            <Brain className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <span className="text-lg font-bold text-foreground">InterviewSim</span>
-        </Link>
-
-        <nav className="flex-1 space-y-2">
-          <Link 
-            to="/dashboard"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <TrendingUp className="w-5 h-5" />
-            Dashboard
-          </Link>
-          <Link 
-            to="/interview"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <Mic className="w-5 h-5" />
-            New Interview
-          </Link>
-          <Link 
-            to="/resume"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <FileText className="w-5 h-5" />
-            Resume
-          </Link>
-          <Link 
-            to="/history"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <History className="w-5 h-5" />
-            History
-          </Link>
-          <Link 
-            to="/profile"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg bg-accent/10 text-accent font-medium"
-          >
-            <User className="w-5 h-5" />
-            Profile
-          </Link>
-        </nav>
-
-        <Button variant="ghost" onClick={handleLogout} className="justify-start gap-3 text-muted-foreground hover:text-destructive">
-          <LogOut className="w-5 h-5" />
-          Logout
-        </Button>
-      </aside>
-
-      {/* Mobile header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border p-4 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center">
-            <Brain className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <span className="font-bold text-foreground">InterviewSim</span>
-        </Link>
-        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </Button>
-      </header>
-
-      {/* Mobile menu */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden fixed top-16 left-0 right-0 bottom-0 z-40 bg-card border-t border-border p-4">
-          <nav className="space-y-2">
-            <Link 
-              to="/dashboard"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <TrendingUp className="w-5 h-5" />
-              Dashboard
-            </Link>
-            <Link 
-              to="/interview"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <Mic className="w-5 h-5" />
-              New Interview
-            </Link>
-            <Link 
-              to="/resume"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <FileText className="w-5 h-5" />
-              Resume
-            </Link>
-            <Link 
-              to="/history"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <History className="w-5 h-5" />
-              History
-            </Link>
-            <Link 
-              to="/profile"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-accent/10 text-accent font-medium"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <User className="w-5 h-5" />
-              Profile
-            </Link>
-            <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive">
-              <LogOut className="w-5 h-5" />
-              Logout
-            </Button>
-          </nav>
-        </div>
-      )}
+      <StudentSidebar onLogout={handleLogout} />
 
       {/* Main content - Centered */}
       <main className="lg:ml-64 pt-20 lg:pt-0 min-h-screen">
@@ -484,7 +340,7 @@ const Profile = () => {
               </Card>
             </motion.div>
 
-            {/* University info */}
+            {/* College info */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -494,7 +350,7 @@ const Profile = () => {
                 <CardHeader className="p-6">
                   <CardTitle className="flex items-center gap-2 text-lg">
                     <GraduationCap className="w-5 h-5 text-accent" />
-                    University Details
+                    College Details
                   </CardTitle>
                   <CardDescription>Your academic affiliation</CardDescription>
                 </CardHeader>
@@ -502,7 +358,7 @@ const Profile = () => {
                   <div className="space-y-4">
                     <div className="p-4 rounded-xl bg-secondary/50">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm text-muted-foreground">University</span>
+                        <span className="text-sm text-muted-foreground">College</span>
                         <span className="font-medium text-foreground">
                           {universityCode?.university_name || "Not linked"}
                         </span>
@@ -516,7 +372,7 @@ const Profile = () => {
                     </div>
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
                       <Shield className="w-3 h-3" />
-                      University code cannot be changed after registration
+                      College code cannot be changed after registration
                     </p>
                   </div>
                 </CardContent>

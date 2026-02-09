@@ -15,12 +15,12 @@ const loginSchema = z.object({
 
 const studentSignupSchema = loginSchema.extend({
   fullName: z.string().min(2, "Full name is required"),
-  universityCode: z.string().min(1, "University code is required"),
+  universityCode: z.string().min(1, "College code is required"),
 });
 
 const adminSignupSchema = loginSchema.extend({
   fullName: z.string().min(2, "Full name is required"),
-  universityName: z.string().min(2, "University name is required"),
+  universityName: z.string().min(2, "College name is required"),
 });
 
 const forgotPasswordSchema = z.object({
@@ -266,7 +266,7 @@ const Auth = () => {
 
         toast({
           title: "Admin account created!",
-          description: `Your university code is: ${result.universityCode}. You can now login.`,
+          description: `Your college code is: ${result.universityCode}. You can now login.`,
         });
 
         // Redirect to login page
@@ -281,8 +281,8 @@ const Auth = () => {
 
       if (codeError || !codeData) {
         toast({
-          title: "Invalid University Code",
-          description: "The university code is invalid, expired, or has reached its usage limit.",
+          title: "Invalid College Code",
+          description: "The college code is invalid, expired, or has reached its usage limit.",
           variant: "destructive",
         });
         setIsLoading(false);
@@ -583,7 +583,7 @@ const Auth = () => {
                       }`} />
                       <p className={`text-sm font-medium ${
                         selectedRole === "admin" ? "text-accent" : "text-foreground"
-                      }`}>University Admin</p>
+                      }`}>College Admin</p>
                       <p className="text-xs text-muted-foreground mt-1">Manage students</p>
                     </button>
                   </div>
@@ -648,17 +648,17 @@ const Auth = () => {
                       )}
                     </div>
 
-                    {/* Student: University Code */}
+                    {/* Student: College Code */}
                     {selectedRole === "student" && (
                       <div className="space-y-2">
                         <Label htmlFor="universityCode" className="flex items-center gap-2">
                           <GraduationCap className="w-4 h-4" />
-                          University Code
+                          College Code
                         </Label>
                         <Input
                           id="universityCode"
                           type="text"
-                          placeholder="Enter your university code"
+                          placeholder="Enter your college code"
                           value={universityCode}
                           onChange={(e) => setUniversityCode(e.target.value.toUpperCase())}
                           className={`h-11 lg:h-12 font-mono ${errors.universityCode ? "border-destructive" : ""}`}
@@ -667,17 +667,17 @@ const Auth = () => {
                           <p className="text-sm text-destructive">{errors.universityCode}</p>
                         )}
                         <p className="text-xs text-muted-foreground">
-                          Get this code from your university administrator
+                          Get this code from your college administrator
                         </p>
                       </div>
                     )}
 
-                    {/* Admin: University Name */}
+                    {/* Admin: College Name */}
                     {selectedRole === "admin" && (
                       <div className="space-y-2">
                         <Label htmlFor="universityName" className="flex items-center gap-2">
                           <Building2 className="w-4 h-4" />
-                          University Name
+                          College Name
                         </Label>
                         <Input
                           id="universityName"
