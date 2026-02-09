@@ -70,8 +70,8 @@ const FAQ_ITEMS = [
     answer: 'Your resume helps the AI interviewer ask relevant, personalized questions based on your skills, experience, and projects. This makes the interview more realistic and valuable for your preparation.',
   },
   {
-    question: 'What is a University Code?',
-    answer: 'A University Code is a unique identifier provided by your university administrator. Students must enter this code during signup to link their account to their institution, enabling their admin to track progress and provide guidance.',
+    question: 'What is a College Code?',
+    answer: 'A College Code is a unique identifier provided by your college administrator. Students must enter this code during signup to link their account to their institution, enabling their admin to track progress and provide guidance.',
   },
   {
     question: 'How is my interview evaluated?',
@@ -292,7 +292,7 @@ const Help = () => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="student">Student</SelectItem>
-                          <SelectItem value="admin">University Admin</SelectItem>
+                          <SelectItem value="admin">College Admin</SelectItem>
                           <SelectItem value="other">Other</SelectItem>
                         </SelectContent>
                       </Select>

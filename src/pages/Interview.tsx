@@ -6,11 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast";
 import { 
   Brain, 
-  FileText, 
-  Mic, 
-  History, 
-  User as UserIcon, 
-  LogOut, 
   Video,
   VideoOff,
   Clock,
@@ -19,16 +14,15 @@ import {
   AlertCircle,
   Loader2,
   CheckCircle,
-  Menu,
-  X,
-  HelpCircle
 } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import InterviewRoom from "@/components/interview/InterviewRoom";
 import PreInterviewSetup from "@/components/interview/PreInterviewSetup";
 import EvaluationDisplay from "@/components/interview/EvaluationDisplay";
 import InterviewModeSelector, { InterviewMode } from "@/components/interview/InterviewModeSelector";
+import StudentSidebar from "@/components/StudentSidebar";
 
+// types and interfaces
 type InterviewDuration = "3" | "5";
 type InterviewStatus = "mode_select" | "setup" | "ready" | "connecting" | "in_progress" | "evaluating" | "completed";
 
@@ -94,7 +88,6 @@ const Interview = () => {
   const [isLoadingConfig, setIsLoadingConfig] = useState(true);
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [interviewTranscript, setInterviewTranscript] = useState<string>('');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [interviewPreferences, setInterviewPreferences] = useState<string>('');
   const [evaluationData, setEvaluationData] = useState<EvaluationData | null>(null);
   const [improvementSuggestions, setImprovementSuggestions] = useState<ImprovementSuggestion[]>([]);
@@ -126,6 +119,7 @@ const Interview = () => {
     };
   }, [navigate]);
 
+  // fetchResumeHighlights, fetchVapiConfig, timer effect, stopMedia, requestPermissions, toggleMic, toggleVideo, startInterview, endInterview, handleVapiCallStart, handleTranscriptUpdate
   const fetchResumeHighlights = async (userId: string) => {
     try {
       const { data: resume } = await supabase
@@ -144,7 +138,6 @@ const Interview = () => {
           .single();
 
         if (highlights) {
-          // Also get the profile name
           const { data: profile } = await supabase
             .from('profiles')
             .select('full_name')
@@ -195,7 +188,6 @@ const Interview = () => {
     }
   };
 
-  // Timer effect
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (status === "in_progress" && timeRemaining > 0) {
@@ -278,7 +270,6 @@ const Interview = () => {
     setInterviewTranscript('');
 
     try {
-      // Create interview record with interview_mode
       const { data: interview, error: interviewError } = await supabase
         .from("interviews")
         .insert({
@@ -295,7 +286,6 @@ const Interview = () => {
 
       setInterviewId(interview.id);
 
-      // Start session via backend with interview mode
       const { data: startData, error: startError } = await supabase.functions.invoke('vapi-interview', {
         body: { 
           action: 'start', 
@@ -319,7 +309,6 @@ const Interview = () => {
         assistantOverrides: startData.assistantOverrides
       });
 
-      // Stop the setup media stream since InterviewRoom will start its own
       stopMedia();
 
       setTimeRemaining(parseInt(duration) * 60);
@@ -345,13 +334,11 @@ const Interview = () => {
     setStatus("evaluating");
     setIsEvaluating(true);
 
-    // Use provided transcript or fallback to accumulated state
     const finalTranscript = transcript || interviewTranscript;
     console.log('[Interview] endInterview called with transcript length:', finalTranscript?.length || 0);
     console.log('[Interview] Transcript preview:', finalTranscript?.substring(0, 500));
 
     try {
-      // Update interview status
       await supabase
         .from("interviews")
         .update({
@@ -360,7 +347,6 @@ const Interview = () => {
         })
         .eq("id", interviewId);
 
-      // Trigger evaluation with transcript and interview mode
       const { data: evalData, error: evalError } = await supabase.functions.invoke('evaluate-interview', {
         body: {
           interviewId,
@@ -386,10 +372,8 @@ const Interview = () => {
           variant: "destructive",
         });
       } else if (evalData?.evaluation) {
-        // Set evaluation data for immediate display
         setEvaluationData(evalData.evaluation);
         
-        // Fetch improvement suggestions
         const { data: improvementsData } = await supabase
           .from('improvement_suggestions')
           .select('*')
@@ -417,7 +401,6 @@ const Interview = () => {
 
   const handleVapiCallStart = async (vapiCallId: string) => {
     if (sessionData?.sessionId && vapiCallId) {
-      // Save VAPI call ID to the session
       await supabase
         .from('interview_sessions')
         .update({ vapi_session_id: vapiCallId })
@@ -436,7 +419,6 @@ const Interview = () => {
     navigate("/");
   };
 
-  // Handler when PreInterviewSetup completes all device tests
   const handlePreInterviewReady = (mediaStream: MediaStream, preferences?: string) => {
     streamRef.current = mediaStream;
     if (videoRef.current) {
@@ -454,11 +436,8 @@ const Interview = () => {
     });
   };
 
-  // Build resume context for VAPI
   const resumeContext = resumeHighlights 
-    ? `Skills: ${resumeHighlights.skills?.join(', ') || 'Not specified'}
-Tools: ${resumeHighlights.tools?.join(', ') || 'Not specified'}
-Summary: ${resumeHighlights.summary || 'Not provided'}`
+    ? `Skills: ${resumeHighlights.skills?.join(', ') || 'Not specified'}\nTools: ${resumeHighlights.tools?.join(', ') || 'Not specified'}\nSummary: ${resumeHighlights.summary || 'Not provided'}`
     : '';
 
   // Show fullscreen interview room when in progress or connecting
@@ -495,362 +474,132 @@ Summary: ${resumeHighlights.summary || 'Not provided'}`
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-0 h-full w-64 bg-card border-r border-border p-6 hidden lg:flex flex-col">
-        <Link to="/" className="flex items-center gap-2 mb-10">
-          <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center">
-            <Brain className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <span className="text-lg font-bold text-foreground">InterviewSim</span>
-        </Link>
-
-        <nav className="flex-1 space-y-2">
-          <Link 
-            to="/dashboard"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <TrendingUp className="w-5 h-5" />
-            Dashboard
-          </Link>
-          <Link 
-            to="/interview"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg bg-accent/10 text-accent font-medium"
-          >
-            <Mic className="w-5 h-5" />
-            New Interview
-          </Link>
-          <Link 
-            to="/resume"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <FileText className="w-5 h-5" />
-            Resume
-          </Link>
-          <Link 
-            to="/history"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <History className="w-5 h-5" />
-            History
-          </Link>
-          <Link 
-            to="/profile"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <UserIcon className="w-5 h-5" />
-            Profile
-          </Link>
-          <Link 
-            to="/help"
-            className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-          >
-            <HelpCircle className="w-5 h-5" />
-            Help
-          </Link>
-        </nav>
-
-        <Button variant="ghost" onClick={handleLogout} className="justify-start gap-3 text-muted-foreground hover:text-destructive">
-          <LogOut className="w-5 h-5" />
-          Logout
-        </Button>
-      </aside>
-
-      {/* Mobile header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border p-4 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg gradient-hero flex items-center justify-center">
-            <Brain className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <span className="font-bold text-foreground">InterviewSim</span>
-        </Link>
-        <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-          {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </Button>
-      </header>
-
-      {/* Mobile menu */}
-      {mobileMenuOpen && (
-        <div className="lg:hidden fixed top-16 left-0 right-0 bottom-0 z-40 bg-card border-t border-border p-4">
-          <nav className="space-y-2">
-            <Link 
-              to="/dashboard"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <TrendingUp className="w-5 h-5" />
-              Dashboard
-            </Link>
-            <Link 
-              to="/interview"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-accent/10 text-accent font-medium"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <Mic className="w-5 h-5" />
-              New Interview
-            </Link>
-            <Link 
-              to="/resume"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <FileText className="w-5 h-5" />
-              Resume
-            </Link>
-            <Link 
-              to="/history"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <History className="w-5 h-5" />
-              History
-            </Link>
-            <Link 
-              to="/profile"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <UserIcon className="w-5 h-5" />
-              Profile
-            </Link>
-            <Link 
-              to="/help"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <HelpCircle className="w-5 h-5" />
-              Help
-            </Link>
-            <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive">
-              <LogOut className="w-5 h-5" />
-              Logout
-            </Button>
-          </nav>
-        </div>
-      )}
+      <StudentSidebar onLogout={handleLogout} />
 
       {/* Main content */}
       <main className="lg:ml-64 pt-20 lg:pt-0">
         <div className="p-4 sm:p-6 lg:p-10">
-          <div className="mb-6 sm:mb-10">
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
-              {status === "mode_select" ? "New Interview" :
-               status === "setup" ? `${selectedMode === 'technical' ? 'Technical DSA' : selectedMode === 'hr' ? 'HR Behavioral' : 'Resume + JD'} Interview Setup` : 
-               status === "ready" ? "Ready to Start" :
-               status === "evaluating" ? "Generating Evaluation..." : "Interview Complete"}
-            </h1>
-            <p className="text-sm sm:text-base text-muted-foreground">
-              {status === "mode_select" ? "Choose your interview type to get started" :
-               status === "setup" ? "Configure your interview session" :
-               status === "ready" ? "Click start when you're ready" :
-               status === "evaluating" ? "Analyzing your performance..." : "Great job! Review your performance."}
-            </p>
-          </div>
+          {/* Show evaluation if completed */}
+          {status === "completed" && evaluationData && (
+            <EvaluationDisplay
+              evaluation={evaluationData}
+              improvements={improvementSuggestions}
+              onStartNewInterview={() => {
+                setStatus("mode_select");
+                setEvaluationData(null);
+                setImprovementSuggestions([]);
+                setInterviewId(null);
+                setSessionData(null);
+              }}
+            />
+          )}
 
-          {/* Interview Mode Selection */}
-          {status === "mode_select" && (
-            <div className="max-w-5xl">
+          {status === "evaluating" && (
+            <div className="flex flex-col items-center justify-center min-h-[60vh]">
+              <div className="text-center">
+                <div className="relative mb-8">
+                  <div className="w-24 h-24 rounded-full border-4 border-accent/20 flex items-center justify-center mx-auto">
+                    <Loader2 className="w-12 h-12 animate-spin text-accent" />
+                  </div>
+                </div>
+                <h2 className="text-2xl font-bold text-foreground mb-3">Analyzing Your Interview</h2>
+                <p className="text-muted-foreground max-w-md mx-auto">
+                  Our AI is evaluating your responses across multiple dimensions...
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Mode selection */}
+          {status === "mode_select" && !evaluationData && (
+            <div>
+              <div className="mb-6 sm:mb-10">
+                <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">New Interview</h1>
+                <p className="text-sm sm:text-base text-muted-foreground">Choose your interview mode to get started</p>
+              </div>
               <InterviewModeSelector
                 selectedMode={selectedMode}
-                onModeSelect={setSelectedMode}
+                onModeSelect={(mode) => setSelectedMode(mode)}
                 onContinue={() => setStatus("setup")}
                 hasResume={!!resumeHighlights}
               />
             </div>
           )}
 
-          {/* Pre-Interview Setup - Device Tests & Avatar Preview */}
-          {status === "setup" && (
-            <div className="max-w-5xl">
-              <PreInterviewSetup 
+          {/* Pre-interview setup */}
+          {(status === "setup" || status === "ready") && selectedMode && (
+            <div>
+              <div className="mb-6">
+                <Button 
+                  variant="ghost" 
+                  onClick={() => {
+                    stopMedia();
+                    setStatus("mode_select");
+                    setSelectedMode(null);
+                  }}
+                  className="mb-4"
+                >
+                  ← Back to mode selection
+                </Button>
+                <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
+                  {selectedMode === 'technical' ? 'Technical' : selectedMode === 'hr' ? 'HR Behavioral' : 'Resume + JD'} Interview
+                </h1>
+                <p className="text-sm sm:text-base text-muted-foreground">
+                  Complete the setup to start your interview
+                </p>
+              </div>
+
+              <PreInterviewSetup
                 onReady={handlePreInterviewReady}
                 interviewMode={selectedMode}
               />
-              
-              {/* Resume status card - only show for resume_jd mode */}
-              {selectedMode === 'resume_jd' && (
-                <div className="mt-6 grid lg:grid-cols-2 gap-4">
-                  {!resumeHighlights ? (
-                    <Card className="border-warning/50 bg-warning/5">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          <AlertCircle className="w-5 h-5 text-warning flex-shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium text-foreground">No resume uploaded</p>
-                            <p className="text-xs text-muted-foreground">
-                              Upload a resume for personalized questions.{" "}
-                              <Link to="/resume" className="text-accent hover:underline">
-                                Upload now →
-                              </Link>
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ) : (
-                    <Card className="border-success/50 bg-success/5">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          <FileText className="w-5 h-5 text-success flex-shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium text-foreground">Resume ready</p>
-                            <p className="text-xs text-muted-foreground">
-                              Questions will be based on your background
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
-              )}
 
-              {/* Mode-specific info cards for technical/hr */}
-              {selectedMode === 'technical' && (
-                <Card className="mt-6 border-warning/50 bg-warning/5">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <AlertCircle className="w-5 h-5 text-warning flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Technical DSA Interview</p>
-                        <p className="text-xs text-muted-foreground">
-                          You'll be asked about algorithms, data structures, and problem-solving. Focus on explaining your thought process clearly.
+              {status === "ready" && (
+                <Card className="mt-6 border-border/50">
+                  <CardContent className="p-6">
+                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-foreground mb-1">Ready to begin!</h3>
+                        <p className="text-muted-foreground text-sm">
+                          Duration: {duration} minutes • Mode: {selectedMode === 'technical' ? 'Technical' : selectedMode === 'hr' ? 'HR Behavioral' : 'Resume + JD'}
                         </p>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {selectedMode === 'hr' && (
-                <Card className="mt-6 border-success/50 bg-success/5">
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-3">
-                      <AlertCircle className="w-5 h-5 text-success flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">HR Behavioral Interview</p>
-                        <p className="text-xs text-muted-foreground">
-                          Use the STAR method (Situation, Task, Action, Result) to structure your answers for best results.
-                        </p>
+                      <div className="flex items-center gap-3">
+                        <select
+                          value={duration}
+                          onChange={(e) => setDuration(e.target.value as InterviewDuration)}
+                          className="h-10 px-3 rounded-lg border border-border bg-background text-foreground text-sm"
+                        >
+                          <option value="3">3 minutes</option>
+                          <option value="5">5 minutes</option>
+                        </select>
+                        <Button
+                          variant="hero"
+                          size="lg"
+                          onClick={startInterview}
+                          disabled={isLoadingConfig || !!vapiError}
+                          className="min-w-[160px]"
+                        >
+                          {isLoadingConfig ? (
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                          ) : (
+                            <>
+                              <Play className="w-5 h-5 mr-2" />
+                              Start Interview
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          )}
-
-          {/* Ready state */}
-          {status === "ready" && (
-          <div className="grid lg:grid-cols-2 gap-4 sm:gap-8 max-w-5xl">
-            {/* Video preview panel */}
-            <Card className="border-border/50 overflow-hidden">
-              <CardContent className="p-0">
-                <div className="aspect-video bg-secondary/50 relative">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className={`w-full h-full object-cover ${!isVideoOn ? "hidden" : ""}`}
-                  />
-                  {!isVideoOn && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <VideoOff className="w-16 h-16 text-muted-foreground/50" />
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Controls panel */}
-            <div className="space-y-6">
-              {vapiError && (
-                <Card className="border-warning/50 bg-warning/5">
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-medium text-foreground">VAPI Configuration Issue</p>
-                        <p className="text-xs text-muted-foreground mt-1">{vapiError}</p>
+                    {vapiError && (
+                      <div className="mt-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                        <span>{vapiError}</span>
                       </div>
-                    </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
-
-              <Card className="border-border/50">
-                <CardHeader>
-                  <CardTitle className="text-lg">Media Controls</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-center gap-4">
-                    <Button
-                      variant={isMicOn ? "default" : "destructive"}
-                      size="lg"
-                      className="w-16 h-16 rounded-full"
-                      onClick={toggleMic}
-                    >
-                      {isMicOn ? <Mic className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-                    </Button>
-                    <Button
-                      variant={isVideoOn ? "default" : "destructive"}
-                      size="lg"
-                      className="w-16 h-16 rounded-full"
-                      onClick={toggleVideo}
-                    >
-                      {isVideoOn ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Button variant="hero" size="xl" className="w-full" onClick={startInterview}>
-                <Play className="w-5 h-5 mr-2" />
-                Start Interview
-              </Button>
-            </div>
-          </div>
-          )}
-
-          {/* Evaluating state */}
-          {status === "evaluating" && (
-            <div className="max-w-3xl mx-auto">
-              <EvaluationDisplay
-                evaluation={null}
-                improvements={[]}
-                isLoading={true}
-                interviewMode={selectedMode}
-                onStartNewInterview={() => {
-                  setStatus("mode_select");
-                  setSelectedMode(null);
-                  setInterviewId(null);
-                  setVapiError(null);
-                  setEvaluationData(null);
-                  setImprovementSuggestions([]);
-                }}
-                onViewHistory={() => navigate("/history")}
-              />
-            </div>
-          )}
-
-          {/* Completed state - Show evaluation inline */}
-          {status === "completed" && (
-            <div className="max-w-4xl mx-auto">
-              <EvaluationDisplay
-                evaluation={evaluationData}
-                improvements={improvementSuggestions}
-                isLoading={isEvaluating}
-                interviewMode={selectedMode}
-                onStartNewInterview={() => {
-                  setStatus("mode_select");
-                  setSelectedMode(null);
-                  setInterviewId(null);
-                  setVapiError(null);
-                  setEvaluationData(null);
-                  setImprovementSuggestions([]);
-                }}
-                onViewHistory={() => navigate("/history")}
-              />
             </div>
           )}
         </div>
