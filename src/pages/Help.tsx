@@ -304,14 +304,17 @@ const Help = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="p-4 rounded-xl bg-secondary/30">
-                    <p className="text-sm font-medium text-foreground mb-1">Email Support</p>
-                    <a
-                      href={`mailto:${SUPPORT_EMAIL}`}
-                      className="text-sm text-accent hover:underline break-all"
-                    >
-                      {SUPPORT_EMAIL}
-                    </a>
+                  <div className="p-4 rounded-xl bg-secondary/30 space-y-2">
+                    <p className="text-sm font-medium text-foreground mb-2">Email Support</p>
+                    {SUPPORT_EMAILS.map((email) => (
+                      <a
+                        key={email}
+                        href={`mailto:${email}`}
+                        className="block text-sm text-accent hover:underline break-all"
+                      >
+                        {email}
+                      </a>
+                    ))}
                   </div>
                   <div className="flex items-start gap-3">
                     <Clock className="w-5 h-5 text-muted-foreground mt-0.5" />
