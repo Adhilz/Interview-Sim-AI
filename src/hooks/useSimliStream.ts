@@ -148,7 +148,7 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
         console.log("[Simli] Speaking ended");
         setIsSpeaking(false);
         options.onSpeaking?.(false);
-      }, 500);
+      }, 200);
     } catch (e) {
       console.error("[Simli] sendAudioData error:", e);
     }
