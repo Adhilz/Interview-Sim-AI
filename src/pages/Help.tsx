@@ -13,52 +13,30 @@ import {
   AccordionTrigger,
 } from '@/components/ui/accordion';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   Brain,
   HelpCircle,
   Mail,
-  MessageSquare,
   Send,
   CheckCircle,
   AlertCircle,
-  Loader2,
   ArrowLeft,
-  Phone,
   Clock,
   Server,
   Video,
   Mic,
   FileText,
   Shield,
+  ExternalLink,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { z } from 'zod';
 
-const contactSchema = z.object({
-  name: z.string().min(2, 'Name must be at least 2 characters').max(100),
-  email: z.string().email('Please enter a valid email address'),
-  role: z.enum(['student', 'admin', 'other']),
-  message: z.string().min(10, 'Message must be at least 10 characters').max(1000),
-});
+const SUPPORT_EMAIL = 'interviewsimai.support@gmail.com';
 
 interface SystemStatus {
   service: string;
   status: 'operational' | 'degraded' | 'outage';
   icon: React.ReactNode;
 }
-
-const SUPPORT_EMAILS = [
-  'adhensarageorge06@gmail.com',
-  'adhilsalam200@gmail.com',
-  'angelelizabethgeorge22@gmail.com',
-  'eldhosoorajgeroge04@gmail.com',
-];
 
 const FAQ_ITEMS = [
   {
@@ -97,14 +75,8 @@ const FAQ_ITEMS = [
 
 const Help = () => {
   const { toast } = useToast();
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    role: '' as 'student' | 'admin' | 'other' | '',
-    message: '',
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
 
   const systemStatus: SystemStatus[] = [
     { service: 'Interview Service', status: 'operational', icon: <Mic className="w-4 h-4" /> },
@@ -114,57 +86,20 @@ const Help = () => {
     { service: 'Database', status: 'operational', icon: <Server className="w-4 h-4" /> },
   ];
 
-  const validateForm = () => {
-    try {
-      contactSchema.parse(formData);
-      setErrors({});
-      return true;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        const newErrors: Record<string, string> = {};
-        error.errors.forEach((err) => {
-          if (err.path[0]) {
-            newErrors[err.path[0] as string] = err.message;
-          }
-        });
-        setErrors(newErrors);
-      }
-      return false;
-    }
+  const handleSendEmail = () => {
+    const subjectLine = subject.trim() || '[InterviewSim] Support Request';
+    const mailtoLink = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subjectLine)}&body=${encodeURIComponent(message)}`;
+    window.location.href = mailtoLink;
+    toast({
+      title: 'Opening email client',
+      description: 'Your default email app should open now.',
+    });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validateForm()) return;
-
-    setIsSubmitting(true);
-
-    // Build mailto link
-    const subject = encodeURIComponent(`[InterviewSim Support] Message from ${formData.name}`);
-    const body = encodeURIComponent(
-      `Name: ${formData.name}\n` +
-      `Email: ${formData.email}\n` +
-      `Role: ${formData.role}\n\n` +
-      `Message:\n${formData.message}`
-    );
-    
-    // Create mailto link with all recipients
-    const mailtoLink = `mailto:${SUPPORT_EMAILS.join(',')}?subject=${subject}&body=${body}`;
-    
-    // Open email client
-    window.location.href = mailtoLink;
-
-    // Show success message
-    setTimeout(() => {
-      setIsSubmitting(false);
-      toast({
-        title: 'Email client opened',
-        description: 'Please send the email from your mail application.',
-      });
-      
-      // Reset form
-      setFormData({ name: '', email: '', role: '', message: '' });
-    }, 500);
+  const handleGmailCompose = () => {
+    const subjectLine = subject.trim() || '[InterviewSim] Support Request';
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${SUPPORT_EMAIL}&su=${encodeURIComponent(subjectLine)}&body=${encodeURIComponent(message)}`;
+    window.open(gmailUrl, '_blank');
   };
 
   const getStatusBadge = (status: string) => {
@@ -201,16 +136,16 @@ const Help = () => {
       <header className="border-b border-border bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-2">
+            <Link to="/dashboard" className="flex items-center gap-2">
               <div className="w-10 h-10 rounded-xl gradient-hero flex items-center justify-center">
                 <Brain className="w-6 h-6 text-primary-foreground" />
               </div>
               <span className="text-lg font-bold text-foreground">InterviewSim</span>
             </Link>
-            <Link to="/">
+            <Link to="/dashboard">
               <Button variant="ghost" size="sm">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Home
+                Back to Dashboard
               </Button>
             </Link>
           </div>
@@ -234,107 +169,61 @@ const Help = () => {
           </div>
 
           <div className="grid lg:grid-cols-3 gap-8">
-            {/* Left Column - Contact Form */}
+            {/* Left Column - Message & FAQ */}
             <div className="lg:col-span-2 space-y-8">
-              {/* Contact Form */}
-              <Card className="border-border/50">
+              {/* Quick Message Card */}
+              <Card className="border-border/50 overflow-hidden">
+                <div className="h-1.5 gradient-hero" />
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-accent" />
-                    Contact Support
+                    <Mail className="w-5 h-5 text-accent" />
+                    Send us a message
                   </CardTitle>
                   <CardDescription>
-                    Fill out the form below and we'll get back to you as soon as possible.
+                    Write your message below and send it directly via email.
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleSubmit} className="space-y-6">
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="name">Your Name</Label>
-                        <Input
-                          id="name"
-                          placeholder="John Doe"
-                          value={formData.name}
-                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                          className={errors.name ? 'border-destructive' : ''}
-                        />
-                        {errors.name && (
-                          <p className="text-xs text-destructive">{errors.name}</p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email Address</Label>
-                        <Input
-                          id="email"
-                          type="email"
-                          placeholder="john@example.com"
-                          value={formData.email}
-                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                          className={errors.email ? 'border-destructive' : ''}
-                        />
-                        {errors.email && (
-                          <p className="text-xs text-destructive">{errors.email}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="role">Your Role</Label>
-                      <Select
-                        value={formData.role}
-                        onValueChange={(value: 'student' | 'admin' | 'other') => 
-                          setFormData({ ...formData, role: value })
-                        }
-                      >
-                        <SelectTrigger className={errors.role ? 'border-destructive' : ''}>
-                          <SelectValue placeholder="Select your role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="student">Student</SelectItem>
-                          <SelectItem value="admin">College Admin</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {errors.role && (
-                        <p className="text-xs text-destructive">{errors.role}</p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="message">Message</Label>
-                      <Textarea
-                        id="message"
-                        placeholder="Describe your issue or question in detail..."
-                        rows={5}
-                        value={formData.message}
-                        onChange={(e) => setFormData({ ...formData, message: e.target.value })}
-                        className={errors.message ? 'border-destructive' : ''}
-                      />
-                      {errors.message && (
-                        <p className="text-xs text-destructive">{errors.message}</p>
-                      )}
-                    </div>
-
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="subject">Subject</Label>
+                    <Input
+                      id="subject"
+                      placeholder="e.g. Issue with interview playback"
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="message">Message</Label>
+                    <Textarea
+                      id="message"
+                      placeholder="Describe your issue or question..."
+                      rows={5}
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-3">
                     <Button
-                      type="submit"
                       variant="hero"
-                      className="w-full sm:w-auto"
-                      disabled={isSubmitting}
+                      className="flex-1"
+                      onClick={handleSendEmail}
                     >
-                      {isSubmitting ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Opening Email...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-4 h-4 mr-2" />
-                          Send Message
-                        </>
-                      )}
+                      <Send className="w-4 h-4 mr-2" />
+                      Send via Email App
                     </Button>
-                  </form>
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={handleGmailCompose}
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Open in Gmail
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">
+                    Your message will be sent to <span className="font-medium text-foreground">{SUPPORT_EMAIL}</span>
+                  </p>
                 </CardContent>
               </Card>
 
@@ -353,10 +242,10 @@ const Help = () => {
                   <Accordion type="single" collapsible className="w-full">
                     {FAQ_ITEMS.map((item, index) => (
                       <AccordionItem key={index} value={`item-${index}`}>
-                        <AccordionTrigger className="text-left">
+                        <AccordionTrigger className="text-left text-sm sm:text-base">
                           {item.question}
                         </AccordionTrigger>
-                        <AccordionContent className="text-muted-foreground">
+                        <AccordionContent className="text-muted-foreground text-sm">
                           {item.answer}
                         </AccordionContent>
                       </AccordionItem>
@@ -366,7 +255,7 @@ const Help = () => {
               </Card>
             </div>
 
-            {/* Right Column - System Status & Quick Links */}
+            {/* Right Column */}
             <div className="space-y-6">
               {/* System Status */}
               <Card className="border-border/50">
@@ -375,9 +264,6 @@ const Help = () => {
                     <Server className="w-5 h-5 text-accent" />
                     System Status
                   </CardTitle>
-                  <CardDescription>
-                    Current status of our services
-                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
@@ -408,42 +294,20 @@ const Help = () => {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
                     <Mail className="w-5 h-5 text-accent" />
-                    Contact Information
+                    Contact
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-muted-foreground" />
-                      Email Support
-                    </p>
-                    <div className="space-y-1 pl-6">
-                      {SUPPORT_EMAILS.map((email, index) => (
-                        <a
-                          key={index}
-                          href={`mailto:${email}`}
-                          className="block text-sm text-accent hover:underline"
-                        >
-                          {email}
-                        </a>
-                      ))}
-                    </div>
+                  <div className="p-4 rounded-xl bg-secondary/30">
+                    <p className="text-sm font-medium text-foreground mb-1">Email Support</p>
+                    <a
+                      href={`mailto:${SUPPORT_EMAIL}`}
+                      className="text-sm text-accent hover:underline break-all"
+                    >
+                      {SUPPORT_EMAIL}
+                    </a>
                   </div>
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => {
-                      const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${SUPPORT_EMAILS.join(',')}&su=${encodeURIComponent('[InterviewSim] Support Request')}`;
-                      window.open(gmailUrl, '_blank');
-                    }}
-                  >
-                    <Send className="w-4 h-4 mr-2" />
-                    Email All Support
-                  </Button>
-
-                  <div className="flex items-start gap-3 pt-2 border-t border-border">
+                  <div className="flex items-start gap-3">
                     <Clock className="w-5 h-5 text-muted-foreground mt-0.5" />
                     <div>
                       <p className="text-sm font-medium">Response Time</p>
@@ -461,19 +325,19 @@ const Help = () => {
                   <CardTitle className="text-lg">Quick Links</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  <Link to="/login">
+                  <Link to="/dashboard">
                     <Button variant="ghost" className="w-full justify-start">
-                      Login to your account
+                      Go to Dashboard
                     </Button>
                   </Link>
-                  <Link to="/signup">
+                  <Link to="/interview">
                     <Button variant="ghost" className="w-full justify-start">
-                      Create new account
+                      Start an Interview
                     </Button>
                   </Link>
-                  <Link to="/forgot-password">
+                  <Link to="/resume">
                     <Button variant="ghost" className="w-full justify-start">
-                      Reset your password
+                      Upload Resume
                     </Button>
                   </Link>
                 </CardContent>
