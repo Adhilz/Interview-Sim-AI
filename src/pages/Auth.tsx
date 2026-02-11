@@ -4,9 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Brain, Eye, EyeOff, Loader2, GraduationCap, ArrowLeft, Building2, Users } from "lucide-react";
 import { z } from "zod";
+
+const BRANCHES = ['CSE', 'ECE', 'ME', 'EEE', 'FSE', 'AI', 'RA', 'CIVIL'] as const;
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -16,6 +19,7 @@ const loginSchema = z.object({
 const studentSignupSchema = loginSchema.extend({
   fullName: z.string().min(2, "Full name is required"),
   universityCode: z.string().min(1, "College code is required"),
+  branch: z.string().min(1, "Please select your branch"),
 });
 
 const adminSignupSchema = loginSchema.extend({
@@ -42,6 +46,7 @@ const Auth = () => {
   const [fullName, setFullName] = useState("");
   const [universityCode, setUniversityCode] = useState("");
   const [universityName, setUniversityName] = useState("");
+  const [branch, setBranch] = useState("");
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   
   const [showPassword, setShowPassword] = useState(false);
@@ -116,7 +121,7 @@ const Auth = () => {
       } else if (isLogin) {
         loginSchema.parse({ email, password });
       } else if (selectedRole === "student") {
-        studentSignupSchema.parse({ email, password, fullName, universityCode });
+        studentSignupSchema.parse({ email, password, fullName, universityCode, branch });
       } else if (selectedRole === "admin") {
         adminSignupSchema.parse({ email, password, fullName, universityName });
       } else {
@@ -297,6 +302,7 @@ const Auth = () => {
           data: {
             full_name: fullName,
             university_code_id: codeData,
+            branch: branch,
           },
         },
       });
@@ -668,6 +674,26 @@ const Auth = () => {
                         <p className="text-xs text-muted-foreground">
                           Get this code from your college administrator
                         </p>
+                      </div>
+                    )}
+
+                    {/* Student: Branch */}
+                    {selectedRole === "student" && (
+                      <div className="space-y-2">
+                        <Label>Branch / Department</Label>
+                        <Select value={branch} onValueChange={setBranch}>
+                          <SelectTrigger className={`h-11 lg:h-12 ${errors.branch ? "border-destructive" : ""}`}>
+                            <SelectValue placeholder="Select your branch" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {BRANCHES.map(b => (
+                              <SelectItem key={b} value={b}>{b}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {errors.branch && (
+                          <p className="text-sm text-destructive">{errors.branch}</p>
+                        )}
                       </div>
                     )}
 
