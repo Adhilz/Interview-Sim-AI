@@ -30,7 +30,13 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
-const SUPPORT_EMAIL = 'interviewsimai.support@gmail.com';
+const SUPPORT_EMAILS = [
+  'adhensarageorge06@gmail.com',
+  'adhilsalam200@gmail.com',
+  'angelelizabethgeorge22@gmail.com',
+  'eldhosoorajgeorge04@gmail.com',
+];
+const SUPPORT_EMAIL = SUPPORT_EMAILS.join(',');
 
 interface SystemStatus {
   service: string;
