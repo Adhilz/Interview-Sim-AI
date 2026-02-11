@@ -369,12 +369,11 @@ const Auth = () => {
 
           <div className="mt-12 flex items-center gap-4">
             <div className="flex -space-x-3">
-              {[1, 2, 3, 4].map((i) => (
-                <div 
-                  key={i}
-                  className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-300 to-accent border-2 border-primary"
-                />
-              ))}
+              <img src="https://i.pravatar.cc/40?img=1" alt="Student" className="w-10 h-10 rounded-full border-2 border-primary object-cover" />
+              <img src="https://i.pravatar.cc/40?img=5" alt="Student" className="w-10 h-10 rounded-full border-2 border-primary object-cover" />
+              <img src="https://i.pravatar.cc/40?img=12" alt="Student" className="w-10 h-10 rounded-full border-2 border-primary object-cover" />
+              <img src="https://i.pravatar.cc/40?img=32" alt="Student" className="w-10 h-10 rounded-full border-2 border-primary object-cover" />
+              <img src="https://i.pravatar.cc/40?img=47" alt="Student" className="w-10 h-10 rounded-full border-2 border-primary object-cover" />
             </div>
             <p className="text-primary-foreground/80 text-sm">
               <span className="font-semibold text-primary-foreground">5,000+</span> students trained
