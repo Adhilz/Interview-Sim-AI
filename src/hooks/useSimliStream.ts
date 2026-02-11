@@ -69,7 +69,13 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
         videoReceivedTimeout: 15000,
         enableSFU: true,
         model: "fasttalk",
+        // Simli is lip-sync only — no TTS, no audio playback
+        // Audio comes exclusively from Vapi
       } as any);
+
+      // Mute the Simli audio element — Vapi is the sole audio source
+      audioEl.muted = true;
+      audioEl.volume = 0;
 
       console.log("[Simli] Client initialized, starting WebRTC...");
 

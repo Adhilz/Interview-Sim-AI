@@ -124,7 +124,7 @@ const SimliAvatar = forwardRef<SimliAvatarRef, SimliAvatarProps>(({
           isReady ? 'opacity-100' : 'opacity-0'
         }`}
       />
-      <audio ref={audioRef} autoPlay playsInline data-simli-audio="true" />
+      <audio ref={audioRef} autoPlay playsInline muted data-simli-audio="true" />
 
       {/* Speaking indicator */}
       {isSpeaking && isReady && (
