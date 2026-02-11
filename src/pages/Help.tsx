@@ -228,7 +228,7 @@ const Help = () => {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground text-center">
-                    Your message will be sent to <span className="font-medium text-foreground">{SUPPORT_EMAIL}</span>
+                    Your message will be sent to the developers of <span className="font-medium text-foreground">AI Interview Simulator</span>
                   </p>
                 </CardContent>
               </Card>
