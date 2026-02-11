@@ -39,7 +39,6 @@ import {
   Award, 
   TrendingUp, 
   LogOut,
-  BarChart3,
   MessageSquare,
   Zap,
   Target,
@@ -50,13 +49,16 @@ import {
   AlertTriangle,
   Star,
   Building2,
-  Calendar,
   Copy,
   Menu,
   X,
-  Bell
+  Bell,
+  Trash2,
+  Pencil,
 } from "lucide-react";
 import { format } from "date-fns";
+
+const BRANCHES = ['CSE', 'ECE', 'ME', 'EEE', 'FSE', 'AI', 'RA', 'CIVIL'] as const;
 
 interface AdminNotification {
   id: string;
@@ -75,6 +77,8 @@ interface StudentInterview {
   score: number | null;
   status: string;
   user_id: string;
+  interview_mode: string | null;
+  duration: string;
 }
 
 interface SkillMetric {
@@ -102,6 +106,7 @@ interface StudentProfile {
   interview_count: number;
   avg_score: number;
   last_interview: string | null;
+  branch: string | null;
 }
 
 interface AdminUniversity {
@@ -131,10 +136,14 @@ const AdminDashboard = () => {
   
   // Filters
   const [performanceFilter, setPerformanceFilter] = useState<string>("all");
+  const [branchFilter, setBranchFilter] = useState<string>("all");
   
   // Dialog states
   const [isCodeDialogOpen, setIsCodeDialogOpen] = useState(false);
   const [newCodeMaxUses, setNewCodeMaxUses] = useState<string>("");
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+  const [newCollegeName, setNewCollegeName] = useState("");
+  const [removeStudentId, setRemoveStudentId] = useState<string | null>(null);
 
   useEffect(() => {
     const checkAdminAndFetchData = async () => {
@@ -196,12 +205,9 @@ const AdminDashboard = () => {
             filter: `admin_user_id=eq.${session.user.id}`,
           },
           (payload) => {
-            console.log('[AdminDashboard] New notification received:', payload);
             const newNotification = payload.new as AdminNotification;
             setNotifications(prev => [newNotification, ...prev]);
             setUnreadCount(prev => prev + 1);
-            
-            // Show toast notification
             toast({
               title: "Interview Completed",
               description: newNotification.message,
@@ -258,9 +264,8 @@ const AdminDashboard = () => {
     setUnreadCount(0);
   };
 
-  const fetchAnalytics = async (adminUserId: string, universityId?: string) => {
+  const fetchAnalytics = async (_adminUserId: string, universityId?: string) => {
     try {
-      // Get students from this university only
       const { data: profiles } = await supabase
         .from('profiles')
         .select('user_id')
@@ -278,7 +283,6 @@ const AdminDashboard = () => {
         return;
       }
 
-      // Get interviews for these students
       const { data: interviews } = await supabase
         .from('interviews')
         .select('*')
@@ -289,7 +293,6 @@ const AdminDashboard = () => {
       const completed = interviews?.filter(i => i.status === 'completed').length || 0;
       setCompletedInterviews(completed);
 
-      // Get evaluations for these students
       const { data: evaluations } = await supabase
         .from('evaluations')
         .select('overall_score, technical_score, communication_score, confidence_score')
@@ -302,7 +305,6 @@ const AdminDashboard = () => {
         const avgConfidence = evaluations.reduce((sum, e) => sum + (e.confidence_score || 0), 0) / evaluations.length;
 
         setAverageScore(Math.round(avgOverall));
-        
         setSkillMetrics([
           { name: "Technical Skills", average: Math.round(avgTechnical), icon: <Zap className="w-5 h-5" /> },
           { name: "Communication", average: Math.round(avgCommunication), icon: <MessageSquare className="w-5 h-5" /> },
@@ -316,9 +318,9 @@ const AdminDashboard = () => {
         ]);
       }
 
-      // Get recent interviews with details
+      // Get recent interviews with individual details (mode, duration)
       if (interviews && interviews.length > 0) {
-        const recentData = interviews.slice(0, 20);
+        const recentData = interviews.slice(0, 30);
         const interviewsWithDetails: StudentInterview[] = await Promise.all(
           recentData.map(async (interview) => {
             const { data: profile } = await supabase
@@ -341,6 +343,8 @@ const AdminDashboard = () => {
               score: evaluation?.overall_score || null,
               status: interview.status,
               user_id: interview.user_id,
+              interview_mode: interview.interview_mode,
+              duration: interview.duration,
             };
           })
         );
@@ -354,22 +358,19 @@ const AdminDashboard = () => {
 
   const fetchUniversityCodes = async (universityId?: string) => {
     if (!universityId) return;
-    
     const { data } = await supabase
       .from('university_codes')
       .select('*')
       .eq('id', universityId);
-    
     setUniversityCodes(data || []);
   };
 
   const fetchStudents = async (universityId?: string) => {
     if (!universityId) return;
 
-    // Get students where university_code_id matches the admin's university_id
     const { data: profiles, error } = await supabase
       .from('profiles')
-      .select('id, user_id, full_name, email, university_code_id')
+      .select('id, user_id, full_name, email, university_code_id, branch')
       .eq('university_code_id', universityId);
 
     if (error) {
@@ -377,7 +378,6 @@ const AdminDashboard = () => {
       return;
     }
 
-    // Get the university name separately
     const { data: uniData } = await supabase
       .from('university_codes')
       .select('university_name')
@@ -413,6 +413,7 @@ const AdminDashboard = () => {
             interview_count: interviews?.length || 0,
             avg_score: Math.round(avgScore),
             last_interview: interviews?.length ? interviews[0].created_at : null,
+            branch: (profile as any).branch || null,
           };
         })
       );
@@ -426,7 +427,6 @@ const AdminDashboard = () => {
   const fetchWeakAreas = async (universityId?: string) => {
     if (!universityId) return;
 
-    // Get students from this university
     const { data: profiles } = await supabase
       .from('profiles')
       .select('user_id')
@@ -435,7 +435,6 @@ const AdminDashboard = () => {
     const studentUserIds = profiles?.map(p => p.user_id) || [];
     if (studentUserIds.length === 0) return;
 
-    // Get evaluations for these students
     const { data: evaluations } = await supabase
       .from('evaluations')
       .select('id')
@@ -445,7 +444,6 @@ const AdminDashboard = () => {
 
     const evaluationIds = evaluations.map(e => e.id);
 
-    // Get suggestions for these evaluations
     const { data: suggestions } = await supabase
       .from('improvement_suggestions')
       .select('category')
@@ -503,28 +501,63 @@ const AdminDashboard = () => {
       .from('university_codes')
       .update({ is_active: !currentStatus })
       .eq('id', id);
-    
     if (adminUniversity) {
       fetchUniversityCodes(adminUniversity.id);
     }
   };
 
-  // Sanitize CSV fields to prevent formula injection attacks
+  // Remove student (unlink from college)
+  const handleRemoveStudent = async (userId: string) => {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ university_code_id: null })
+      .eq('user_id', userId);
+
+    if (error) {
+      toast({ title: "Error", description: "Failed to remove student", variant: "destructive" });
+    } else {
+      toast({ title: "Student removed", description: "Student has been unlinked from your college." });
+      setStudents(prev => prev.filter(s => s.user_id !== userId));
+      setTotalStudents(prev => prev - 1);
+    }
+    setRemoveStudentId(null);
+  };
+
+  // Rename college
+  const handleRenameCollege = async () => {
+    if (!adminUniversity || !newCollegeName.trim()) return;
+
+    const { error } = await supabase
+      .from('university_codes')
+      .update({ university_name: newCollegeName.trim() })
+      .eq('id', adminUniversity.id);
+
+    if (error) {
+      toast({ title: "Error", description: "Failed to rename college", variant: "destructive" });
+    } else {
+      setAdminUniversity({ ...adminUniversity, university_name: newCollegeName.trim() });
+      toast({ title: "College renamed", description: `College name updated to "${newCollegeName.trim()}"` });
+      setIsRenameDialogOpen(false);
+      setNewCollegeName("");
+    }
+  };
+
+  // Sanitize CSV fields
   const sanitizeCSVField = (value: string | null | undefined): string => {
     if (!value) return '""';
     const str = String(value);
-    // Prefix dangerous characters that could trigger formula execution in Excel/LibreOffice
     const dangerous = /^[=+\-@\t\r]/;
     const safe = dangerous.test(str) ? `'${str}` : str;
-    // Escape double quotes and wrap in quotes
     return `"${safe.replace(/"/g, '""')}"`;
   };
 
   const exportToCSV = () => {
-    const headers = ['Student Name', 'Email', 'Interviews', 'Avg Score', 'Last Interview'];
-    const rows = students.map(s => [
+    const dataToExport = filteredStudents;
+    const headers = ['Student Name', 'Email', 'Branch', 'Interviews', 'Avg Score', 'Last Interview'];
+    const rows = dataToExport.map(s => [
       sanitizeCSVField(s.full_name),
       sanitizeCSVField(s.email),
+      sanitizeCSVField(s.branch || 'N/A'),
       s.interview_count.toString(),
       s.avg_score.toString(),
       s.last_interview ? format(new Date(s.last_interview), 'yyyy-MM-dd') : 'Never'
@@ -535,7 +568,8 @@ const AdminDashboard = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `students_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    const suffix = branchFilter !== 'all' ? `_${branchFilter}` : '';
+    a.download = `students${suffix}_${format(new Date(), 'yyyy-MM-dd')}.csv`;
     a.click();
   };
 
@@ -565,6 +599,19 @@ const AdminDashboard = () => {
     }
   };
 
+  const getModeBadge = (mode: string | null) => {
+    switch (mode) {
+      case 'technical':
+        return <Badge variant="outline" className="text-xs">Technical</Badge>;
+      case 'hr':
+        return <Badge variant="outline" className="text-xs">HR</Badge>;
+      case 'resume_jd':
+        return <Badge variant="outline" className="text-xs">Resume</Badge>;
+      default:
+        return <Badge variant="outline" className="text-xs">{mode || 'N/A'}</Badge>;
+    }
+  };
+
   const getPerformanceBadge = (score: number) => {
     if (score >= 80) return <Badge className="bg-green-500/10 text-green-500"><Star className="w-3 h-3 mr-1" /> High</Badge>;
     if (score >= 50) return <Badge className="bg-yellow-500/10 text-yellow-500">Average</Badge>;
@@ -572,10 +619,11 @@ const AdminDashboard = () => {
     return <Badge variant="outline">N/A</Badge>;
   };
 
-  // Apply filters to students
+  // Apply filters
   const filteredStudents = students.filter(s => {
     if (performanceFilter === "high" && s.avg_score < 80) return false;
     if (performanceFilter === "low" && s.avg_score >= 50) return false;
+    if (branchFilter !== "all" && s.branch !== branchFilter) return false;
     return true;
   });
 
@@ -599,6 +647,9 @@ const AdminDashboard = () => {
               <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary">
                 <Building2 className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm font-medium">{adminUniversity.university_name}</span>
+                <button onClick={() => { setNewCollegeName(adminUniversity.university_name); setIsRenameDialogOpen(true); }}>
+                  <Pencil className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+                </button>
               </div>
             )}
             
@@ -618,7 +669,6 @@ const AdminDashboard = () => {
                 )}
               </Button>
               
-              {/* Notification Dropdown */}
               {showNotifications && (
                 <div className="absolute right-0 top-full mt-2 w-80 max-h-96 overflow-y-auto bg-card border border-border rounded-lg shadow-lg z-50">
                   <div className="p-3 border-b border-border flex items-center justify-between">
@@ -631,25 +681,19 @@ const AdminDashboard = () => {
                   </div>
                   <div className="divide-y divide-border">
                     {notifications.length === 0 ? (
-                      <div className="p-4 text-center text-muted-foreground text-sm">
-                        No notifications yet
-                      </div>
+                      <div className="p-4 text-center text-muted-foreground text-sm">No notifications yet</div>
                     ) : (
                       notifications.map((notification) => (
                         <div 
                           key={notification.id}
-                          className={`p-3 hover:bg-secondary/50 cursor-pointer transition-colors ${
-                            !notification.is_read ? 'bg-accent/5' : ''
-                          }`}
+                          className={`p-3 hover:bg-secondary/50 cursor-pointer transition-colors ${!notification.is_read ? 'bg-accent/5' : ''}`}
                           onClick={() => markNotificationAsRead(notification.id)}
                         >
                           <p className="text-sm text-foreground">{notification.message}</p>
                           <p className="text-xs text-muted-foreground mt-1">
                             {format(new Date(notification.created_at), 'MMM d, h:mm a')}
                           </p>
-                          {!notification.is_read && (
-                            <span className="inline-block w-2 h-2 rounded-full bg-accent mt-1" />
-                          )}
+                          {!notification.is_read && <span className="inline-block w-2 h-2 rounded-full bg-accent mt-1" />}
                         </div>
                       ))
                     )}
@@ -668,13 +712,15 @@ const AdminDashboard = () => {
           </div>
         </div>
 
-        {/* Mobile menu */}
         {mobileMenuOpen && (
           <div className="sm:hidden border-t border-border p-4 space-y-2">
             {adminUniversity && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary">
                 <Building2 className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm font-medium">{adminUniversity.university_name}</span>
+                <button onClick={() => { setNewCollegeName(adminUniversity.university_name); setIsRenameDialogOpen(true); }}>
+                  <Pencil className="w-3 h-3 text-muted-foreground" />
+                </button>
               </div>
             )}
             <Button variant="ghost" className="w-full justify-start" onClick={handleLogout}>
@@ -800,7 +846,7 @@ const AdminDashboard = () => {
               </Card>
             )}
 
-            {/* Recent Interviews */}
+            {/* Recent Interviews - Individual */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base lg:text-lg">Recent Interviews</CardTitle>
@@ -810,13 +856,15 @@ const AdminDashboard = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Student</TableHead>
+                      <TableHead>Mode</TableHead>
+                      <TableHead className="hidden sm:table-cell">Duration</TableHead>
                       <TableHead className="hidden md:table-cell">Date</TableHead>
                       <TableHead>Score</TableHead>
                       <TableHead>Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {recentInterviews.slice(0, 10).map((interview) => (
+                    {recentInterviews.slice(0, 15).map((interview) => (
                       <TableRow key={interview.id}>
                         <TableCell>
                           <div>
@@ -824,8 +872,10 @@ const AdminDashboard = () => {
                             <p className="text-xs text-muted-foreground hidden sm:block">{interview.student_email}</p>
                           </div>
                         </TableCell>
+                        <TableCell>{getModeBadge(interview.interview_mode)}</TableCell>
+                        <TableCell className="hidden sm:table-cell text-sm">{interview.duration} min</TableCell>
                         <TableCell className="hidden md:table-cell text-sm">
-                          {interview.interview_date && format(new Date(interview.interview_date), 'MMM d, yyyy')}
+                          {interview.interview_date && format(new Date(interview.interview_date), 'MMM d, yyyy h:mm a')}
                         </TableCell>
                         <TableCell>
                           {interview.score !== null ? (
@@ -848,9 +898,20 @@ const AdminDashboard = () => {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <h2 className="text-xl lg:text-2xl font-bold">Students</h2>
               <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                <Select value={branchFilter} onValueChange={setBranchFilter}>
+                  <SelectTrigger className="w-full sm:w-[140px]">
+                    <Filter className="w-4 h-4 mr-2" />
+                    <SelectValue placeholder="Branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Branches</SelectItem>
+                    {BRANCHES.map(b => (
+                      <SelectItem key={b} value={b}>{b}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Select value={performanceFilter} onValueChange={setPerformanceFilter}>
                   <SelectTrigger className="w-full sm:w-[150px]">
-                    <Filter className="w-4 h-4 mr-2" />
                     <SelectValue placeholder="Performance" />
                   </SelectTrigger>
                   <SelectContent>
@@ -861,7 +922,7 @@ const AdminDashboard = () => {
                 </Select>
                 <Button variant="outline" onClick={exportToCSV} className="w-full sm:w-auto">
                   <Download className="w-4 h-4 mr-2" />
-                  Export
+                  Export{branchFilter !== 'all' ? ` (${branchFilter})` : ''}
                 </Button>
               </div>
             </div>
@@ -873,9 +934,11 @@ const AdminDashboard = () => {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead className="hidden sm:table-cell">Email</TableHead>
+                      <TableHead>Branch</TableHead>
                       <TableHead>Interviews</TableHead>
                       <TableHead>Avg Score</TableHead>
                       <TableHead className="hidden md:table-cell">Last Active</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -883,6 +946,13 @@ const AdminDashboard = () => {
                       <TableRow key={student.id}>
                         <TableCell className="font-medium text-sm">{student.full_name}</TableCell>
                         <TableCell className="hidden sm:table-cell text-sm">{student.email}</TableCell>
+                        <TableCell>
+                          {student.branch ? (
+                            <Badge variant="outline" className="text-xs">{student.branch}</Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-sm">{student.interview_count}</TableCell>
                         <TableCell>{getPerformanceBadge(student.avg_score)}</TableCell>
                         <TableCell className="hidden md:table-cell text-sm">
@@ -891,8 +961,25 @@ const AdminDashboard = () => {
                             : 'Never'
                           }
                         </TableCell>
+                        <TableCell>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setRemoveStudentId(student.user_id)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
+                    {filteredStudents.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          No students found
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -940,7 +1027,6 @@ const AdminDashboard = () => {
               </Dialog>
             </div>
 
-            {/* Main university code card */}
             {adminUniversity && (
               <Card className="border-accent/30 bg-accent/5">
                 <CardContent className="p-4 lg:p-6">
@@ -963,7 +1049,6 @@ const AdminDashboard = () => {
               </Card>
             )}
 
-            {/* Additional codes */}
             {universityCodes.length > 1 && (
               <Card>
                 <CardHeader>
@@ -1019,7 +1104,6 @@ const AdminDashboard = () => {
             <h2 className="text-xl lg:text-2xl font-bold">Performance Analytics</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Score Distribution */}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base lg:text-lg">Score Distribution</CardTitle>
@@ -1030,10 +1114,7 @@ const AdminDashboard = () => {
                       <span className="text-sm text-muted-foreground">High (80-100)</span>
                       <div className="flex items-center gap-2">
                         <div className="w-32 h-2 bg-secondary rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-green-500 rounded-full"
-                            style={{ width: `${(students.filter(s => s.avg_score >= 80).length / Math.max(students.length, 1)) * 100}%` }}
-                          />
+                          <div className="h-full bg-green-500 rounded-full" style={{ width: `${(students.filter(s => s.avg_score >= 80).length / Math.max(students.length, 1)) * 100}%` }} />
                         </div>
                         <span className="text-sm font-medium w-8">{students.filter(s => s.avg_score >= 80).length}</span>
                       </div>
@@ -1042,10 +1123,7 @@ const AdminDashboard = () => {
                       <span className="text-sm text-muted-foreground">Average (50-79)</span>
                       <div className="flex items-center gap-2">
                         <div className="w-32 h-2 bg-secondary rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-yellow-500 rounded-full"
-                            style={{ width: `${(students.filter(s => s.avg_score >= 50 && s.avg_score < 80).length / Math.max(students.length, 1)) * 100}%` }}
-                          />
+                          <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${(students.filter(s => s.avg_score >= 50 && s.avg_score < 80).length / Math.max(students.length, 1)) * 100}%` }} />
                         </div>
                         <span className="text-sm font-medium w-8">{students.filter(s => s.avg_score >= 50 && s.avg_score < 80).length}</span>
                       </div>
@@ -1054,10 +1132,7 @@ const AdminDashboard = () => {
                       <span className="text-sm text-muted-foreground">Needs Support (&lt;50)</span>
                       <div className="flex items-center gap-2">
                         <div className="w-32 h-2 bg-secondary rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-red-500 rounded-full"
-                            style={{ width: `${(students.filter(s => s.avg_score > 0 && s.avg_score < 50).length / Math.max(students.length, 1)) * 100}%` }}
-                          />
+                          <div className="h-full bg-red-500 rounded-full" style={{ width: `${(students.filter(s => s.avg_score > 0 && s.avg_score < 50).length / Math.max(students.length, 1)) * 100}%` }} />
                         </div>
                         <span className="text-sm font-medium w-8">{students.filter(s => s.avg_score > 0 && s.avg_score < 50).length}</span>
                       </div>
@@ -1066,7 +1141,6 @@ const AdminDashboard = () => {
                 </CardContent>
               </Card>
 
-              {/* Interview Completion */}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-base lg:text-lg">Interview Completion</CardTitle>
@@ -1075,25 +1149,8 @@ const AdminDashboard = () => {
                   <div className="flex items-center justify-center">
                     <div className="relative w-32 h-32">
                       <svg className="w-full h-full transform -rotate-90">
-                        <circle
-                          cx="64"
-                          cy="64"
-                          r="56"
-                          stroke="currentColor"
-                          strokeWidth="12"
-                          fill="transparent"
-                          className="text-secondary"
-                        />
-                        <circle
-                          cx="64"
-                          cy="64"
-                          r="56"
-                          stroke="currentColor"
-                          strokeWidth="12"
-                          fill="transparent"
-                          strokeDasharray={`${(completedInterviews / Math.max(totalInterviews, 1)) * 352} 352`}
-                          className="text-accent"
-                        />
+                        <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-secondary" />
+                        <circle cx="64" cy="64" r="56" stroke="currentColor" strokeWidth="12" fill="transparent" strokeDasharray={`${(completedInterviews / Math.max(totalInterviews, 1)) * 352} 352`} className="text-accent" />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
                         <span className="text-2xl font-bold">{totalInterviews > 0 ? Math.round((completedInterviews / totalInterviews) * 100) : 0}%</span>
@@ -1107,9 +1164,95 @@ const AdminDashboard = () => {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Branch-wise breakdown */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base lg:text-lg">Branch-wise Distribution</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {BRANCHES.map(branch => {
+                    const count = students.filter(s => s.branch === branch).length;
+                    if (count === 0) return null;
+                    return (
+                      <div key={branch} className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{branch}</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-32 h-2 bg-secondary rounded-full overflow-hidden">
+                            <div className="h-full bg-accent rounded-full" style={{ width: `${(count / Math.max(students.length, 1)) * 100}%` }} />
+                          </div>
+                          <span className="text-sm font-medium w-8">{count}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {(() => {
+                    const unassigned = students.filter(s => !s.branch).length;
+                    if (unassigned === 0) return null;
+                    return (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-muted-foreground">Unassigned</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-32 h-2 bg-secondary rounded-full overflow-hidden">
+                            <div className="h-full bg-muted-foreground/30 rounded-full" style={{ width: `${(unassigned / Math.max(students.length, 1)) * 100}%` }} />
+                          </div>
+                          <span className="text-sm font-medium w-8">{unassigned}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </main>
+
+      {/* Remove Student Confirmation Dialog */}
+      <Dialog open={!!removeStudentId} onOpenChange={() => setRemoveStudentId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove Student</DialogTitle>
+            <DialogDescription>
+              This will unlink the student from your college. They will no longer appear in your dashboard. Their account and data will remain intact.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRemoveStudentId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => removeStudentId && handleRemoveStudent(removeStudentId)}>
+              Remove Student
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename College Dialog */}
+      <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename College</DialogTitle>
+            <DialogDescription>
+              Update your college name. This will be reflected across the platform.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="collegeName">College Name</Label>
+              <Input
+                id="collegeName"
+                value={newCollegeName}
+                onChange={(e) => setNewCollegeName(e.target.value)}
+                placeholder="Enter new college name"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRenameDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleRenameCollege} disabled={!newCollegeName.trim()}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -377,6 +377,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          branch: Database["public"]["Enums"]["student_branch"] | null
           camera_permission: boolean | null
           created_at: string | null
           email: string
@@ -390,6 +391,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          branch?: Database["public"]["Enums"]["student_branch"] | null
           camera_permission?: boolean | null
           created_at?: string | null
           email: string
@@ -403,6 +405,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          branch?: Database["public"]["Enums"]["student_branch"] | null
           camera_permission?: boolean | null
           created_at?: string | null
           email?: string
@@ -638,6 +641,15 @@ export type Database = {
       app_role: "admin" | "student"
       interview_duration: "3" | "5"
       interview_status: "scheduled" | "in_progress" | "completed" | "cancelled"
+      student_branch:
+        | "CSE"
+        | "ECE"
+        | "ME"
+        | "EEE"
+        | "FSE"
+        | "AI"
+        | "RA"
+        | "CIVIL"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -768,6 +780,7 @@ export const Constants = {
       app_role: ["admin", "student"],
       interview_duration: ["3", "5"],
       interview_status: ["scheduled", "in_progress", "completed", "cancelled"],
+      student_branch: ["CSE", "ECE", "ME", "EEE", "FSE", "AI", "RA", "CIVIL"],
     },
   },
 } as const
