@@ -144,6 +144,9 @@ const AdminDashboard = () => {
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
   const [newCollegeName, setNewCollegeName] = useState("");
   const [removeStudentId, setRemoveStudentId] = useState<string | null>(null);
+  const [editBranchStudentId, setEditBranchStudentId] = useState<string | null>(null);
+  const [selectedBranch, setSelectedBranch] = useState<string>("");
+  const [aptitudeResults, setAptitudeResults] = useState<{ user_id: string; student_name: string; score: number; total_questions: number; completed_at: string; branch: string | null }[]>([]);
 
   useEffect(() => {
     const checkAdminAndFetchData = async () => {
@@ -190,6 +193,7 @@ const AdminDashboard = () => {
         fetchStudents(profileData?.university_id),
         fetchWeakAreas(profileData?.university_id),
         fetchNotifications(session.user.id),
+        fetchAptitudeResults(profileData?.university_id),
       ]);
       setIsLoading(false);
 
@@ -523,6 +527,59 @@ const AdminDashboard = () => {
     setRemoveStudentId(null);
   };
 
+  // Edit student branch
+  const handleEditBranch = async () => {
+    if (!editBranchStudentId || !selectedBranch) return;
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ branch: selectedBranch as any })
+      .eq('user_id', editBranchStudentId);
+
+    if (error) {
+      toast({ title: "Error", description: "Failed to update branch", variant: "destructive" });
+    } else {
+      toast({ title: "Branch updated", description: "Student branch has been updated." });
+      setStudents(prev => prev.map(s => s.user_id === editBranchStudentId ? { ...s, branch: selectedBranch } : s));
+    }
+    setEditBranchStudentId(null);
+    setSelectedBranch("");
+  };
+
+  // Fetch aptitude results
+  const fetchAptitudeResults = async (universityId?: string) => {
+    if (!universityId) return;
+
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('user_id, full_name, branch')
+      .eq('university_code_id', universityId);
+
+    const studentUserIds = profiles?.map(p => p.user_id) || [];
+    if (studentUserIds.length === 0) return;
+
+    const { data: tests } = await supabase
+      .from('aptitude_tests')
+      .select('user_id, score, total_questions, completed_at')
+      .in('user_id', studentUserIds)
+      .order('completed_at', { ascending: false });
+
+    if (tests) {
+      const results = tests.map(t => {
+        const profile = profiles?.find(p => p.user_id === t.user_id);
+        return {
+          user_id: t.user_id,
+          student_name: profile?.full_name || 'Unknown',
+          score: t.score,
+          total_questions: t.total_questions,
+          completed_at: t.completed_at,
+          branch: profile?.branch || null,
+        };
+      });
+      setAptitudeResults(results);
+    }
+  };
+
   // Rename college
   const handleRenameCollege = async () => {
     if (!adminUniversity || !newCollegeName.trim()) return;
@@ -738,6 +795,7 @@ const AdminDashboard = () => {
             <TabsTrigger value="students" className="flex-1 min-w-[80px]">Students</TabsTrigger>
             <TabsTrigger value="codes" className="flex-1 min-w-[80px]">Codes</TabsTrigger>
             <TabsTrigger value="analytics" className="flex-1 min-w-[80px]">Analytics</TabsTrigger>
+            <TabsTrigger value="aptitude" className="flex-1 min-w-[80px]">Aptitude</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -947,11 +1005,17 @@ const AdminDashboard = () => {
                         <TableCell className="font-medium text-sm">{student.full_name}</TableCell>
                         <TableCell className="hidden sm:table-cell text-sm">{student.email}</TableCell>
                         <TableCell>
-                          {student.branch ? (
-                            <Badge variant="outline" className="text-xs">{student.branch}</Badge>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
+                          <button
+                            className="flex items-center gap-1 hover:opacity-80"
+                            onClick={() => { setEditBranchStudentId(student.user_id); setSelectedBranch(student.branch || ""); }}
+                          >
+                            {student.branch ? (
+                              <Badge variant="outline" className="text-xs">{student.branch}</Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                            <Pencil className="w-3 h-3 text-muted-foreground" />
+                          </button>
                         </TableCell>
                         <TableCell className="text-sm">{student.interview_count}</TableCell>
                         <TableCell>{getPerformanceBadge(student.avg_score)}</TableCell>
@@ -1206,6 +1270,50 @@ const AdminDashboard = () => {
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* Aptitude Tab */}
+          <TabsContent value="aptitude" className="space-y-6">
+            <h2 className="text-xl lg:text-2xl font-bold">Aptitude Test Results</h2>
+            <Card>
+              <CardContent className="p-0 overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student</TableHead>
+                      <TableHead>Branch</TableHead>
+                      <TableHead>Score</TableHead>
+                      <TableHead className="hidden sm:table-cell">Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {aptitudeResults.map((result, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="font-medium text-sm">{result.student_name}</TableCell>
+                        <TableCell>
+                          {result.branch ? (
+                            <Badge variant="outline" className="text-xs">{result.branch}</Badge>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm font-medium">{result.score}/{result.total_questions}</TableCell>
+                        <TableCell className="hidden sm:table-cell text-sm">
+                          {format(new Date(result.completed_at), 'MMM d, yyyy h:mm a')}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {aptitudeResults.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                          No aptitude test results yet
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </main>
 
@@ -1250,6 +1358,34 @@ const AdminDashboard = () => {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsRenameDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleRenameCollege} disabled={!newCollegeName.trim()}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Branch Dialog */}
+      <Dialog open={!!editBranchStudentId} onOpenChange={() => setEditBranchStudentId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Student Branch</DialogTitle>
+            <DialogDescription>
+              Select a new branch for this student.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <Select value={selectedBranch} onValueChange={setSelectedBranch}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select branch" />
+              </SelectTrigger>
+              <SelectContent>
+                {BRANCHES.map(b => (
+                  <SelectItem key={b} value={b}>{b}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditBranchStudentId(null)}>Cancel</Button>
+            <Button onClick={handleEditBranch} disabled={!selectedBranch}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
