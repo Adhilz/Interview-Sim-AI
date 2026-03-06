@@ -262,49 +262,27 @@ const InterviewRoom = ({
     }
   }, [simliReady, hasStartedVapi, isLoading, isConnected, startVapi]);
 
-  // ─── Pipe VAPI audio to Simli for lip-sync (Vapi plays audio directly to user) ───
+  // ─── Fallback: DOM-based audio piping (only if direct track interception missed) ───
   useEffect(() => {
     if (!isConnected || !simliReady || !simliAvatarRef.current?.isReady) return;
 
-    const pipeVapiAudioToSimli = () => {
+    // Give the direct track interception 2s to work before falling back
+    const fallbackTimeout = setTimeout(() => {
       const audioElements = document.querySelectorAll('audio');
       for (const audioEl of audioElements) {
-        // Skip Simli's muted audio element
         if (audioEl.hasAttribute('data-simli-audio')) continue;
-        
         const stream = (audioEl as any).srcObject as MediaStream;
         if (stream && stream.getAudioTracks().length > 0) {
           const audioTrack = stream.getAudioTracks()[0];
-          console.log('[InterviewRoom] Piping VAPI audio track to Simli for lip-sync');
-          
-          // Send audio track to Simli for real-time lip-sync animation
+          console.log('[InterviewRoom] Fallback: piping VAPI audio via DOM scan');
           simliAvatarRef.current?.listenToMediaStreamTrack(audioTrack);
-          
-          // VAPI audio plays normally to user — no silencing needed
-          // Simli audio is muted — it only drives lip-sync visuals
-          console.log('[InterviewRoom] Vapi = sole audio source, Simli = lip-sync only');
-          return true;
+          return;
         }
       }
-      return false;
-    };
+      console.warn('[InterviewRoom] Fallback: no VAPI audio track found in DOM');
+    }, 2000);
 
-    if (!pipeVapiAudioToSimli()) {
-      const retryInterval = setInterval(() => {
-        if (pipeVapiAudioToSimli()) {
-          clearInterval(retryInterval);
-        }
-      }, 500);
-
-      const timeout = setTimeout(() => {
-        clearInterval(retryInterval);
-        console.warn('[InterviewRoom] Could not find VAPI audio track after 15s');
-      }, 15000);
-      return () => {
-        clearInterval(retryInterval);
-        clearTimeout(timeout);
-      };
-    }
+    return () => clearTimeout(fallbackTimeout);
   }, [isConnected, simliReady]);
 
   // ─── Handle VAPI error ───
