@@ -11,6 +11,7 @@ interface UseVapiOptions {
   onSpeechEnd?: () => void;
   onError?: (error: any) => void;
   onMessage?: (message: any) => void;
+  onAudioTrack?: (track: MediaStreamTrack) => void;
 }
 
 interface TranscriptEntry {
@@ -45,6 +46,26 @@ export const useVapi = (options: UseVapiOptions) => {
     const vapi = new Vapi(options.publicKey);
     vapiRef.current = vapi;
 
+    // ── Intercept audio track directly via Daily call object for zero-latency piping ──
+    const setupTrackInterception = () => {
+      try {
+        const dailyCall = (vapi as any).getDailyCallObject?.();
+        if (dailyCall) {
+          dailyCall.on('track-started', (e: any) => {
+            if (!e?.participant || e.participant.local) return;
+            if (e.participant.user_name !== 'Vapi Speaker') return;
+            if (e.track?.kind === 'audio') {
+              console.log('[VAPI] Audio track intercepted directly from WebRTC');
+              options.onAudioTrack?.(e.track);
+            }
+          });
+          console.log('[VAPI] Track interception registered on Daily call object');
+        }
+      } catch (err) {
+        console.warn('[VAPI] Could not set up track interception:', err);
+      }
+    };
+
     vapi.on('call-start', () => {
       console.log('[VAPI] Call started');
       setIsConnected(true);
@@ -55,6 +76,9 @@ export const useVapi = (options: UseVapiOptions) => {
       lastUserTranscriptRef.current = '';
       lastAssistantTranscriptRef.current = '';
       pendingUserTranscriptRef.current = '';
+
+      // Set up direct track interception
+      setupTrackInterception();
       
       // Try multiple ways to get the call ID
       setTimeout(() => {

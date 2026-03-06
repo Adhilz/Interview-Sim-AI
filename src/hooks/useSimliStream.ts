@@ -1,5 +1,10 @@
 import { useCallback, useRef, useState, useEffect } from "react";
-import { SimliClient } from "simli-client";
+import {
+  SimliClient,
+  generateSimliSessionToken,
+  generateIceServers,
+  LogLevel,
+} from "simli-client";
 
 interface UseSimliStreamOptions {
   apiKey: string;
@@ -18,7 +23,6 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
   const [error, setError] = useState<string | null>(null);
 
   const simliClientRef = useRef<SimliClient | null>(null);
-  const speakingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
 
@@ -42,8 +46,8 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
     const videoEl = videoElRef.current;
     const audioEl = audioElRef.current;
     if (!videoEl || !audioEl) {
-      console.warn("[Simli] Video/audio elements not ready, retrying in 500ms...");
-      setTimeout(() => initialize(), 500);
+      console.warn("[Simli] Video/audio elements not ready, retrying in 300ms...");
+      setTimeout(() => initialize(), 300);
       return;
     }
 
@@ -51,72 +55,106 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
     setError(null);
 
     try {
-      const client = new SimliClient();
-      simliClientRef.current = client;
+      // ── Step 1: Generate session token ──
+      console.log("[Simli] Generating session token...");
+      const { session_token } = await generateSimliSessionToken(
+        {
+          config: {
+            faceId: options.faceId,
+            handleSilence: true,
+            maxSessionLength: 600,
+            maxIdleTime: 300,
+            model: "fasttalk",
+          },
+          apiKey: options.apiKey,
+        }
+      );
+      console.log("[Simli] Session token obtained");
 
-      client.Initialize({
-        apiKey: options.apiKey,
-        faceID: options.faceId,
-        handleSilence: true,
-        maxSessionLength: 600,
-        maxIdleTime: 300,
-        videoRef: videoEl as any,
-        audioRef: audioEl as any,
-        session_token: "",
-        SimliURL: "",
-        maxRetryAttempts: 3,
-        retryDelay_ms: 2000,
-        videoReceivedTimeout: 15000,
-        enableSFU: true,
-        model: "fasttalk",
-        // Simli is lip-sync only — no TTS, no audio playback
-        // Audio comes exclusively from Vapi
-      } as any);
+      // ── Step 2: Generate ICE servers for optimal WebRTC routing ──
+      console.log("[Simli] Fetching ICE servers...");
+      let iceServers: RTCIceServer[] | null = null;
+      try {
+        iceServers = await generateIceServers(options.apiKey);
+        console.log("[Simli] ICE servers obtained:", iceServers?.length || 0);
+      } catch (iceErr) {
+        console.warn("[Simli] ICE server fetch failed, using defaults:", iceErr);
+      }
 
-      // Mute the Simli audio element — Vapi is the sole audio source
+      // ── Step 3: Create SimliClient with v3 constructor ──
+      // Mute Simli audio — Vapi is the sole audio source
       audioEl.muted = true;
       audioEl.volume = 0;
 
-      console.log("[Simli] Client initialized, starting WebRTC...");
+      const client = new SimliClient(
+        session_token,
+        videoEl,
+        audioEl,
+        iceServers,
+        LogLevel.ERROR,              // Reduce log noise
+        "livekit",                 // Transport mode
+        "websockets",              // Signaling mode
+        undefined,                 // Default SimliWSURL
+        2048,                      // Smaller audio buffer for lower latency (default is larger)
+      );
+      simliClientRef.current = client;
 
-      client.on("connected", () => {
-        console.log("[Simli] Connected successfully");
+      // ── Step 4: Wire up v3 events ──
+      client.on("start", () => {
+        console.log("[Simli] Connected — stream started");
         setIsConnected(true);
         setIsLoading(false);
         options.onConnected?.();
 
-        // Monitor the video element for actual playback to determine true readiness
+        // Monitor video for actual rendering
         const checkVideoPlaying = () => {
           if (videoEl.videoWidth > 0 && videoEl.videoHeight > 0 && !videoEl.paused) {
-            console.log("[Simli] Stream active — video is rendering");
-            console.log("[Simli] Avatar ready");
+            console.log("[Simli] Avatar ready — video rendering");
             setIsReady(true);
             options.onReady?.();
           } else {
-            // Retry until video is actually playing
-            setTimeout(checkVideoPlaying, 200);
+            setTimeout(checkVideoPlaying, 150);
           }
         };
         checkVideoPlaying();
       });
 
-      client.on("disconnected", () => {
+      // Built-in speaking/silent events — no manual timeout needed
+      client.on("speaking", () => {
+        setIsSpeaking(true);
+        options.onSpeaking?.(true);
+      });
+
+      client.on("silent", () => {
+        setIsSpeaking(false);
+        options.onSpeaking?.(false);
+      });
+
+      client.on("stop", () => {
         console.log("[Simli] Disconnected");
         setIsConnected(false);
         setIsReady(false);
       });
 
-      client.on("failed", () => {
-        console.error("[Simli] Connection failed");
-        setError("Simli connection failed");
+      client.on("error", (detail) => {
+        console.error("[Simli] Error:", detail);
+        setError(detail || "Simli connection error");
+        options.onError?.(detail || "Simli connection error");
+      });
+
+      client.on("startup_error", (detail) => {
+        console.error("[Simli] Startup error:", detail);
+        setError(detail || "Simli startup failed");
         setIsConnected(false);
         setIsReady(false);
         setIsLoading(false);
-        options.onError?.("Simli connection failed");
+        options.onError?.(detail || "Simli startup failed");
       });
 
+      // ── Step 5: Start WebRTC connection ──
+      console.log("[Simli] Starting WebRTC connection...");
       await client.start();
-      console.log("[Simli] Start called, waiting for connection...");
+      console.log("[Simli] start() completed, waiting for 'start' event...");
     } catch (e: any) {
       console.error("[Simli] Init error:", e);
       const msg = e?.message || "Failed to initialize Simli";
@@ -130,29 +168,13 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
 
   const sendAudioData = useCallback((audioData: Uint8Array) => {
     if (!simliClientRef.current || !isConnected) return;
-
     try {
-      simliClientRef.current.sendAudioData(audioData);
-
-      if (!isSpeaking) {
-        console.log("[Simli] Speaking started");
-      }
-      setIsSpeaking(true);
-      options.onSpeaking?.(true);
-
-      if (speakingTimeoutRef.current) {
-        clearTimeout(speakingTimeoutRef.current);
-      }
-
-      speakingTimeoutRef.current = setTimeout(() => {
-        console.log("[Simli] Speaking ended");
-        setIsSpeaking(false);
-        options.onSpeaking?.(false);
-      }, 200);
+      // Use sendAudioDataImmediate for lowest latency — bypasses internal buffering
+      simliClientRef.current.sendAudioDataImmediate(audioData);
     } catch (e) {
-      console.error("[Simli] sendAudioData error:", e);
+      console.error("[Simli] sendAudioDataImmediate error:", e);
     }
-  }, [isConnected, isSpeaking, options]);
+  }, [isConnected]);
 
   const listenToMediaStreamTrack = useCallback((track: MediaStreamTrack) => {
     if (!simliClientRef.current || !isConnected) {
@@ -177,10 +199,7 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
 
   const destroy = useCallback(() => {
     try {
-      if (speakingTimeoutRef.current) {
-        clearTimeout(speakingTimeoutRef.current);
-      }
-      simliClientRef.current?.close();
+      simliClientRef.current?.stop();
       simliClientRef.current = null;
       setIsConnected(false);
       setIsReady(false);
