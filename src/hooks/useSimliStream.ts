@@ -91,7 +91,7 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
         videoEl,
         audioEl,
         iceServers,
-        LogLevel.WARN,             // Reduce log noise
+        LogLevel.ERROR,              // Reduce log noise
         "livekit",                 // Transport mode
         "websockets",              // Signaling mode
         undefined,                 // Default SimliWSURL
