@@ -11,6 +11,7 @@ interface UseVapiOptions {
   onSpeechEnd?: () => void;
   onError?: (error: any) => void;
   onMessage?: (message: any) => void;
+  onAudioTrack?: (track: MediaStreamTrack) => void;
 }
 
 interface TranscriptEntry {
