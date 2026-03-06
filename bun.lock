@@ -56,7 +56,7 @@
         "react-resizable-panels": "^2.1.9",
         "react-router-dom": "^6.30.1",
         "recharts": "^2.15.4",
-        "simli-client": "^2.0.0",
+        "simli-client": "^3.0.1",
         "sonner": "^1.7.4",
         "tailwind-merge": "^2.6.0",
         "tailwindcss-animate": "^1.0.7",
@@ -941,7 +941,7 @@
 
     "signal-exit": ["signal-exit@4.1.0", "", {}, "sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw=="],
 
-    "simli-client": ["simli-client@2.0.0", "", { "dependencies": { "livekit-client": "^2.15.15" } }, "sha512-EiL6BjZ3R3ag6JAmI8Aifkc4wdeAWe1ZvlYn6bAzS8IF/uB1S5nO5eXzY1MGqyqnqfBPBKsqrz2k34/LQBAA9Q=="],
+    "simli-client": ["simli-client@3.0.1", "", { "dependencies": { "livekit-client": "^2.15.15" } }, "sha512-4TWccj4pTZqojFNVj8HLaDZ3d44knebmLC9T6GYOz61ttZSoUM/Ogmmyr5SOs/63nc/V52VWvqysCul2x5x5zw=="],
 
     "simple-concat": ["simple-concat@1.0.1", "", {}, "sha512-cSFtAPtRhljv69IK0hTVZQ+OfE9nePi/rtJmw5UjHeVyVroEqJXP1sFztKUy1qU+xvz3u/sfYJLa947b7nAN2Q=="],
 
