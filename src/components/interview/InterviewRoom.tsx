@@ -115,6 +115,26 @@ const InterviewRoom = ({
         onTimeWarning?.();
       }
     },
+    // ── Direct audio track interception — zero-latency piping to Simli ──
+    onAudioTrack: (track) => {
+      console.log('[InterviewRoom] VAPI audio track received directly — piping to Simli');
+      if (simliAvatarRef.current?.isReady) {
+        simliAvatarRef.current.listenToMediaStreamTrack(track);
+        console.log('[InterviewRoom] Audio track piped to Simli immediately');
+      } else {
+        // Simli not ready yet — retry until it is
+        console.log('[InterviewRoom] Simli not ready, will pipe when ready');
+        const retryPipe = setInterval(() => {
+          if (simliAvatarRef.current?.isReady) {
+            simliAvatarRef.current.listenToMediaStreamTrack(track);
+            console.log('[InterviewRoom] Audio track piped to Simli (deferred)');
+            clearInterval(retryPipe);
+          }
+        }, 100);
+        // Safety timeout
+        setTimeout(() => clearInterval(retryPipe), 15000);
+      }
+    },
     onMessage: (message) => {
       if (message.type === 'transcript' && message.transcriptType === 'final' && message.transcript) {
         const role = message.role === 'assistant' ? 'Interviewer' : 'Candidate';
