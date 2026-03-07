@@ -37,6 +37,7 @@ const SimliAvatar = forwardRef<SimliAvatarRef, SimliAvatarProps>(({
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [refsReady, setRefsReady] = useState(false);
+  const hasAutoInitializedRef = useRef(false);
 
   const {
     isConnected,
