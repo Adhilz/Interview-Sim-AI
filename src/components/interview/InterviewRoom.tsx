@@ -48,6 +48,7 @@ const InterviewRoom = ({
   const simliAvatarRef = useRef<SimliAvatarRef>(null);
   const [simliConfig, setSimliConfig] = useState<{ apiKey: string; faceId: string } | null>(null);
   const [simliReady, setSimliReady] = useState(false);
+  const audioPipedRef = useRef(false);
   
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
@@ -117,21 +118,26 @@ const InterviewRoom = ({
     },
     // ── Direct audio track interception — zero-latency piping to Simli ──
     onAudioTrack: (track) => {
-      console.log('[InterviewRoom] VAPI audio track received directly — piping to Simli');
+      if (audioPipedRef.current) {
+        console.log('[InterviewRoom] Audio track already piped, skipping duplicate');
+        return;
+      }
+      console.log('[InterviewRoom] VAPI audio track received — piping to Simli');
       if (simliAvatarRef.current?.isReady) {
         simliAvatarRef.current.listenToMediaStreamTrack(track);
+        audioPipedRef.current = true;
         console.log('[InterviewRoom] Audio track piped to Simli immediately');
       } else {
-        // Simli not ready yet — retry until it is
         console.log('[InterviewRoom] Simli not ready, will pipe when ready');
         const retryPipe = setInterval(() => {
+          if (audioPipedRef.current) { clearInterval(retryPipe); return; }
           if (simliAvatarRef.current?.isReady) {
             simliAvatarRef.current.listenToMediaStreamTrack(track);
+            audioPipedRef.current = true;
             console.log('[InterviewRoom] Audio track piped to Simli (deferred)');
             clearInterval(retryPipe);
           }
         }, 100);
-        // Safety timeout
         setTimeout(() => clearInterval(retryPipe), 15000);
       }
     },
@@ -265,9 +271,10 @@ const InterviewRoom = ({
   // ─── Fallback: DOM-based audio piping (only if direct track interception missed) ───
   useEffect(() => {
     if (!isConnected || !simliReady || !simliAvatarRef.current?.isReady) return;
+    if (audioPipedRef.current) return; // Already piped via direct interception
 
-    // Give the direct track interception 2s to work before falling back
     const fallbackTimeout = setTimeout(() => {
+      if (audioPipedRef.current) return; // Check again before fallback
       const audioElements = document.querySelectorAll('audio');
       for (const audioEl of audioElements) {
         if (audioEl.hasAttribute('data-simli-audio')) continue;
@@ -276,11 +283,12 @@ const InterviewRoom = ({
           const audioTrack = stream.getAudioTracks()[0];
           console.log('[InterviewRoom] Fallback: piping VAPI audio via DOM scan');
           simliAvatarRef.current?.listenToMediaStreamTrack(audioTrack);
+          audioPipedRef.current = true;
           return;
         }
       }
       console.warn('[InterviewRoom] Fallback: no VAPI audio track found in DOM');
-    }, 2000);
+    }, 3000);
 
     return () => clearTimeout(fallbackTimeout);
   }, [isConnected, simliReady]);
