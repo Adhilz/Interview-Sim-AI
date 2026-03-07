@@ -53,11 +53,15 @@ export const useVapi = (options: UseVapiOptions) => {
         if (dailyCall) {
           dailyCall.on('track-started', (e: any) => {
             if (!e?.participant || e.participant.local) return;
-            if (e.participant.user_name !== 'Vapi Speaker') return;
-            if (e.track?.kind === 'audio') {
-              console.log('[VAPI] Audio track intercepted directly from WebRTC');
-              options.onAudioTrack?.(e.track);
-            }
+            if (e.track?.kind !== 'audio') return;
+
+            // Some sessions expose different remote participant names.
+            // Accept any remote audio track to avoid missing lip-sync piping.
+            console.log('[VAPI] Audio track intercepted directly from WebRTC', {
+              user_name: e.participant.user_name,
+              participant_id: e.participant.session_id || e.participant.user_id,
+            });
+            options.onAudioTrack?.(e.track);
           });
           console.log('[VAPI] Track interception registered on Daily call object');
         }
