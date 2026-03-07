@@ -25,6 +25,22 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
   const simliClientRef = useRef<SimliClient | null>(null);
   const videoElRef = useRef<HTMLVideoElement | null>(null);
   const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const optionsRef = useRef(options);
+  const isConnectedRef = useRef(false);
+  const isLoadingRef = useRef(false);
+  const isInitializingRef = useRef(false);
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
+
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
+
+  useEffect(() => {
+    isLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   const setVideoElement = useCallback((el: HTMLVideoElement | null) => {
     videoElRef.current = el;
