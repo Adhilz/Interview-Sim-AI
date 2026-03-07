@@ -149,6 +149,7 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
 
       client.on("stop", () => {
         console.log("[Simli] Disconnected");
+        simliClientRef.current = null;
         setIsConnected(false);
         setIsReady(false);
         setIsLoading(false);
@@ -156,6 +157,7 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
 
       client.on("error", (detail) => {
         console.error("[Simli] Error:", detail);
+        simliClientRef.current = null;
         setError(detail || "Simli connection error");
         setIsLoading(false);
         optionsRef.current.onError?.(detail || "Simli connection error");
@@ -163,6 +165,7 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
 
       client.on("startup_error", (detail) => {
         console.error("[Simli] Startup error:", detail);
+        simliClientRef.current = null;
         setError(detail || "Simli startup failed");
         setIsConnected(false);
         setIsReady(false);
