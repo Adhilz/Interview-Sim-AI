@@ -84,12 +84,12 @@ const SimliAvatar = forwardRef<SimliAvatarRef, SimliAvatarProps>(({
     [sendAudioData, listenToMediaStreamTrack, clearBuffer, destroy, isConnected, isReady]
   );
 
-  // Only start after refs are ready
+  // Only start once after refs are ready
   useEffect(() => {
-    if (autoStart && refsReady) {
-      console.log('[SimliAvatar] Refs ready, initializing...');
-      initialize();
-    }
+    if (!autoStart || !refsReady || hasAutoInitializedRef.current) return;
+    hasAutoInitializedRef.current = true;
+    console.log('[SimliAvatar] Refs ready, initializing...');
+    initialize();
   }, [autoStart, initialize, refsReady]);
 
   return (
