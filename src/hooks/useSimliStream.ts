@@ -54,8 +54,7 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
     if (
       isInitializingRef.current ||
       isLoadingRef.current ||
-      isConnectedRef.current ||
-      simliClientRef.current
+      isConnectedRef.current
     ) {
       return;
     }
