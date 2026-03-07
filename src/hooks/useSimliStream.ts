@@ -221,8 +221,9 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
 
   const destroy = useCallback(() => {
     try {
-      simliClientRef.current?.stop();
+      void simliClientRef.current?.stop();
       simliClientRef.current = null;
+      isInitializingRef.current = false;
       setIsConnected(false);
       setIsReady(false);
       setIsLoading(false);
