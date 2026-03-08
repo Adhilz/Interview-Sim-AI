@@ -102,8 +102,21 @@ export const useVapi = (options: UseVapiOptions) => {
       lastAssistantTranscriptRef.current = '';
       pendingUserTranscriptRef.current = '';
 
-      // Set up direct track interception
-      setupTrackInterception();
+      // Set up direct track interception with retry
+      if (!setupTrackInterception()) {
+        let retryCount = 0;
+        const retryInterval = setInterval(() => {
+          retryCount++;
+          if (trackIntercepted || retryCount > 30) {
+            clearInterval(retryInterval);
+            if (!trackIntercepted) {
+              console.warn('[VAPI] Track interception failed after retries, falling back to DOM scan');
+            }
+            return;
+          }
+          setupTrackInterception();
+        }, 500);
+      }
       
       // Try multiple ways to get the call ID
       setTimeout(() => {
