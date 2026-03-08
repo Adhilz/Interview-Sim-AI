@@ -719,7 +719,7 @@ Generate ONE natural opening now:`;
     console.error('[VAPI] Error generating dynamic first message:', error);
   }
 
-  return buildFallbackFirstMessage(candidateName, candidateProfile);
+  return buildFallbackFirstMessage(candidateName, candidateProfile, companyName);
 };
 
 // Generate first message for Technical mode
