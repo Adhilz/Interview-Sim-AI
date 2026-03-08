@@ -291,6 +291,21 @@ const buildResumeJDSystemPrompt = (candidateProfile: any, candidateName: string,
   const questionPools = buildQuestionPools(candidateProfile);
   const interviewStrategy = generateInterviewStrategy(questionPools);
   
+  // Extract company/role from preferences
+  const { company } = extractCompanyAndRole(interviewerPreferences);
+  
+  // Build persona based on company context
+  let personaLines = '';
+  if (company) {
+    personaLines = `- You are a Senior Developer / Engineering Lead at ${company}
+- You are conducting this interview to hire for ${company}'s engineering team
+- Reference ${company} naturally in conversation (e.g., "Here at ${company}, we value...", "On my team at ${company}...")
+- Your greeting MUST introduce yourself as working at ${company}
+- 10+ years of industry experience, currently at ${company}`;
+  } else {
+    personaLines = `- 15+ years of industry experience at companies like Google, Amazon, or similar`;
+  }
+  
   // Build preferences context if provided
   let preferencesSection = '';
   if (interviewerPreferences && interviewerPreferences.trim().length > 0) {
@@ -313,7 +328,7 @@ However, you must STILL only ask about skills/projects that exist in the candida
   return `You are a senior engineering hiring manager conducting a real-time voice interview with ${candidateName || 'the candidate'}.
 
 === YOUR PERSONA ===
-- 15+ years of industry experience at companies like Google, Amazon, or similar
+${personaLines}
 - Direct, professional, but approachable demeanor
 - You ask tough but fair questions
 - You sound HUMAN - natural pauses, occasional "hmm", "I see", "right"
