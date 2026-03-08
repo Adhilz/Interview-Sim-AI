@@ -9,6 +9,7 @@ import {
 interface UseSimliStreamOptions {
   apiKey: string;
   faceId: string;
+  syncMode?: 'speed' | 'perfection';
   onConnected?: () => void;
   onError?: (error: string) => void;
   onSpeaking?: (speaking: boolean) => void;
@@ -100,9 +101,10 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
         console.warn("[Simli] ICE server fetch failed, using defaults:", iceErr);
       }
 
-      // Keep Simli audio muted: Vapi remains the only audible output.
-      audioEl.muted = true;
-      audioEl.volume = 0;
+      // In perfection mode, Simli plays audio (lip-synced). In speed mode, Vapi plays audio directly.
+      const muteSimliAudio = options.syncMode !== 'perfection';
+      audioEl.muted = muteSimliAudio;
+      audioEl.volume = muteSimliAudio ? 0 : 1;
 
       // Use P2P-first mode (previous stable architecture).
       // Simli SDK will auto-fallback to livekit on retries when needed.
