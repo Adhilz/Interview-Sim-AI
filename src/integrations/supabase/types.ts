@@ -384,6 +384,7 @@ export type Database = {
           full_name: string | null
           id: string
           microphone_permission: boolean | null
+          sync_mode: string
           university_code_id: string | null
           university_id: string | null
           updated_at: string | null
@@ -398,6 +399,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           microphone_permission?: boolean | null
+          sync_mode?: string
           university_code_id?: string | null
           university_id?: string | null
           updated_at?: string | null
@@ -412,6 +414,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           microphone_permission?: boolean | null
+          sync_mode?: string
           university_code_id?: string | null
           university_id?: string | null
           updated_at?: string | null

@@ -20,7 +20,9 @@ import {
   Upload,
   Shield,
   Mail,
-  Settings
+  Settings,
+  Zap,
+  Target
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import StudentSidebar from "@/components/StudentSidebar";
@@ -58,6 +60,7 @@ const Profile = () => {
   const [cameraPermission, setCameraPermission] = useState(false);
   const [micPermission, setMicPermission] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [syncMode, setSyncMode] = useState<'speed' | 'perfection'>('speed');
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -97,6 +100,7 @@ const Profile = () => {
         setCameraPermission(typedProfile.camera_permission || false);
         setMicPermission(typedProfile.microphone_permission || false);
         setAvatarUrl(typedProfile.avatar_url);
+        setSyncMode((profileData as any).sync_mode === 'perfection' ? 'perfection' : 'speed');
 
         if (typedProfile.university_code_id) {
           const { data: codeData } = await supabase
@@ -174,7 +178,8 @@ const Profile = () => {
           full_name: fullName,
           camera_permission: cameraPermission,
           microphone_permission: micPermission,
-        })
+          sync_mode: syncMode,
+        } as any)
         .eq("user_id", user.id);
 
       if (error) throw error;
@@ -427,6 +432,77 @@ const Profile = () => {
                         onCheckedChange={setMicPermission}
                       />
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Sync Mode Preference */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.45 }}
+              className="md:col-span-2"
+            >
+              <Card className="border-border/50">
+                <CardHeader className="p-6">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Target className="w-5 h-5 text-accent" />
+                    Interview Sync Mode
+                  </CardTitle>
+                  <CardDescription>Choose how the AI avatar syncs with voice during interviews</CardDescription>
+                </CardHeader>
+                <CardContent className="p-6 pt-0">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setSyncMode('speed')}
+                      className={`relative p-4 rounded-xl text-left transition-all ${
+                        syncMode === 'speed'
+                          ? 'bg-accent/10 border-2 border-accent ring-1 ring-accent/30'
+                          : 'bg-secondary/50 border-2 border-transparent hover:border-border'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          syncMode === 'speed' ? 'bg-accent/20' : 'bg-accent/10'
+                        }`}>
+                          <Zap className="w-5 h-5 text-accent" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-foreground">Speed</p>
+                          <p className="text-xs text-muted-foreground">Fastest response</p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        AI voice plays immediately. Avatar lip-sync follows with best-effort timing. Lowest latency.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSyncMode('perfection')}
+                      className={`relative p-4 rounded-xl text-left transition-all ${
+                        syncMode === 'perfection'
+                          ? 'bg-accent/10 border-2 border-accent ring-1 ring-accent/30'
+                          : 'bg-secondary/50 border-2 border-transparent hover:border-border'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                          syncMode === 'perfection' ? 'bg-accent/20' : 'bg-accent/10'
+                        }`}>
+                          <Target className="w-5 h-5 text-accent" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-foreground">Perfection</p>
+                          <p className="text-xs text-muted-foreground">Perfect lip-sync</p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Buffers audio briefly so avatar lips and voice start together in perfect sync. Slight delay.
+                      </p>
+                    </button>
                   </div>
                 </CardContent>
               </Card>

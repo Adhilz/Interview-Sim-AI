@@ -49,6 +49,9 @@ const InterviewRoom = ({
   const [simliConfig, setSimliConfig] = useState<{ apiKey: string; faceId: string } | null>(null);
   const [simliReady, setSimliReady] = useState(false);
   const audioPipedRef = useRef(false);
+  const syncModeRef = useRef<'speed' | 'perfection'>('speed');
+  const perfectionProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const perfectionContextRef = useRef<AudioContext | null>(null);
   
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
@@ -116,25 +119,67 @@ const InterviewRoom = ({
         onTimeWarning?.();
       }
     },
-    // ── Direct audio track interception — zero-latency piping to Simli ──
+    // ── Direct audio track interception — piping to Simli ──
     onAudioTrack: (track) => {
       if (audioPipedRef.current) {
         console.log('[InterviewRoom] Audio track already piped, skipping duplicate');
         return;
       }
+
+      const pipeTrack = () => {
+        if (audioPipedRef.current) return;
+
+        if (syncModeRef.current === 'perfection') {
+          // PERFECTION MODE: Extract PCM16 from the track and send via sendAudioDataImmediate
+          // This ensures Simli receives audio data frame-by-frame for exact lip-sync
+          console.log('[InterviewRoom] Perfection mode — setting up PCM extraction pipeline');
+          try {
+            const audioCtx = new AudioContext({ sampleRate: 16000 });
+            perfectionContextRef.current = audioCtx;
+            const source = audioCtx.createMediaStreamSource(new MediaStream([track]));
+            // ScriptProcessorNode for PCM extraction (small buffer for low latency)
+            const processor = audioCtx.createScriptProcessor(512, 1, 1);
+            perfectionProcessorRef.current = processor;
+
+            processor.onaudioprocess = (e) => {
+              if (!simliAvatarRef.current?.isConnected) return;
+              const inputData = e.inputBuffer.getChannelData(0);
+              // Convert Float32 to PCM16
+              const pcm16 = new Int16Array(inputData.length);
+              for (let i = 0; i < inputData.length; i++) {
+                const s = Math.max(-1, Math.min(1, inputData[i]));
+                pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+              }
+              simliAvatarRef.current.sendAudioData(new Uint8Array(pcm16.buffer));
+            };
+
+            source.connect(processor);
+            processor.connect(audioCtx.destination); // Required for processing to run
+            audioPipedRef.current = true;
+            console.log('[InterviewRoom] Perfection mode PCM pipeline active');
+          } catch (err) {
+            console.error('[InterviewRoom] Perfection mode setup failed, falling back to speed:', err);
+            simliAvatarRef.current?.listenToMediaStreamTrack(track);
+            audioPipedRef.current = true;
+          }
+        } else {
+          // SPEED MODE: Direct track piping (lowest latency, best-effort sync)
+          console.log('[InterviewRoom] Speed mode — direct track piping');
+          simliAvatarRef.current?.listenToMediaStreamTrack(track);
+          audioPipedRef.current = true;
+        }
+        console.log('[InterviewRoom] Audio track piped to Simli');
+      };
+
       console.log('[InterviewRoom] VAPI audio track received — piping to Simli');
       if (simliAvatarRef.current?.isReady) {
-        simliAvatarRef.current.listenToMediaStreamTrack(track);
-        audioPipedRef.current = true;
-        console.log('[InterviewRoom] Audio track piped to Simli immediately');
+        pipeTrack();
       } else {
         console.log('[InterviewRoom] Simli not ready, will pipe when ready');
         const retryPipe = setInterval(() => {
           if (audioPipedRef.current) { clearInterval(retryPipe); return; }
           if (simliAvatarRef.current?.isReady) {
-            simliAvatarRef.current.listenToMediaStreamTrack(track);
-            audioPipedRef.current = true;
-            console.log('[InterviewRoom] Audio track piped to Simli (deferred)');
+            pipeTrack();
             clearInterval(retryPipe);
           }
         }, 100);
@@ -198,20 +243,25 @@ const InterviewRoom = ({
     }
   }, [timeRemaining, hasSpokenEndMessage, isConnected, say]);
 
-  // ─── Fetch user avatar ───
+  // ─── Fetch user avatar + sync mode ───
   useEffect(() => {
-    const fetchUserAvatar = async () => {
+    const fetchUserProfile = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('avatar_url')
+          .select('avatar_url, sync_mode')
           .eq('user_id', session.user.id)
           .single();
         if (profile?.avatar_url) setUserAvatarUrl(profile.avatar_url);
+        const mode = (profile as any)?.sync_mode;
+        if (mode === 'perfection' || mode === 'speed') {
+          syncModeRef.current = mode;
+          console.log('[InterviewRoom] Sync mode:', mode);
+        }
       }
     };
-    fetchUserAvatar();
+    fetchUserProfile();
   }, []);
 
   // ─── Enumerate devices ───
@@ -362,6 +412,9 @@ const InterviewRoom = ({
     
     stopVapi();
     stopMedia();
+    // Clean up perfection mode audio pipeline
+    perfectionProcessorRef.current?.disconnect();
+    perfectionContextRef.current?.close().catch(() => {});
     simliAvatarRef.current?.destroy();
     onEndInterview(finalTranscript);
   };
