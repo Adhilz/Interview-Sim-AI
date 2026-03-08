@@ -659,26 +659,35 @@ const generateDynamicFirstMessage = async (candidateName: string, candidateProfi
     topic = `${randomExp.role || 'your role'} at ${randomExp.company || 'your previous company'}`;
   }
 
+  const companyContext = companyName 
+    ? `\nINTERVIEWER COMPANY: ${companyName} (You MUST introduce yourself as a senior developer at ${companyName})`
+    : '';
+
+  const companyExamples = companyName
+    ? `\n- "Hi ${candidateName}, I'm a senior developer here at ${companyName}. I've been going through your profile and your work on ${topic || 'some projects'} really stood out. Tell me about the biggest challenge there."
+- "${candidateName}, great to meet you. I'm part of the engineering team at ${companyName}. I noticed your experience with ${topic}. Walk me through how you approached that."`
+    : '';
+
   const prompt = `Generate a unique, natural interview opening for a candidate.
 
 CANDIDATE: ${candidateName || 'Candidate'}
 APPROACH: Start with ${selectedApproach}
 TOPIC: ${topic || 'general technical background'}
-${tech ? `TECH: ${tech}` : ''}
+${tech ? `TECH: ${tech}` : ''}${companyContext}
 
 RULES:
-- Maximum 40 words
+- Maximum 50 words
 - Sound like a real human interviewer, not AI
 - Reference the specific topic/project/skill
 - End with a direct question
-- NO "Thank you for joining" or "Welcome" - jump straight in
+${companyName ? `- You MUST introduce yourself as a senior developer at ${companyName} in the greeting` : '- NO "Thank you for joining" or "Welcome" - jump straight in'}
 - Professional but conversational tone
 - Include a brief human touch like "I've been reviewing your background..."
 
 EXAMPLES:
-- "${candidateName}, I've looked through your work. Your project on ${topic || 'the system'} caught my eye - what was the trickiest technical problem you solved there?"
+${companyName ? companyExamples : `- "${candidateName}, I've looked through your work. Your project on ${topic || 'the system'} caught my eye - what was the trickiest technical problem you solved there?"
 - "Alright ${candidateName}, let's dive in. I see you've worked with ${topic}. Tell me about a particularly complex challenge you faced."
-- "${candidateName}, interesting background. Before we go into specifics... your experience at ${topic} - walk me through your biggest contribution there."
+- "${candidateName}, interesting background. Before we go into specifics... your experience at ${topic} - walk me through your biggest contribution there."`}
 
 Generate ONE natural opening now:`;
 
