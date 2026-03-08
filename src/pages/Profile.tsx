@@ -20,7 +20,9 @@ import {
   Upload,
   Shield,
   Mail,
-  Settings
+  Settings,
+  Zap,
+  Target
 } from "lucide-react";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 import StudentSidebar from "@/components/StudentSidebar";
@@ -58,6 +60,7 @@ const Profile = () => {
   const [cameraPermission, setCameraPermission] = useState(false);
   const [micPermission, setMicPermission] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [syncMode, setSyncMode] = useState<'speed' | 'perfection'>('speed');
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -97,6 +100,7 @@ const Profile = () => {
         setCameraPermission(typedProfile.camera_permission || false);
         setMicPermission(typedProfile.microphone_permission || false);
         setAvatarUrl(typedProfile.avatar_url);
+        setSyncMode((profileData as any).sync_mode === 'perfection' ? 'perfection' : 'speed');
 
         if (typedProfile.university_code_id) {
           const { data: codeData } = await supabase
@@ -174,7 +178,8 @@ const Profile = () => {
           full_name: fullName,
           camera_permission: cameraPermission,
           microphone_permission: micPermission,
-        })
+          sync_mode: syncMode,
+        } as any)
         .eq("user_id", user.id);
 
       if (error) throw error;
