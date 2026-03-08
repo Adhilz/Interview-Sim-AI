@@ -412,6 +412,9 @@ const InterviewRoom = ({
     
     stopVapi();
     stopMedia();
+    // Clean up perfection mode audio pipeline
+    perfectionProcessorRef.current?.disconnect();
+    perfectionContextRef.current?.close().catch(() => {});
     simliAvatarRef.current?.destroy();
     onEndInterview(finalTranscript);
   };
