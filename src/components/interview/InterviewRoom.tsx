@@ -138,7 +138,7 @@ const InterviewRoom = ({
             perfectionContextRef.current = audioCtx;
             const source = audioCtx.createMediaStreamSource(new MediaStream([track]));
             // ScriptProcessorNode for PCM extraction (small buffer for low latency)
-            const processor = audioCtx.createScriptProcessorNode(512, 1, 1);
+            const processor = audioCtx.createScriptProcessor(512, 1, 1);
             perfectionProcessorRef.current = processor;
 
             processor.onaudioprocess = (e) => {
