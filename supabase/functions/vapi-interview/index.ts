@@ -760,24 +760,24 @@ const buildFallbackFirstMessage = (candidateName: string, candidateProfile: any,
   // Project-based fallbacks
   if (candidateProfile?.projects?.length > 0) {
     const randomProject = candidateProfile.projects[Math.floor(Math.random() * candidateProfile.projects.length)];
-    fallbacks.push(`${name}, I've reviewed your background. Your project "${randomProject.title}" looks interesting - what was the most significant technical challenge you faced there?`);
-    fallbacks.push(`Alright ${name}, let's start with your work on "${randomProject.title}". Walk me through the architecture and key design decisions.`);
+    fallbacks.push(`Hi ${name}, ${companyIntro}I've reviewed your background. Your project "${randomProject.title}" looks interesting - what was the most significant technical challenge you faced there?`);
+    fallbacks.push(`${name}, ${companyIntro}let's start with your work on "${randomProject.title}". Walk me through the architecture and key design decisions.`);
   }
   
   // Skill-based fallbacks
   if (candidateProfile?.skills?.length > 0) {
     const randomSkill = candidateProfile.skills[Math.floor(Math.random() * candidateProfile.skills.length)];
-    fallbacks.push(`${name}, I see you have experience with ${randomSkill}. Tell me about a complex problem you solved using it.`);
+    fallbacks.push(`Hi ${name}, ${companyIntro}I see you have experience with ${randomSkill}. Tell me about a complex problem you solved using it.`);
   }
   
   // Experience-based fallbacks
   if (candidateProfile?.experience?.length > 0) {
     const randomExp = candidateProfile.experience[Math.floor(Math.random() * candidateProfile.experience.length)];
-    fallbacks.push(`${name}, your experience at ${randomExp.company || 'your previous company'} as ${randomExp.role || 'developer'} - what was your biggest technical contribution there?`);
+    fallbacks.push(`${name}, ${companyIntro}your experience at ${randomExp.company || 'your previous company'} as ${randomExp.role || 'developer'} - what was your biggest technical contribution there?`);
   }
   
   // Generic fallback
-  fallbacks.push(`${name}, let's begin. Tell me about a challenging technical problem you've tackled recently and your approach to solving it.`);
+  fallbacks.push(`Hi ${name}, ${companyIntro}let's begin. Tell me about a challenging technical problem you've tackled recently and your approach to solving it.`);
   
   return fallbacks[Math.floor(Math.random() * fallbacks.length)];
 };
