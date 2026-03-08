@@ -923,6 +923,9 @@ serve(async (req) => {
         });
       }
 
+      // Extract company for first message generation
+      const { company: extractedCompany } = mode === 'resume_jd' ? extractCompanyAndRole(interviewerPreferences) : { company: null };
+
       // Build system prompt based on interview mode
       let systemPrompt: string;
       if (mode === 'technical') {
@@ -944,9 +947,9 @@ serve(async (req) => {
         firstMessage = generateHRFirstMessage(candidateName);
       } else {
         // resume_jd mode
-        firstMessage = buildFallbackFirstMessage(candidateName, candidateProfile);
+        firstMessage = buildFallbackFirstMessage(candidateName, candidateProfile, extractedCompany);
         if (LOVABLE_API_KEY && candidateProfile) {
-          firstMessage = await generateDynamicFirstMessage(candidateName, candidateProfile, LOVABLE_API_KEY);
+          firstMessage = await generateDynamicFirstMessage(candidateName, candidateProfile, LOVABLE_API_KEY, extractedCompany);
         }
       }
 
