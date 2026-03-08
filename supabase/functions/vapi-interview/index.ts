@@ -748,7 +748,10 @@ const generateHRFirstMessage = (candidateName: string): string => {
   return openings[Math.floor(Math.random() * openings.length)];
 };
 
-const buildFallbackFirstMessage = (candidateName: string, candidateProfile: any) => {
+const buildFallbackFirstMessage = (candidateName: string, candidateProfile: any, companyName?: string | null) => {
+  const name = candidateName || 'Candidate';
+  const companyIntro = companyName ? `I'm a senior developer here at ${companyName}. ` : '';
+  
   const name = candidateName || 'Candidate';
   
   // Build multiple fallback options
