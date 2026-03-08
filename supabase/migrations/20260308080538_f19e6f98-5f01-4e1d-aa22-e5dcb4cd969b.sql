@@ -1,0 +1,1 @@
+ALTER TABLE public.profiles ADD COLUMN sync_mode varchar NOT NULL DEFAULT 'speed';
