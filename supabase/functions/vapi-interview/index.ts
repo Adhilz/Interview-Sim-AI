@@ -255,6 +255,37 @@ const formatResumeForLLM = (candidateProfile: any): string => {
 };
 
 // Professional system prompt with STRICT resume grounding and randomization (for resume_jd mode)
+// Extract company and role from interviewer preferences text
+function extractCompanyAndRole(preferences: string | undefined): { company: string | null; role: string | null } {
+  if (!preferences || preferences.trim().length === 0) return { company: null, role: null };
+  const text = preferences.trim();
+  let company: string | null = null;
+  let role: string | null = null;
+  const companyPatterns = [
+    /(?:at|for|in|@)\s+([A-Z][A-Za-z0-9\s&.'-]{1,30}?)(?:\s*[.,;]|\s+(?:as|for|the|focus|that|which|where|this|I|i|they|we|a|an|and|or|but|is|are|was|were|has|have|had|with|from|about|on|to|in|of|looking|hiring|seeking))/i,
+    /(?:at|for|in|@)\s+([A-Z][A-Za-z0-9\s&.'-]{1,30}?)$/im,
+    /(?:company|org|organization|firm|startup)(?:\s*[:=]\s*|\s+(?:is|called|named)\s+)([A-Z][A-Za-z0-9\s&.'-]{1,30})/i,
+    /(?:interviewing|applying|position|job|role)\s+(?:at|for|with)\s+([A-Z][A-Za-z0-9\s&.'-]{1,30}?)(?:\s*[.,;]|\s|$)/i,
+  ];
+  for (const pattern of companyPatterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      company = match[1].trim().replace(/[.,;]+$/, '').trim();
+      if (company.length > 1 && company.length < 40) break;
+      company = null;
+    }
+  }
+  const rolePatterns = [
+    /(?:Senior|Junior|Lead|Staff|Principal|Mid[- ]?level|Entry[- ]?level)?\s*(?:React|Frontend|Backend|Full[- ]?Stack|Software|DevOps|Data|ML|AI|Cloud|Mobile|iOS|Android|Web|QA|Platform|Infrastructure|Systems?|Site Reliability|Security|Network|Database|Embedded|Game|Blockchain|Product)?\s*(?:Developer|Engineer|Architect|Designer|Scientist|Analyst|Manager|Consultant|Specialist|Administrator|Programmer|Tester)/i,
+    /(?:SDE|SWE|MLE|TPM|PM|EM|TL|SE|SSE)(?:\s*[-–]\s*\d+|\s+\d+)?/i,
+  ];
+  for (const pattern of rolePatterns) {
+    const match = text.match(pattern);
+    if (match?.[0]) { role = match[0].trim(); break; }
+  }
+  return { company, role };
+}
+
 const buildResumeJDSystemPrompt = (candidateProfile: any, candidateName: string, interviewerPreferences?: string) => {
   const formattedResume = formatResumeForLLM(candidateProfile);
   const questionPools = buildQuestionPools(candidateProfile);
