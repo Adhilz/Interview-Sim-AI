@@ -67,6 +67,7 @@ const InterviewRoom = ({
   const [fullTranscript, setFullTranscript] = useState<string[]>([]);
   const [hasShown30SecWarning, setHasShown30SecWarning] = useState(false);
   const [hasSpokenEndMessage, setHasSpokenEndMessage] = useState(false);
+  const [syncModeDisplay, setSyncModeDisplay] = useState<'speed' | 'perfection'>('speed');
   
   const [settings, setSettings] = useState<InterviewSettingsState>(() => {
     const saved = localStorage.getItem('interviewSettings');
