@@ -9,7 +9,9 @@ import {
   Clock,
   Loader2,
   Settings,
-  User
+  User,
+  Zap,
+  Target
 } from "lucide-react";
 import { useVapi } from "@/hooks/useVapi";
 import { supabase } from "@/integrations/supabase/client";
