@@ -157,6 +157,16 @@ const InterviewRoom = ({
             processor.connect(audioCtx.destination); // Required for processing to run
             audioPipedRef.current = true;
             console.log('[InterviewRoom] Perfection mode PCM pipeline active');
+            // Mute Vapi's direct audio output — Simli will play audio in sync with lips
+            setTimeout(() => {
+              document.querySelectorAll('audio').forEach((el) => {
+                if (!el.hasAttribute('data-simli-audio')) {
+                  el.muted = true;
+                  el.volume = 0;
+                  console.log('[InterviewRoom] Muted Vapi audio element for perfection mode');
+                }
+              });
+            }, 500);
           } catch (err) {
             console.error('[InterviewRoom] Perfection mode setup failed, falling back to speed:', err);
             simliAvatarRef.current?.listenToMediaStreamTrack(track);
@@ -440,6 +450,7 @@ const InterviewRoom = ({
               faceId={simliConfig.faceId}
               autoStart={true}
               avatarUrl={avatarUrl || undefined}
+              syncMode={syncModeRef.current}
               onConnected={() => console.log('[InterviewRoom] Simli connected')}
               onReady={handleSimliReady}
               onError={(err) => {
