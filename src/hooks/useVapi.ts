@@ -47,26 +47,47 @@ export const useVapi = (options: UseVapiOptions) => {
     vapiRef.current = vapi;
 
     // ── Intercept audio track directly via Daily call object for zero-latency piping ──
+    let trackIntercepted = false;
     const setupTrackInterception = () => {
+      if (trackIntercepted) return;
       try {
         const dailyCall = (vapi as any).getDailyCallObject?.();
-        if (dailyCall) {
-          dailyCall.on('track-started', (e: any) => {
-            if (!e?.participant || e.participant.local) return;
-            if (e.track?.kind !== 'audio') return;
-
-            // Some sessions expose different remote participant names.
-            // Accept any remote audio track to avoid missing lip-sync piping.
-            console.log('[VAPI] Audio track intercepted directly from WebRTC', {
-              user_name: e.participant.user_name,
-              participant_id: e.participant.session_id || e.participant.user_id,
-            });
-            options.onAudioTrack?.(e.track);
-          });
-          console.log('[VAPI] Track interception registered on Daily call object');
+        if (!dailyCall) {
+          console.log('[VAPI] Daily call object not available yet, will retry...');
+          return false;
         }
+
+        // Check for already-existing remote audio tracks
+        const participants = dailyCall.participants?.();
+        if (participants) {
+          for (const [id, p] of Object.entries(participants)) {
+            if (id === 'local') continue;
+            const participant = p as any;
+            if (participant?.tracks?.audio?.persistentTrack) {
+              console.log('[VAPI] Found existing remote audio track from:', participant.user_name);
+              trackIntercepted = true;
+              options.onAudioTrack?.(participant.tracks.audio.persistentTrack);
+              break;
+            }
+          }
+        }
+
+        // Also listen for future tracks
+        dailyCall.on('track-started', (e: any) => {
+          if (trackIntercepted) return;
+          if (!e?.participant || e.participant.local) return;
+          if (e.track?.kind !== 'audio') return;
+          console.log('[VAPI] Audio track intercepted from WebRTC', {
+            user_name: e.participant.user_name,
+          });
+          trackIntercepted = true;
+          options.onAudioTrack?.(e.track);
+        });
+        console.log('[VAPI] Track interception registered on Daily call object');
+        return true;
       } catch (err) {
         console.warn('[VAPI] Could not set up track interception:', err);
+        return false;
       }
     };
 
