@@ -186,7 +186,6 @@ const InterviewRoom = ({
         setTimeout(() => clearInterval(retryPipe), 15000);
       }
     },
-    },
     onMessage: (message) => {
       if (message.type === 'transcript' && message.transcriptType === 'final' && message.transcript) {
         const role = message.role === 'assistant' ? 'Interviewer' : 'Candidate';
