@@ -532,7 +532,22 @@ const InterviewRoom = ({
             </span>
           </div>
 
-          {/* Connection status */}
+          {/* Sync mode indicator — top center */}
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 sm:top-4 z-10">
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+              syncModeDisplay === 'perfection'
+                ? 'bg-accent/80 text-accent-foreground'
+                : 'bg-black/50 text-white/70'
+            }`}>
+              {syncModeDisplay === 'perfection' ? (
+                <Target className="w-3 h-3" />
+              ) : (
+                <Zap className="w-3 h-3" />
+              )}
+              {syncModeDisplay === 'perfection' ? 'Perfection Sync' : 'Speed Mode'}
+            </div>
+          </div>
+
           <div className="absolute top-2 left-2 sm:top-4 sm:left-4 flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg bg-black/50 z-10">
             <div className={`w-2 h-2 rounded-full ${
               isActuallyConnected ? "bg-success" : 
