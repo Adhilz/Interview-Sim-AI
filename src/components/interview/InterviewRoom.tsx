@@ -49,6 +49,9 @@ const InterviewRoom = ({
   const [simliConfig, setSimliConfig] = useState<{ apiKey: string; faceId: string } | null>(null);
   const [simliReady, setSimliReady] = useState(false);
   const audioPipedRef = useRef(false);
+  const syncModeRef = useRef<'speed' | 'perfection'>('speed');
+  const perfectionProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const perfectionContextRef = useRef<AudioContext | null>(null);
   
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
