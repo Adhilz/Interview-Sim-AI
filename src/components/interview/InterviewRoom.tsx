@@ -132,54 +132,22 @@ const InterviewRoom = ({
       const pipeTrack = () => {
         if (audioPipedRef.current) return;
 
+        // Both modes use listenToMediaStreamTrack — Simli needs the raw track for lip-sync
+        console.log(`[InterviewRoom] ${syncModeRef.current} mode — piping track to Simli`);
+        simliAvatarRef.current?.listenToMediaStreamTrack(track);
+        audioPipedRef.current = true;
+
         if (syncModeRef.current === 'perfection') {
-          // PERFECTION MODE: Extract PCM16 from the track and send via sendAudioDataImmediate
-          // This ensures Simli receives audio data frame-by-frame for exact lip-sync
-          console.log('[InterviewRoom] Perfection mode — setting up PCM extraction pipeline');
-          try {
-            const audioCtx = new AudioContext({ sampleRate: 16000 });
-            perfectionContextRef.current = audioCtx;
-            const source = audioCtx.createMediaStreamSource(new MediaStream([track]));
-            // ScriptProcessorNode for PCM extraction (small buffer for low latency)
-            const processor = audioCtx.createScriptProcessor(512, 1, 1);
-            perfectionProcessorRef.current = processor;
-
-            processor.onaudioprocess = (e) => {
-              if (!simliAvatarRef.current?.isConnected) return;
-              const inputData = e.inputBuffer.getChannelData(0);
-              // Convert Float32 to PCM16
-              const pcm16 = new Int16Array(inputData.length);
-              for (let i = 0; i < inputData.length; i++) {
-                const s = Math.max(-1, Math.min(1, inputData[i]));
-                pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          // PERFECTION MODE: Simli plays audio (synced with lips), mute Vapi's direct output
+          setTimeout(() => {
+            document.querySelectorAll('audio').forEach((el) => {
+              if (!el.hasAttribute('data-simli-audio')) {
+                el.muted = true;
+                (el as HTMLAudioElement).volume = 0;
+                console.log('[InterviewRoom] Muted Vapi audio for perfection mode');
               }
-              simliAvatarRef.current.sendAudioData(new Uint8Array(pcm16.buffer));
-            };
-
-            source.connect(processor);
-            processor.connect(audioCtx.destination); // Required for processing to run
-            audioPipedRef.current = true;
-            console.log('[InterviewRoom] Perfection mode PCM pipeline active');
-            // Mute Vapi's direct audio output — Simli will play audio in sync with lips
-            setTimeout(() => {
-              document.querySelectorAll('audio').forEach((el) => {
-                if (!el.hasAttribute('data-simli-audio')) {
-                  el.muted = true;
-                  el.volume = 0;
-                  console.log('[InterviewRoom] Muted Vapi audio element for perfection mode');
-                }
-              });
-            }, 500);
-          } catch (err) {
-            console.error('[InterviewRoom] Perfection mode setup failed, falling back to speed:', err);
-            simliAvatarRef.current?.listenToMediaStreamTrack(track);
-            audioPipedRef.current = true;
-          }
-        } else {
-          // SPEED MODE: Direct track piping (lowest latency, best-effort sync)
-          console.log('[InterviewRoom] Speed mode — direct track piping');
-          simliAvatarRef.current?.listenToMediaStreamTrack(track);
-          audioPipedRef.current = true;
+            });
+          }, 500);
         }
         console.log('[InterviewRoom] Audio track piped to Simli');
       };
@@ -332,29 +300,45 @@ const InterviewRoom = ({
     }
   }, [simliReady, hasStartedVapi, isLoading, isConnected, startVapi]);
 
-  // ─── Fallback: DOM-based audio piping (only if direct track interception missed) ───
+  // ─── Fallback: DOM-based audio piping with retry (if direct track interception missed) ───
   useEffect(() => {
     if (!isConnected || !simliReady || !simliAvatarRef.current?.isReady) return;
-    if (audioPipedRef.current) return; // Already piped via direct interception
+    if (audioPipedRef.current) return;
 
-    const fallbackTimeout = setTimeout(() => {
-      if (audioPipedRef.current) return; // Check again before fallback
+    let attempts = 0;
+    const maxAttempts = 10;
+    const scanInterval = setInterval(() => {
+      if (audioPipedRef.current || attempts >= maxAttempts) {
+        clearInterval(scanInterval);
+        if (!audioPipedRef.current && attempts >= maxAttempts) {
+          console.warn('[InterviewRoom] Fallback: no VAPI audio track found after retries');
+        }
+        return;
+      }
+      attempts++;
       const audioElements = document.querySelectorAll('audio');
       for (const audioEl of audioElements) {
         if (audioEl.hasAttribute('data-simli-audio')) continue;
         const stream = (audioEl as any).srcObject as MediaStream;
         if (stream && stream.getAudioTracks().length > 0) {
           const audioTrack = stream.getAudioTracks()[0];
-          console.log('[InterviewRoom] Fallback: piping VAPI audio via DOM scan');
+          console.log('[InterviewRoom] Fallback: piping VAPI audio via DOM scan (attempt', attempts, ')');
           simliAvatarRef.current?.listenToMediaStreamTrack(audioTrack);
           audioPipedRef.current = true;
+          clearInterval(scanInterval);
+
+          // In perfection mode, also mute the source audio element
+          if (syncModeRef.current === 'perfection') {
+            audioEl.muted = true;
+            (audioEl as HTMLAudioElement).volume = 0;
+            console.log('[InterviewRoom] Fallback: muted Vapi audio for perfection mode');
+          }
           return;
         }
       }
-      console.warn('[InterviewRoom] Fallback: no VAPI audio track found in DOM');
-    }, 3000);
+    }, 1000);
 
-    return () => clearTimeout(fallbackTimeout);
+    return () => clearInterval(scanInterval);
   }, [isConnected, simliReady]);
 
   // ─── Handle VAPI error ───
