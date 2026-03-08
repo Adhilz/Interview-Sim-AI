@@ -440,6 +440,7 @@ const InterviewRoom = ({
               faceId={simliConfig.faceId}
               autoStart={true}
               avatarUrl={avatarUrl || undefined}
+              syncMode={syncModeRef.current}
               onConnected={() => console.log('[InterviewRoom] Simli connected')}
               onReady={handleSimliReady}
               onError={(err) => {
