@@ -332,29 +332,45 @@ const InterviewRoom = ({
     }
   }, [simliReady, hasStartedVapi, isLoading, isConnected, startVapi]);
 
-  // ─── Fallback: DOM-based audio piping (only if direct track interception missed) ───
+  // ─── Fallback: DOM-based audio piping with retry (if direct track interception missed) ───
   useEffect(() => {
     if (!isConnected || !simliReady || !simliAvatarRef.current?.isReady) return;
-    if (audioPipedRef.current) return; // Already piped via direct interception
+    if (audioPipedRef.current) return;
 
-    const fallbackTimeout = setTimeout(() => {
-      if (audioPipedRef.current) return; // Check again before fallback
+    let attempts = 0;
+    const maxAttempts = 10;
+    const scanInterval = setInterval(() => {
+      if (audioPipedRef.current || attempts >= maxAttempts) {
+        clearInterval(scanInterval);
+        if (!audioPipedRef.current && attempts >= maxAttempts) {
+          console.warn('[InterviewRoom] Fallback: no VAPI audio track found after retries');
+        }
+        return;
+      }
+      attempts++;
       const audioElements = document.querySelectorAll('audio');
       for (const audioEl of audioElements) {
         if (audioEl.hasAttribute('data-simli-audio')) continue;
         const stream = (audioEl as any).srcObject as MediaStream;
         if (stream && stream.getAudioTracks().length > 0) {
           const audioTrack = stream.getAudioTracks()[0];
-          console.log('[InterviewRoom] Fallback: piping VAPI audio via DOM scan');
+          console.log('[InterviewRoom] Fallback: piping VAPI audio via DOM scan (attempt', attempts, ')');
           simliAvatarRef.current?.listenToMediaStreamTrack(audioTrack);
           audioPipedRef.current = true;
+          clearInterval(scanInterval);
+
+          // In perfection mode, also mute the source audio element
+          if (syncModeRef.current === 'perfection') {
+            audioEl.muted = true;
+            (audioEl as HTMLAudioElement).volume = 0;
+            console.log('[InterviewRoom] Fallback: muted Vapi audio for perfection mode');
+          }
           return;
         }
       }
-      console.warn('[InterviewRoom] Fallback: no VAPI audio track found in DOM');
-    }, 3000);
+    }, 1000);
 
-    return () => clearTimeout(fallbackTimeout);
+    return () => clearInterval(scanInterval);
   }, [isConnected, simliReady]);
 
   // ─── Handle VAPI error ───
