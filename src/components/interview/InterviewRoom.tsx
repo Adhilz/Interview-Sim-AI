@@ -201,20 +201,25 @@ const InterviewRoom = ({
     }
   }, [timeRemaining, hasSpokenEndMessage, isConnected, say]);
 
-  // ─── Fetch user avatar ───
+  // ─── Fetch user avatar + sync mode ───
   useEffect(() => {
-    const fetchUserAvatar = async () => {
+    const fetchUserProfile = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('avatar_url')
+          .select('avatar_url, sync_mode')
           .eq('user_id', session.user.id)
           .single();
         if (profile?.avatar_url) setUserAvatarUrl(profile.avatar_url);
+        const mode = (profile as any)?.sync_mode;
+        if (mode === 'perfection' || mode === 'speed') {
+          syncModeRef.current = mode;
+          console.log('[InterviewRoom] Sync mode:', mode);
+        }
       }
     };
-    fetchUserAvatar();
+    fetchUserProfile();
   }, []);
 
   // ─── Enumerate devices ───
