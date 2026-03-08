@@ -624,7 +624,7 @@ Use occasionally:
 const buildInterviewSystemPrompt = buildResumeJDSystemPrompt;
 
 // Generate varied, dynamic first messages
-const generateDynamicFirstMessage = async (candidateName: string, candidateProfile: any, apiKey: string): Promise<string> => {
+const generateDynamicFirstMessage = async (candidateName: string, candidateProfile: any, apiKey: string, companyName?: string | null): Promise<string> => {
   // Randomly select starting approach
   const approaches = [
     { type: 'project', weight: 0.3 },
