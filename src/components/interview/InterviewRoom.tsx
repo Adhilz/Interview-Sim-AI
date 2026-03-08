@@ -270,6 +270,7 @@ const InterviewRoom = ({
         const mode = (profile as any)?.sync_mode;
         if (mode === 'perfection' || mode === 'speed') {
           syncModeRef.current = mode;
+          setSyncModeDisplay(mode);
           console.log('[InterviewRoom] Sync mode:', mode);
         }
       }
