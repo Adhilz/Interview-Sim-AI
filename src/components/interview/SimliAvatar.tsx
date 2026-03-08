@@ -7,6 +7,7 @@ interface SimliAvatarProps {
   faceId: string;
   autoStart?: boolean;
   avatarUrl?: string;
+  syncMode?: 'speed' | 'perfection';
   onConnected?: () => void;
   onReady?: () => void;
   onError?: (error: string) => void;
@@ -28,6 +29,7 @@ const SimliAvatar = forwardRef<SimliAvatarRef, SimliAvatarProps>(({
   faceId,
   autoStart = true,
   avatarUrl,
+  syncMode = 'speed',
   onConnected,
   onReady,
   onError,
@@ -55,6 +57,7 @@ const SimliAvatar = forwardRef<SimliAvatarRef, SimliAvatarProps>(({
   } = useSimliStream({
     apiKey,
     faceId,
+    syncMode,
     onConnected,
     onReady,
     onError,
