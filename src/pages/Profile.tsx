@@ -431,7 +431,11 @@ const Profile = () => {
                         checked={micPermission}
                         onCheckedChange={setMicPermission}
                       />
-
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
 
             {/* Sync Mode Preference */}
             <motion.div
@@ -499,10 +503,6 @@ const Profile = () => {
                         Buffers audio briefly so avatar lips and voice start together in perfect sync. Slight delay.
                       </p>
                     </button>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
                   </div>
                 </CardContent>
               </Card>
