@@ -255,10 +255,56 @@ const formatResumeForLLM = (candidateProfile: any): string => {
 };
 
 // Professional system prompt with STRICT resume grounding and randomization (for resume_jd mode)
+// Extract company and role from interviewer preferences text
+function extractCompanyAndRole(preferences: string | undefined): { company: string | null; role: string | null } {
+  if (!preferences || preferences.trim().length === 0) return { company: null, role: null };
+  const text = preferences.trim();
+  let company: string | null = null;
+  let role: string | null = null;
+  const companyPatterns = [
+    /(?:at|for|in|@)\s+([A-Z][A-Za-z0-9\s&.'-]{1,30}?)(?:\s*[.,;]|\s+(?:as|for|the|focus|that|which|where|this|I|i|they|we|a|an|and|or|but|is|are|was|were|has|have|had|with|from|about|on|to|in|of|looking|hiring|seeking))/i,
+    /(?:at|for|in|@)\s+([A-Z][A-Za-z0-9\s&.'-]{1,30}?)$/im,
+    /(?:company|org|organization|firm|startup)(?:\s*[:=]\s*|\s+(?:is|called|named)\s+)([A-Z][A-Za-z0-9\s&.'-]{1,30})/i,
+    /(?:interviewing|applying|position|job|role)\s+(?:at|for|with)\s+([A-Z][A-Za-z0-9\s&.'-]{1,30}?)(?:\s*[.,;]|\s|$)/i,
+  ];
+  for (const pattern of companyPatterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      company = match[1].trim().replace(/[.,;]+$/, '').trim();
+      if (company.length > 1 && company.length < 40) break;
+      company = null;
+    }
+  }
+  const rolePatterns = [
+    /(?:Senior|Junior|Lead|Staff|Principal|Mid[- ]?level|Entry[- ]?level)?\s*(?:React|Frontend|Backend|Full[- ]?Stack|Software|DevOps|Data|ML|AI|Cloud|Mobile|iOS|Android|Web|QA|Platform|Infrastructure|Systems?|Site Reliability|Security|Network|Database|Embedded|Game|Blockchain|Product)?\s*(?:Developer|Engineer|Architect|Designer|Scientist|Analyst|Manager|Consultant|Specialist|Administrator|Programmer|Tester)/i,
+    /(?:SDE|SWE|MLE|TPM|PM|EM|TL|SE|SSE)(?:\s*[-–]\s*\d+|\s+\d+)?/i,
+  ];
+  for (const pattern of rolePatterns) {
+    const match = text.match(pattern);
+    if (match?.[0]) { role = match[0].trim(); break; }
+  }
+  return { company, role };
+}
+
 const buildResumeJDSystemPrompt = (candidateProfile: any, candidateName: string, interviewerPreferences?: string) => {
   const formattedResume = formatResumeForLLM(candidateProfile);
   const questionPools = buildQuestionPools(candidateProfile);
   const interviewStrategy = generateInterviewStrategy(questionPools);
+  
+  // Extract company/role from preferences
+  const { company } = extractCompanyAndRole(interviewerPreferences);
+  
+  // Build persona based on company context
+  let personaLines = '';
+  if (company) {
+    personaLines = `- You are a Senior Developer / Engineering Lead at ${company}
+- You are conducting this interview to hire for ${company}'s engineering team
+- Reference ${company} naturally in conversation (e.g., "Here at ${company}, we value...", "On my team at ${company}...")
+- Your greeting MUST introduce yourself as working at ${company}
+- 10+ years of industry experience, currently at ${company}`;
+  } else {
+    personaLines = `- 15+ years of industry experience at companies like Google, Amazon, or similar`;
+  }
   
   // Build preferences context if provided
   let preferencesSection = '';
@@ -282,11 +328,12 @@ However, you must STILL only ask about skills/projects that exist in the candida
   return `You are a senior engineering hiring manager conducting a real-time voice interview with ${candidateName || 'the candidate'}.
 
 === YOUR PERSONA ===
-- 15+ years of industry experience at companies like Google, Amazon, or similar
+${personaLines}
 - Direct, professional, but approachable demeanor
 - You ask tough but fair questions
 - You sound HUMAN - natural pauses, occasional "hmm", "I see", "right"
 - NEVER mention you are an AI or system
+${company ? `- When greeting, introduce yourself as a senior developer at ${company} (e.g., "Hi ${candidateName}, I'm a senior developer here at ${company}. I've been looking at your profile...")` : ''}
 ${preferencesSection}
 === ABSOLUTE RULE: RESUME-ONLY QUESTIONING ===
 You MUST ONLY ask questions about what is in the candidate's resume.
@@ -577,7 +624,7 @@ Use occasionally:
 const buildInterviewSystemPrompt = buildResumeJDSystemPrompt;
 
 // Generate varied, dynamic first messages
-const generateDynamicFirstMessage = async (candidateName: string, candidateProfile: any, apiKey: string): Promise<string> => {
+const generateDynamicFirstMessage = async (candidateName: string, candidateProfile: any, apiKey: string, companyName?: string | null): Promise<string> => {
   // Randomly select starting approach
   const approaches = [
     { type: 'project', weight: 0.3 },
@@ -612,26 +659,35 @@ const generateDynamicFirstMessage = async (candidateName: string, candidateProfi
     topic = `${randomExp.role || 'your role'} at ${randomExp.company || 'your previous company'}`;
   }
 
+  const companyContext = companyName 
+    ? `\nINTERVIEWER COMPANY: ${companyName} (You MUST introduce yourself as a senior developer at ${companyName})`
+    : '';
+
+  const companyExamples = companyName
+    ? `\n- "Hi ${candidateName}, I'm a senior developer here at ${companyName}. I've been going through your profile and your work on ${topic || 'some projects'} really stood out. Tell me about the biggest challenge there."
+- "${candidateName}, great to meet you. I'm part of the engineering team at ${companyName}. I noticed your experience with ${topic}. Walk me through how you approached that."`
+    : '';
+
   const prompt = `Generate a unique, natural interview opening for a candidate.
 
 CANDIDATE: ${candidateName || 'Candidate'}
 APPROACH: Start with ${selectedApproach}
 TOPIC: ${topic || 'general technical background'}
-${tech ? `TECH: ${tech}` : ''}
+${tech ? `TECH: ${tech}` : ''}${companyContext}
 
 RULES:
-- Maximum 40 words
+- Maximum 50 words
 - Sound like a real human interviewer, not AI
 - Reference the specific topic/project/skill
 - End with a direct question
-- NO "Thank you for joining" or "Welcome" - jump straight in
+${companyName ? `- You MUST introduce yourself as a senior developer at ${companyName} in the greeting` : '- NO "Thank you for joining" or "Welcome" - jump straight in'}
 - Professional but conversational tone
 - Include a brief human touch like "I've been reviewing your background..."
 
 EXAMPLES:
-- "${candidateName}, I've looked through your work. Your project on ${topic || 'the system'} caught my eye - what was the trickiest technical problem you solved there?"
+${companyName ? companyExamples : `- "${candidateName}, I've looked through your work. Your project on ${topic || 'the system'} caught my eye - what was the trickiest technical problem you solved there?"
 - "Alright ${candidateName}, let's dive in. I see you've worked with ${topic}. Tell me about a particularly complex challenge you faced."
-- "${candidateName}, interesting background. Before we go into specifics... your experience at ${topic} - walk me through your biggest contribution there."
+- "${candidateName}, interesting background. Before we go into specifics... your experience at ${topic} - walk me through your biggest contribution there."`}
 
 Generate ONE natural opening now:`;
 
@@ -663,7 +719,7 @@ Generate ONE natural opening now:`;
     console.error('[VAPI] Error generating dynamic first message:', error);
   }
 
-  return buildFallbackFirstMessage(candidateName, candidateProfile);
+  return buildFallbackFirstMessage(candidateName, candidateProfile, companyName);
 };
 
 // Generate first message for Technical mode
@@ -692,7 +748,10 @@ const generateHRFirstMessage = (candidateName: string): string => {
   return openings[Math.floor(Math.random() * openings.length)];
 };
 
-const buildFallbackFirstMessage = (candidateName: string, candidateProfile: any) => {
+const buildFallbackFirstMessage = (candidateName: string, candidateProfile: any, companyName?: string | null) => {
+  const name = candidateName || 'Candidate';
+  const companyIntro = companyName ? `I'm a senior developer here at ${companyName}. ` : '';
+  
   const name = candidateName || 'Candidate';
   
   // Build multiple fallback options
@@ -701,24 +760,24 @@ const buildFallbackFirstMessage = (candidateName: string, candidateProfile: any)
   // Project-based fallbacks
   if (candidateProfile?.projects?.length > 0) {
     const randomProject = candidateProfile.projects[Math.floor(Math.random() * candidateProfile.projects.length)];
-    fallbacks.push(`${name}, I've reviewed your background. Your project "${randomProject.title}" looks interesting - what was the most significant technical challenge you faced there?`);
-    fallbacks.push(`Alright ${name}, let's start with your work on "${randomProject.title}". Walk me through the architecture and key design decisions.`);
+    fallbacks.push(`Hi ${name}, ${companyIntro}I've reviewed your background. Your project "${randomProject.title}" looks interesting - what was the most significant technical challenge you faced there?`);
+    fallbacks.push(`${name}, ${companyIntro}let's start with your work on "${randomProject.title}". Walk me through the architecture and key design decisions.`);
   }
   
   // Skill-based fallbacks
   if (candidateProfile?.skills?.length > 0) {
     const randomSkill = candidateProfile.skills[Math.floor(Math.random() * candidateProfile.skills.length)];
-    fallbacks.push(`${name}, I see you have experience with ${randomSkill}. Tell me about a complex problem you solved using it.`);
+    fallbacks.push(`Hi ${name}, ${companyIntro}I see you have experience with ${randomSkill}. Tell me about a complex problem you solved using it.`);
   }
   
   // Experience-based fallbacks
   if (candidateProfile?.experience?.length > 0) {
     const randomExp = candidateProfile.experience[Math.floor(Math.random() * candidateProfile.experience.length)];
-    fallbacks.push(`${name}, your experience at ${randomExp.company || 'your previous company'} as ${randomExp.role || 'developer'} - what was your biggest technical contribution there?`);
+    fallbacks.push(`${name}, ${companyIntro}your experience at ${randomExp.company || 'your previous company'} as ${randomExp.role || 'developer'} - what was your biggest technical contribution there?`);
   }
   
   // Generic fallback
-  fallbacks.push(`${name}, let's begin. Tell me about a challenging technical problem you've tackled recently and your approach to solving it.`);
+  fallbacks.push(`Hi ${name}, ${companyIntro}let's begin. Tell me about a challenging technical problem you've tackled recently and your approach to solving it.`);
   
   return fallbacks[Math.floor(Math.random() * fallbacks.length)];
 };
@@ -864,6 +923,9 @@ serve(async (req) => {
         });
       }
 
+      // Extract company for first message generation
+      const { company: extractedCompany } = mode === 'resume_jd' ? extractCompanyAndRole(interviewerPreferences) : { company: null };
+
       // Build system prompt based on interview mode
       let systemPrompt: string;
       if (mode === 'technical') {
@@ -885,9 +947,9 @@ serve(async (req) => {
         firstMessage = generateHRFirstMessage(candidateName);
       } else {
         // resume_jd mode
-        firstMessage = buildFallbackFirstMessage(candidateName, candidateProfile);
+        firstMessage = buildFallbackFirstMessage(candidateName, candidateProfile, extractedCompany);
         if (LOVABLE_API_KEY && candidateProfile) {
-          firstMessage = await generateDynamicFirstMessage(candidateName, candidateProfile, LOVABLE_API_KEY);
+          firstMessage = await generateDynamicFirstMessage(candidateName, candidateProfile, LOVABLE_API_KEY, extractedCompany);
         }
       }
 
