@@ -158,6 +158,30 @@ const Interview = () => {
   const fetchVapiConfig = async () => {
     try {
       setIsLoadingConfig(true);
+
+      // Check sessionStorage cache first to avoid cold-start delay
+      const cached = sessionStorage.getItem('vapiConfig');
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed?.publicKey && parsed?.assistantId) {
+            console.log('[Interview] Using cached VAPI config');
+            setVapiConfig(parsed);
+            setIsLoadingConfig(false);
+            // Refresh in background (non-blocking)
+            supabase.functions.invoke('vapi-interview', { body: { action: 'get_config' } })
+              .then(({ data }) => {
+                if (data?.publicKey && data?.assistantId) {
+                  sessionStorage.setItem('vapiConfig', JSON.stringify({ publicKey: data.publicKey, assistantId: data.assistantId }));
+                  setVapiConfig({ publicKey: data.publicKey, assistantId: data.assistantId });
+                }
+              })
+              .catch(() => {});
+            return;
+          }
+        } catch {}
+      }
+
       const { data, error } = await supabase.functions.invoke('vapi-interview', {
         body: { action: 'get_config' },
       });
@@ -175,10 +199,9 @@ const Interview = () => {
       }
 
       if (data?.publicKey && data?.assistantId) {
-        setVapiConfig({
-          publicKey: data.publicKey,
-          assistantId: data.assistantId,
-        });
+        const config = { publicKey: data.publicKey, assistantId: data.assistantId };
+        sessionStorage.setItem('vapiConfig', JSON.stringify(config));
+        setVapiConfig(config);
       }
     } catch (error) {
       console.error('Error fetching VAPI config:', error);

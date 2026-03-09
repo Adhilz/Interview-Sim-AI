@@ -692,21 +692,27 @@ ${companyName ? companyExamples : `- "${candidateName}, I've looked through your
 Generate ONE natural opening now:`;
 
   try {
+    // Race the AI call against a 4-second timeout so we never block interview start
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: 'google/gemini-2.5-flash-lite',
         messages: [
           { role: 'user', content: prompt }
         ],
         max_tokens: 100,
-        temperature: 0.9, // High temperature for variety
+        temperature: 0.9,
       }),
     });
+    clearTimeout(timeout);
 
     if (response.ok) {
       const data = await response.json();
@@ -716,7 +722,7 @@ Generate ONE natural opening now:`;
       }
     }
   } catch (error) {
-    console.error('[VAPI] Error generating dynamic first message:', error);
+    console.log('[VAPI] Dynamic first message skipped (timeout or error), using fallback');
   }
 
   return buildFallbackFirstMessage(candidateName, candidateProfile, companyName);
