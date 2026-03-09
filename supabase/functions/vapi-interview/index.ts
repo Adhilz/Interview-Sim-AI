@@ -752,8 +752,6 @@ const buildFallbackFirstMessage = (candidateName: string, candidateProfile: any,
   const name = candidateName || 'Candidate';
   const companyIntro = companyName ? `I'm a senior developer here at ${companyName}. ` : '';
   
-  const name = candidateName || 'Candidate';
-  
   // Build multiple fallback options
   const fallbacks: string[] = [];
   
