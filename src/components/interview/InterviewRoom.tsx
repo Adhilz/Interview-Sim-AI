@@ -129,6 +129,15 @@ const InterviewRoom = ({
         return;
       }
 
+      const muteVapiAudioElements = () => {
+        document.querySelectorAll('audio').forEach((el) => {
+          if (!el.hasAttribute('data-simli-audio')) {
+            el.muted = true;
+            (el as HTMLAudioElement).volume = 0;
+          }
+        });
+      };
+
       const pipeTrack = () => {
         if (audioPipedRef.current) return;
 
@@ -139,15 +148,12 @@ const InterviewRoom = ({
 
         if (syncModeRef.current === 'perfection') {
           // PERFECTION MODE: Simli plays audio (synced with lips), mute Vapi's direct output
-          setTimeout(() => {
-            document.querySelectorAll('audio').forEach((el) => {
-              if (!el.hasAttribute('data-simli-audio')) {
-                el.muted = true;
-                (el as HTMLAudioElement).volume = 0;
-                console.log('[InterviewRoom] Muted Vapi audio for perfection mode');
-              }
-            });
-          }, 500);
+          // Mute immediately and keep checking for new audio elements VAPI may inject
+          muteVapiAudioElements();
+          const muteWatcher = setInterval(muteVapiAudioElements, 2000);
+          // Store interval for cleanup
+          (window as any).__vapiMuteWatcher = muteWatcher;
+          console.log('[InterviewRoom] Perfection mode: persistent VAPI audio muting active');
         }
         console.log('[InterviewRoom] Audio track piped to Simli');
       };
