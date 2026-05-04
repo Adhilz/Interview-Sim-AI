@@ -417,6 +417,10 @@ const InterviewRoom = ({
     stopVapi();
     stopMedia();
     // Clean up perfection mode audio pipeline
+    if ((window as any).__vapiMuteWatcher) {
+      clearInterval((window as any).__vapiMuteWatcher);
+      delete (window as any).__vapiMuteWatcher;
+    }
     perfectionProcessorRef.current?.disconnect();
     perfectionContextRef.current?.close().catch(() => {});
     simliAvatarRef.current?.destroy();
