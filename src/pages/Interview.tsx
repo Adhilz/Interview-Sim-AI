@@ -212,7 +212,7 @@ const Interview = () => {
   };
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setInterval>;
     if (status === "in_progress" && timeRemaining > 0) {
       timer = setInterval(() => {
         setTimeRemaining((prev) => {
