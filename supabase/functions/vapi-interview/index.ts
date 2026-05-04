@@ -965,10 +965,10 @@ serve(async (req) => {
       const voiceConfig = {
         provider: "11labs",
         voiceId: "pFZP5JQG7iQjIQuC4Bku", // Lily — calm, professional female voice with natural tone
-        stability: 0.6,
-        similarityBoost: 0.8,
-        style: 0.3,
-        useSpeakerBoost: true,
+        stability: 0.85,
+        similarityBoost: 0.75,
+        style: 0.15,
+        useSpeakerBoost: false,
         model: "eleven_turbo_v2_5",
       };
 
