@@ -83,7 +83,7 @@ export const useSimliStream = (options: UseSimliStreamOptions) => {
       const { session_token } = await generateSimliSessionToken({
         config: {
           faceId: options.faceId,
-          handleSilence: true,
+          handleSilence: false,
           maxSessionLength: 600,
           maxIdleTime: 300,
           model: "fasttalk",
